@@ -45,7 +45,7 @@ impl Value {
     /// A [`Value`](crate::resp::Value) to user type conversion that consumes the input value.
     ///
     /// # Errors
-    /// Any parsing error ([`Error::Client`](crate::Error::Client)) due to incompatibility between Value variant and taget type
+    /// Any parsing error ([`ErrorKind::Client`](crate::ErrorKind::Client)) due to incompatibility between Value variant and taget type
     #[inline]
     pub fn into<T>(self) -> Result<T>
     where

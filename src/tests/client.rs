@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use crate::{
-    ClientError, Error, Result,
+    ClientError, ErrorKind, Result,
     client::{Client, IntoConfig},
     commands::{
         BlockingCommands, ClientKillOptions, ConnectionCommands, FlushingMode, LMoveWhere,
@@ -40,9 +40,13 @@ async fn failing_user_serialize_surfaces_as_error_not_panic() -> Result<()> {
     let result = client
         .send::<()>(cmd("SET").arg("key").arg(FailingSerialize), None)
         .await;
+    let error = result.unwrap_err();
     assert!(
-        matches!(result, Err(Error::Client(ClientError::SerdeSerialize(_)))),
-        "expected a deferred serialization error, got {result:?}"
+        matches!(
+            error.kind(),
+            ErrorKind::Client(ClientError::SerdeSerialize(_))
+        ),
+        "expected a deferred serialization error, got {error:?}"
     );
 
     // The connection is still usable: the doomed command never reached the wire.
@@ -167,7 +171,11 @@ async fn command_timeout() -> Result<()> {
     // since the timeout is configured to 10ms, we should have a timeout error
     let result: Result<Option<(String, Vec<String>)>> =
         client.blmpop(5., "key", LMoveWhere::Left, 1).await;
-    assert!(matches!(result, Err(Error::Timeout)));
+    let error = result.expect_err("the command must time out");
+    assert!(matches!(error.kind(), ErrorKind::Timeout));
+    // A multiplexed client has many commands in flight: the error is worthless
+    // unless it names the one that expired.
+    assert_eq!(Some("BLMPOP"), error.command());
 
     client.close().await?;
 

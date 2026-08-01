@@ -1,11 +1,11 @@
 use crate::{
-    Result,
+    ErrorKind, Result,
     client::ClientPreparedCommand,
     commands::{
         FlushingMode, FunctionListOptions, LibraryInfo, ScriptDebugMode, ScriptingCommands,
         ServerCommands, StringCommands,
     },
-    error::{Error, RedisErrorKind},
+    error::RedisErrorKind,
     sleep, spawn,
     tests::get_test_client,
 };
@@ -72,7 +72,7 @@ async fn evalsha_noscript() -> Result<()> {
         .await
         .unwrap_err();
 
-    let Error::Redis(error) = result else {
+    let ErrorKind::Redis(error) = result.into_kind() else {
         unreachable!();
     };
 

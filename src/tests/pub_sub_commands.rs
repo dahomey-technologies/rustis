@@ -1,5 +1,5 @@
 use crate::{
-    ClientError, Error, Result,
+    ClientError, Error, ErrorKind, Result,
     client::{Client, IntoConfig, ReconnectionConfig},
     commands::{
         ClientKillOptions, ClusterCommands, ClusterShardResult, ConnectionCommands, FlushingMode,
@@ -930,12 +930,13 @@ async fn a_failed_unsubscribe_keeps_the_channel_tracked() -> Result<()> {
     // as a duplicate. On the buggy path it was forgotten before the failed send,
     // so the re-subscribe is wrongly accepted.
     let resubscribe_result = pub_sub_stream.subscribe("ps03_b").await;
+    let error = resubscribe_result.unwrap_err();
     assert!(
         matches!(
-            resubscribe_result,
-            Err(Error::Client(ClientError::AlreadySubscribed))
+            error.kind(),
+            ErrorKind::Client(ClientError::AlreadySubscribed)
         ),
-        "a channel whose unsubscribe failed must remain tracked, got {resubscribe_result:?}"
+        "a channel whose unsubscribe failed must remain tracked, got {error:?}"
     );
 
     Ok(())

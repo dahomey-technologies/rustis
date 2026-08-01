@@ -1,5 +1,5 @@
 use crate::{
-    ConnectionState, Error, Future, Result, RetryReason, TcpStreamReader, TcpStreamWriter,
+    ConnectionState, ErrorKind, Future, Result, RetryReason, TcpStreamReader, TcpStreamWriter,
     client::{BufferConfig, Config, PreparedCommand},
     commands::{
         ClusterCommands, ConnectionCommands, HelloOptions, SentinelCommands, ServerCommands,
@@ -515,7 +515,7 @@ where
                 .executor
                 .read()
                 .await
-                .ok_or_else(|| Error::DisconnectedByPeer)??;
+                .ok_or_else(|| ErrorKind::DisconnectedByPeer)??;
 
             response.to()
         })

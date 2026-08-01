@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    ClientError, Error, RedisError, RedisErrorKind, Result, resp::Value, tests::log_try_init,
+    ClientError, ErrorKind, RedisError, RedisErrorKind, Result, resp::Value, tests::log_try_init,
 };
 use serde::Deserialize;
 use smallvec::SmallVec;
@@ -70,8 +70,12 @@ fn bool() -> Result<()> {
         Value::BulkString(Vec::new()),
     ] {
         let result = bool::deserialize(&unreadable);
+        let error = result.unwrap_err();
         assert!(
-            matches!(result, Err(Error::Client(ClientError::CannotParseBoolean))),
+            matches!(
+                error.kind(),
+                ErrorKind::Client(ClientError::CannotParseBoolean)
+            ),
             "{unreadable:?} read as a bool"
         );
     }
@@ -235,11 +239,11 @@ fn option() -> Result<()> {
         description: "error".to_owned(),
     }));
     assert!(matches!(
-        result,
-        Err(Error::Redis(RedisError {
+        result.unwrap_err().kind(),
+        ErrorKind::Redis(RedisError {
             kind: RedisErrorKind::Err,
             description
-        })) if description == "error"
+        }) if description == "error"
     ));
 
     let result = Option::<String>::deserialize(&Value::BulkString(b"hello".to_vec()))?;
@@ -279,11 +283,11 @@ fn unit() -> Result<()> {
         description: "error".to_owned(),
     }));
     assert!(matches!(
-        result,
-        Err(Error::Redis(RedisError {
+        result.unwrap_err().kind(),
+        ErrorKind::Redis(RedisError {
             kind: RedisErrorKind::Err,
             description
-        })) if description == "error"
+        }) if description == "error"
     ));
 
     let result = <()>::deserialize(&Value::Null);
@@ -302,7 +306,7 @@ fn unit() -> Result<()> {
 fn unit_struct() -> Result<()> {
     log_try_init();
 
-    #[derive(Deserialize)]
+    #[derive(Deserialize, Debug)]
     struct Unit;
 
     let result = Unit::deserialize(&Value::Error(RedisError {
@@ -310,11 +314,11 @@ fn unit_struct() -> Result<()> {
         description: "error".to_owned(),
     }));
     assert!(matches!(
-        result,
-        Err(Error::Redis(RedisError {
+        result.unwrap_err().kind(),
+        ErrorKind::Redis(RedisError {
             kind: RedisErrorKind::Err,
             description
-        })) if description == "error"
+        }) if description == "error"
     ));
 
     let result = Unit::deserialize(&Value::Null);
@@ -330,7 +334,7 @@ fn unit_struct() -> Result<()> {
 fn newtype_struct() -> Result<()> {
     log_try_init();
 
-    #[derive(Deserialize)]
+    #[derive(Deserialize, Debug)]
     struct Millimeters(u8);
 
     let result = Millimeters::deserialize(&Value::Error(RedisError {
@@ -338,11 +342,11 @@ fn newtype_struct() -> Result<()> {
         description: "error".to_owned(),
     }));
     assert!(matches!(
-        result,
-        Err(Error::Redis(RedisError {
+        result.unwrap_err().kind(),
+        ErrorKind::Redis(RedisError {
             kind: RedisErrorKind::Err,
             description
-        })) if description == "error"
+        }) if description == "error"
     ));
 
     let result = Millimeters::deserialize(&Value::Integer(12))?;
@@ -360,11 +364,11 @@ fn seq() -> Result<()> {
         description: "error".to_owned(),
     }));
     assert!(matches!(
-        result,
-        Err(Error::Redis(RedisError {
+        result.unwrap_err().kind(),
+        ErrorKind::Redis(RedisError {
             kind: RedisErrorKind::Err,
             description
-        })) if description == "error"
+        }) if description == "error"
     ));
 
     let result =
@@ -394,11 +398,11 @@ fn tuple() -> Result<()> {
     }));
 
     assert!(matches!(
-        result,
-        Err(Error::Redis(RedisError {
+        result.unwrap_err().kind(),
+        ErrorKind::Redis(RedisError {
             kind: RedisErrorKind::Err,
             description
-        })) if description == "error"
+        }) if description == "error"
     ));
 
     let result = <(i32, i32, i32)>::deserialize(&Value::Array(vec![
@@ -430,11 +434,11 @@ fn tuple_struct() -> Result<()> {
     }));
 
     assert!(matches!(
-        result,
-        Err(Error::Redis(RedisError {
+        result.unwrap_err().kind(),
+        ErrorKind::Redis(RedisError {
             kind: RedisErrorKind::Err,
             description
-        })) if description == "error"
+        }) if description == "error"
     ));
 
     let result = Rgb::deserialize(&Value::Array(vec![
@@ -630,9 +634,10 @@ fn struct_flat_array_shapes() -> Result<()> {
     // `CannotParseStruct`.
     let value = Value::Array(vec![Value::BulkString(b"id".to_vec()), Value::Integer(12)]);
     let result = Person::deserialize(&value);
+    let error = result.unwrap_err();
     assert!(
-        matches!(&result, Err(Error::Client(ClientError::SerdeDeserialize(msg))) if msg.contains("name")),
-        "{result:?}"
+        matches!(error.kind(), ErrorKind::Client(ClientError::SerdeDeserialize(msg)) if msg.contains("name")),
+        "{error:?}"
     );
 
     Ok(())
@@ -656,11 +661,11 @@ fn _enum() -> Result<()> {
     }));
 
     assert!(matches!(
-        result,
-        Err(Error::Redis(RedisError {
+        result.unwrap_err().kind(),
+        ErrorKind::Redis(RedisError {
             kind: RedisErrorKind::Err,
             description
-        })) if description == "error"
+        }) if description == "error"
     ));
 
     // unit_variant
@@ -764,21 +769,23 @@ fn out_of_range_integer_errors_instead_of_truncating() {
     // Mirror of the RESP deserializer: an out-of-range `Value::Integer` no longer
     // silently truncates/wraps when deserialized into a narrower target.
     let result = u8::deserialize(&Value::Integer(300));
+    let error = result.unwrap_err();
     assert!(
         matches!(
-            result,
-            Err(Error::Client(crate::ClientError::CannotParseInteger))
+            error.kind(),
+            ErrorKind::Client(crate::ClientError::CannotParseInteger)
         ),
-        "u8 from 300 should error, got {result:?}"
+        "u8 from 300 should error, got {error:?}"
     );
 
     let result = u32::deserialize(&Value::Integer(-1));
+    let error = result.unwrap_err();
     assert!(
         matches!(
-            result,
-            Err(Error::Client(crate::ClientError::CannotParseInteger))
+            error.kind(),
+            ErrorKind::Client(crate::ClientError::CannotParseInteger)
         ),
-        "u32 from -1 should error, got {result:?}"
+        "u32 from -1 should error, got {error:?}"
     );
 
     // In-range values and the nil-to-default coercion are preserved.
@@ -793,39 +800,43 @@ fn lossy_double_to_integer_errors_instead_of_truncating() {
     // Mirror of the RESP deserializer: `Value::Double` only converts to an
     // integer when the conversion is exact.
     let result = i64::deserialize(&Value::Double(3.9));
+    let error = result.unwrap_err();
     assert!(
         matches!(
-            result,
-            Err(Error::Client(crate::ClientError::CannotParseInteger))
+            error.kind(),
+            ErrorKind::Client(crate::ClientError::CannotParseInteger)
         ),
-        "i64 from 3.9 should error, got {result:?}"
+        "i64 from 3.9 should error, got {error:?}"
     );
 
     let result = i64::deserialize(&Value::Double(1e300));
+    let error = result.unwrap_err();
     assert!(
         matches!(
-            result,
-            Err(Error::Client(crate::ClientError::CannotParseInteger))
+            error.kind(),
+            ErrorKind::Client(crate::ClientError::CannotParseInteger)
         ),
-        "i64 from 1e300 should error, got {result:?}"
+        "i64 from 1e300 should error, got {error:?}"
     );
 
     let result = u32::deserialize(&Value::Double(-1.));
+    let error = result.unwrap_err();
     assert!(
         matches!(
-            result,
-            Err(Error::Client(crate::ClientError::CannotParseInteger))
+            error.kind(),
+            ErrorKind::Client(crate::ClientError::CannotParseInteger)
         ),
-        "u32 from -1.0 should error, got {result:?}"
+        "u32 from -1.0 should error, got {error:?}"
     );
 
     let result = i8::deserialize(&Value::Double(f64::NAN));
+    let error = result.unwrap_err();
     assert!(
         matches!(
-            result,
-            Err(Error::Client(crate::ClientError::CannotParseInteger))
+            error.kind(),
+            ErrorKind::Client(crate::ClientError::CannotParseInteger)
         ),
-        "i8 from NaN should error, got {result:?}"
+        "i8 from NaN should error, got {error:?}"
     );
 
     // An exactly representable double still deserializes to the integer.
@@ -853,9 +864,10 @@ fn one_element_array_unwraps_for_every_integer_width() {
 
     // The element still has to fit the target.
     let value = Value::Array(vec![Value::Integer(300)]);
+    let error = u8::deserialize(&value).unwrap_err();
     assert!(matches!(
-        u8::deserialize(&value),
-        Err(Error::Client(ClientError::CannotParseInteger))
+        error.kind(),
+        ErrorKind::Client(ClientError::CannotParseInteger)
     ));
 
     // A longer array would have to discard the rest silently.
@@ -866,9 +878,10 @@ fn one_element_array_unwraps_for_every_integer_width() {
         i64::deserialize(&value),
         u64::deserialize(&value).map(|u| i64::try_from(u).unwrap()),
     ] {
+        let error = result.unwrap_err();
         assert!(matches!(
-            result,
-            Err(Error::Client(ClientError::CannotParseInteger))
+            error.kind(),
+            ErrorKind::Client(ClientError::CannotParseInteger)
         ));
     }
 }
@@ -889,9 +902,10 @@ fn integers_128_are_supported() {
     );
     assert_eq!(12i128, i128::deserialize(&Value::Double(12.)).unwrap());
     assert_eq!(0i128, i128::deserialize(&Value::Null).unwrap());
+    let error = u128::deserialize(&Value::Integer(-1)).unwrap_err();
     assert!(matches!(
-        u128::deserialize(&Value::Integer(-1)),
-        Err(Error::Client(ClientError::CannotParseInteger))
+        error.kind(),
+        ErrorKind::Client(ClientError::CannotParseInteger)
     ));
 }
 

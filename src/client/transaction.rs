@@ -1,5 +1,5 @@
 use crate::{
-    ClientError, Error, Result,
+    ClientError, Error, ErrorKind, Result,
     client::{BatchPreparedCommand, Client, PreparedCommand},
     commands::{
         ArrayCommands, BitmapCommands, BloomCommands, CountMinSketchCommands, CuckooCommands,
@@ -113,26 +113,50 @@ impl Transaction {
             .internal_send_batch(self.commands, self.retry_on_error)
             .await?;
 
+        // The reply the caller reads is EXEC's, whose elements are the queued
+        // commands' own replies. Which command an error inside it belongs to is
+        // only recoverable when exactly one command is awaited: with several,
+        // the batch deserializer reports on the tuple as a whole and does not
+        // say which element it stumbled on.
+        let awaited_command = {
+            let mut awaited = self
+                .forget_flags
+                .iter()
+                .enumerate()
+                .filter(|(_, forget)| !**forget);
+            match (awaited.next(), awaited.next()) {
+                // `results` is MULTI, then one reply per queued command, then
+                // EXEC — hence the offset of one onto the queued commands.
+                (Some((i, _)), None) => results.get(i + 1).map(|(_, name)| name.clone()),
+                _ => None,
+            }
+        };
+
         let mut iter = results.into_iter();
 
-        // MULTI + QUEUED commands
+        // MULTI + QUEUED commands. A server error here names the queued command
+        // it refused, which is the one the caller has to fix.
         for _ in 0..num_commands - 1 {
-            if let Some(response) = iter.next() {
-                response.to::<()>()?;
+            if let Some((response, command)) = iter.next() {
+                response.to::<()>().map_err(|e| e.with_command(command))?;
             }
         }
 
         // EXEC
-        if let Some(result) = iter.next() {
-            match TransactionResultSeed::new(self.forget_flags)
+        if let Some((result, _)) = iter.next() {
+            let result = match TransactionResultSeed::new(self.forget_flags)
                 .deserialize(RespDeserializer::new(result.view()?))
             {
                 Ok(Some(t)) => Ok(t),
-                Ok(None) => Err(Error::Aborted),
+                Ok(None) => Err(Error::from(ErrorKind::Aborted)),
                 Err(e) => Err(e),
+            };
+            match (result, awaited_command) {
+                (Err(e), Some(command)) => Err(e.with_command(command)),
+                (result, _) => result,
             }
         } else {
-            Err(Error::Client(ClientError::Unexpected))
+            Err(Error::from(ClientError::Unexpected))
         }
     }
 
@@ -154,7 +178,7 @@ impl Transaction {
                 match slot {
                     None => slot = Some(command_slot),
                     Some(slot) if slot != command_slot => {
-                        return Err(Error::Client(ClientError::CrossSlot));
+                        return Err(Error::from(ClientError::CrossSlot));
                     }
                     Some(_) => (),
                 }

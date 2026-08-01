@@ -1,6 +1,6 @@
 #[cfg(any(feature = "native-tls", feature = "rustls"))]
 use crate::client::TlsConfig;
-use crate::{Error, Result, client::Config};
+use crate::{Error, ErrorKind, Result, client::Config};
 use futures_util::{Future, FutureExt};
 use socket2::TcpKeepalive;
 #[cfg(feature = "tokio-runtime")]
@@ -160,7 +160,9 @@ impl<T> Future for JoinHandle<T> {
             #[cfg(feature = "tokio-runtime")]
             JoinHandle::Tokio(join_handle) => match join_handle.poll_unpin(cx) {
                 Poll::Ready(Ok(result)) => Poll::Ready(Ok(result)),
-                Poll::Ready(Err(e)) => Poll::Ready(Err(Error::TokioJoin(Arc::new(e)))),
+                Poll::Ready(Err(e)) => {
+                    Poll::Ready(Err(Error::from(ErrorKind::TokioJoin(Arc::new(e)))))
+                }
                 Poll::Pending => Poll::Pending,
             },
         }
@@ -189,6 +191,6 @@ pub(crate) async fn timeout<F: Future>(timeout: Duration, future: F) -> Result<F
     {
         tokio::time::timeout(timeout, future)
             .await
-            .map_err(|_| Error::Timeout)
+            .map_err(|_| Error::from(ErrorKind::Timeout))
     }
 }

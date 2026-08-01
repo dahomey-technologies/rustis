@@ -1,5 +1,5 @@
 use crate::{
-    ConnectionState, Error, Result, RetryReason, StandaloneConnection,
+    ConnectionState, Error, ErrorKind, Result, RetryReason, StandaloneConnection,
     client::{Config, SentinelConfig},
     commands::{RoleResult, SentinelCommands, ServerCommands},
     resp::{Command, RespResponse},
@@ -246,18 +246,18 @@ enum DiscoveryOutcome {
 impl DiscoveryOutcome {
     fn into_error(self, service_name: &str, max_discovery_rounds: usize) -> Error {
         match self {
-            DiscoveryOutcome::AllUnreachable => {
-                Error::Sentinel("All Sentinel instances are unreachable".to_owned())
-            }
-            DiscoveryOutcome::MasterUnknown => Error::Sentinel(format!(
+            DiscoveryOutcome::AllUnreachable => Error::from(ErrorKind::Sentinel(
+                "All Sentinel instances are unreachable".to_owned(),
+            )),
+            DiscoveryOutcome::MasterUnknown => Error::from(ErrorKind::Sentinel(format!(
                 "master {service_name} is unknown by all Sentinel instances"
-            )),
-            DiscoveryOutcome::MasterUnreachable => Error::Sentinel(format!(
+            ))),
+            DiscoveryOutcome::MasterUnreachable => Error::from(ErrorKind::Sentinel(format!(
                 "master {service_name} could not be reached through any Sentinel"
-            )),
-            DiscoveryOutcome::RoundsExhausted => Error::Sentinel(format!(
+            ))),
+            DiscoveryOutcome::RoundsExhausted => Error::from(ErrorKind::Sentinel(format!(
                 "master {service_name} did not stabilize after {max_discovery_rounds} discovery rounds"
-            )),
+            ))),
         }
     }
 }

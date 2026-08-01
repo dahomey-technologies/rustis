@@ -1,5 +1,5 @@
 use crate::{
-    ClientError, Error, Result,
+    ClientError, ErrorKind, Result,
     client::{BufferConfig, RespLimits},
     resp::{BufferDecoder, RespResponse, RespView},
 };
@@ -87,9 +87,10 @@ fn bool() -> Result<()> {
     // frame is `#` plus exactly one of `t`/`f` plus CRLF, so anything else means
     // the frame boundary itself is unknown.
     let result = decode("#a\r\n");
+    let error = result.unwrap_err();
     assert!(matches!(
-        result,
-        Err(Error::Client(ClientError::CannotParseBoolean))
+        error.kind(),
+        ErrorKind::Client(ClientError::CannotParseBoolean)
     ));
 
     Ok(())
@@ -143,9 +144,10 @@ fn bulk_string() {
     assert_eq!(None, result);
 
     let result = decode("$5\r\nhello\ra");
+    let error = result.unwrap_err();
     assert!(matches!(
-        result,
-        Err(Error::Client(ClientError::CannotParseBulkString))
+        error.kind(),
+        ErrorKind::Client(ClientError::CannotParseBulkString)
     ));
 }
 
@@ -424,8 +426,8 @@ fn the_decoder_enforces_the_configured_parser_limits() {
     buf.extend_from_slice(b"*3\r\n:1\r\n:2\r\n:3\r\n");
 
     assert!(matches!(
-        decoder.decode(&mut buf),
-        Err(Error::Client(ClientError::CollectionLengthTooLarge))
+        decoder.decode(&mut buf).unwrap_err().kind(),
+        ErrorKind::Client(ClientError::CollectionLengthTooLarge)
     ));
 }
 

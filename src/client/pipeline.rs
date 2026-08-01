@@ -122,14 +122,24 @@ impl Pipeline<'_> {
             });
         }
 
+        // Past this point the command names have served their purpose for the
+        // single-response path below; the batch deserializer reports on the
+        // whole reply, which belongs to no single command.
+        let (results, command_names): (Vec<_>, Vec<_>) = results.into_iter().unzip();
+
         // A single response deserializes directly as `T` rather than as a
         // one-element batch. Peeling it off with `pop` inside the condition
         // rather than after it keeps the emptiness of `results` the only thing
         // this branch depends on, with no length invariant left to assert.
+        let mut results = results;
         if results.len() == 1
             && let Some(result) = results.pop()
         {
-            return result.to();
+            let named = result.to();
+            return match (named, command_names.into_iter().next()) {
+                (Err(e), Some(command)) => Err(e.with_command(command)),
+                (named, _) => named,
+            };
         }
 
         let deserializer = RespBatchDeserializer::new(&results);

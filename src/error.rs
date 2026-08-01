@@ -1,5 +1,6 @@
 use crate::Result;
 use atoi::atoi;
+use bytes::Bytes;
 use futures_channel::mpsc;
 use smallvec::SmallVec;
 use std::{
@@ -136,7 +137,7 @@ pub enum ClientError {
     ///
     /// This means the connection is down and the queue of commands waiting for it
     /// is full. It is distinct from
-    /// [`DisconnectedByPeer`](crate::Error::DisconnectedByPeer), which means the
+    /// [`DisconnectedByPeer`](crate::ErrorKind::DisconnectedByPeer), which means the
     /// command was dropped because it opted out of retries, and from
     /// [`MaxCommandAttemptsReached`](Self::MaxCommandAttemptsReached), which means
     /// the command was retried and kept failing. Only a *new* command is refused:
@@ -221,10 +222,10 @@ pub enum ClientError {
     CollectionLengthTooLarge,
 }
 
-/// All error kinds
+/// What an [`struct@Error`] is, independently of the command it belongs to.
 #[derive(Debug, Error, Clone)]
 #[non_exhaustive]
-pub enum Error {
+pub enum ErrorKind {
     /// Raised if an error occurs within the driver
     #[error("client error: {0}")]
     Client(#[from] ClientError),
@@ -298,39 +299,206 @@ pub enum Error {
     DisconnectedByPeer,
 }
 
-impl From<tokio::sync::broadcast::error::SendError<()>> for Error {
+impl From<tokio::sync::broadcast::error::SendError<()>> for ErrorKind {
     fn from(value: tokio::sync::broadcast::error::SendError<()>) -> Self {
-        Error::TokioBroadcastSend(Arc::new(value))
+        ErrorKind::TokioBroadcastSend(Arc::new(value))
     }
 }
 
-impl From<std::io::Error> for Error {
+impl From<std::io::Error> for ErrorKind {
     fn from(value: std::io::Error) -> Self {
-        Error::IO(Arc::new(value))
+        ErrorKind::IO(Arc::new(value))
     }
 }
 
 #[cfg_attr(docsrs, doc(cfg(feature = "native-tls")))]
 #[cfg(feature = "native-tls")]
-impl From<native_tls::Error> for Error {
+impl From<native_tls::Error> for ErrorKind {
     fn from(value: native_tls::Error) -> Self {
-        Error::Tls(Arc::new(value))
+        ErrorKind::Tls(Arc::new(value))
     }
 }
 
 #[cfg_attr(docsrs, doc(cfg(feature = "rustls")))]
 #[cfg(feature = "rustls")]
-impl From<rustls::pki_types::InvalidDnsNameError> for Error {
+impl From<rustls::pki_types::InvalidDnsNameError> for ErrorKind {
     fn from(value: rustls::pki_types::InvalidDnsNameError) -> Self {
-        Error::InvalidDnsName(Arc::new(value))
+        ErrorKind::InvalidDnsName(Arc::new(value))
     }
 }
 
 #[cfg(feature = "tokio-runtime")]
-impl From<tokio::task::JoinError> for Error {
+impl From<tokio::task::JoinError> for ErrorKind {
     fn from(value: tokio::task::JoinError) -> Self {
-        Error::TokioJoin(Arc::new(value))
+        ErrorKind::TokioJoin(Arc::new(value))
     }
+}
+
+/// Identifies the command an [`struct@Error`] belongs to.
+///
+/// A multiplexed client has many commands in flight at once, so an error that
+/// names none of them cannot be correlated to the application code that issued
+/// it. Every error the client raises on behalf of a command carries one of
+/// these.
+#[derive(Debug, Clone)]
+pub struct ErrorContext {
+    /// The command name, as a slice of the command buffer it was sent from.
+    command: Bytes,
+}
+
+impl ErrorContext {
+    /// The name of the command the error belongs to, as sent on the wire
+    /// (`GET`, `EVALSHA`…).
+    ///
+    /// In a pipeline or a transaction, an error that fails the batch as a whole
+    /// — a timeout, a lost connection, a full send queue — is named after the
+    /// batch's first command, since all of them died together. An error born in
+    /// the reply of one queued command is named after that command, and only
+    /// when a single reply is awaited: past that, the batch deserializer reports
+    /// on the whole tuple and does not say which element it stumbled on, so the
+    /// error carries no command rather than the wrong one.
+    #[must_use]
+    pub fn command(&self) -> &str {
+        // Command names come from `&'static str` literals, so this never fails;
+        // an empty name is nonetheless a better answer here than a panic.
+        std::str::from_utf8(&self.command).unwrap_or_default()
+    }
+}
+
+impl Display for ErrorContext {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.command())
+    }
+}
+
+/// Any error raised by the client, and the command it belongs to.
+///
+/// Match on [`kind`](Error::kind) to tell errors apart, and read
+/// [`command`](Error::command) to know which command produced it:
+///
+/// ```
+/// # use rustis::{Error, ErrorKind, Result};
+/// # fn handle(result: Result<String>) {
+/// if let Err(e) = result {
+///     if matches!(e.kind(), ErrorKind::Timeout) {
+///         eprintln!("{:?} timed out", e.command());
+///     }
+/// }
+/// # }
+/// ```
+#[derive(Debug, Clone)]
+pub struct Error {
+    kind: ErrorKind,
+    /// Boxed so an `Error` costs one pointer more than its kind, and so the
+    /// common case — an error raised before any command is known — allocates
+    /// nothing.
+    context: Option<Box<ErrorContext>>,
+}
+
+impl Error {
+    /// What the error is.
+    #[must_use]
+    pub fn kind(&self) -> &ErrorKind {
+        &self.kind
+    }
+
+    /// Consumes the error and yields its kind, for matching by value.
+    #[must_use]
+    pub fn into_kind(self) -> ErrorKind {
+        self.kind
+    }
+
+    /// The command the error belongs to, when the client knows it.
+    ///
+    /// `None` for an error raised outside any command, such as a connection
+    /// timeout.
+    #[must_use]
+    pub fn context(&self) -> Option<&ErrorContext> {
+        self.context.as_deref()
+    }
+
+    /// The name of the command the error belongs to — shorthand for
+    /// [`context().map(ErrorContext::command)`](Error::context).
+    #[must_use]
+    pub fn command(&self) -> Option<&str> {
+        self.context.as_ref().map(|c| c.command())
+    }
+
+    /// Names the command this error belongs to, unless one is already named.
+    ///
+    /// The site closest to the cause holds the most precise command, so the
+    /// outer layers it bubbles through leave it alone.
+    #[must_use]
+    pub(crate) fn with_command(mut self, command: Bytes) -> Self {
+        if self.context.is_none() {
+            self.context = Some(Box::new(ErrorContext { command }));
+        }
+        self
+    }
+}
+
+impl Display for Error {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(&self.kind, f)?;
+        if let Some(context) = &self.context {
+            write!(f, " (while executing {context})")?;
+        }
+        Ok(())
+    }
+}
+
+impl std::error::Error for Error {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.kind.source()
+    }
+}
+
+impl From<ErrorKind> for Error {
+    fn from(kind: ErrorKind) -> Self {
+        Error {
+            kind,
+            context: None,
+        }
+    }
+}
+
+/// Forwards to `ErrorKind`'s own conversion, so `?` keeps working on the
+/// foreign error types the client builds upon.
+macro_rules! error_from {
+    ($($(#[$meta:meta])* $ty:ty),* $(,)?) => {
+        $(
+            $(#[$meta])*
+            impl From<$ty> for Error {
+                fn from(value: $ty) -> Self {
+                    Error::from(ErrorKind::from(value))
+                }
+            }
+        )*
+    };
+}
+
+error_from! {
+    ClientError,
+    RedisError,
+    std::io::Error,
+    Utf8Error,
+    FromUtf8Error,
+    ParseFloatError,
+    ParseIntError,
+    tokio::sync::oneshot::error::RecvError,
+    mpsc::SendError,
+    tokio::sync::broadcast::error::SendError<()>,
+    #[cfg(feature = "tokio-runtime")]
+    tokio::task::JoinError,
+    #[cfg_attr(docsrs, doc(cfg(feature = "native-tls")))]
+    #[cfg(feature = "native-tls")]
+    native_tls::Error,
+    #[cfg_attr(docsrs, doc(cfg(feature = "rustls")))]
+    #[cfg(feature = "rustls")]
+    rustls::Error,
+    #[cfg_attr(docsrs, doc(cfg(feature = "rustls")))]
+    #[cfg(feature = "rustls")]
+    rustls::pki_types::InvalidDnsNameError,
 }
 
 impl serde::de::Error for Error {
@@ -338,7 +506,7 @@ impl serde::de::Error for Error {
     where
         T: Display,
     {
-        Error::Client(ClientError::SerdeDeserialize(msg.to_string()))
+        Error::from(ClientError::SerdeDeserialize(msg.to_string()))
     }
 }
 
@@ -347,7 +515,7 @@ impl serde::ser::Error for Error {
     where
         T: Display,
     {
-        Error::Client(ClientError::SerdeSerialize(msg.to_string()))
+        Error::from(ClientError::SerdeSerialize(msg.to_string()))
     }
 }
 
@@ -399,16 +567,16 @@ impl RedisErrorKind {
         hash_slot: &[u8],
         address: &[u8],
     ) -> Result<(u16, (String, u16))> {
-        let hash_slot = atoi(hash_slot).ok_or(Error::Client(ClientError::CannotParseHashSlot))?;
+        let hash_slot = atoi(hash_slot).ok_or(Error::from(ClientError::CannotParseHashSlot))?;
         // Split at the last colon: IPv6 hosts contain colons, and Redis emits
         // bare `host:port` with no brackets, so only the rightmost colon
         // reliably separates the port.
         let index = address
             .iter()
             .rposition(|b| *b == b':')
-            .ok_or(Error::Client(ClientError::CannotParseAddress))?;
+            .ok_or(Error::from(ClientError::CannotParseAddress))?;
         let (host, port) = (&address[..index], &address[index + 1..]);
-        let port = atoi(port).ok_or(Error::Client(ClientError::CannotParsePort))?;
+        let port = atoi(port).ok_or(Error::from(ClientError::CannotParsePort))?;
         Ok((hash_slot, (String::from_utf8_lossy(host).to_string(), port)))
     }
 }

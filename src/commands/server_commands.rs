@@ -1581,7 +1581,7 @@ impl FromStr for RequestPolicy {
             "all_shards" => Ok(RequestPolicy::AllShards),
             "multi_shard" => Ok(RequestPolicy::MultiShard),
             "special" => Ok(RequestPolicy::Special),
-            _ => Err(Error::Client(ClientError::CannotParseRequestPolicy)),
+            _ => Err(Error::from(ClientError::CannotParseRequestPolicy)),
         }
     }
 }
@@ -1654,7 +1654,7 @@ impl FromStr for ResponsePolicy {
             "agg_max" => Ok(ResponsePolicy::AggMax),
             "agg_sum" => Ok(ResponsePolicy::AggSum),
             "special" => Ok(ResponsePolicy::Special),
-            _ => Err(Error::Client(ClientError::CannotParseResponsePolicy)),
+            _ => Err(Error::from(ClientError::CannotParseResponsePolicy)),
         }
     }
 }

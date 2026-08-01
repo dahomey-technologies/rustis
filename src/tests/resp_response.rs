@@ -1,5 +1,5 @@
 use crate::{
-    ClientError, Error, Result,
+    ClientError, ErrorKind, Result,
     resp::{RespBuf, RespFrameParser, RespResponse, RespTape, RespTapeMut, RespView},
 };
 use bytes::Bytes;
@@ -218,8 +218,10 @@ fn into_collection_iter_accepts_every_collection_tag() {
 /// sequence, so a caller iterating a reply cannot mistake a failure for no rows.
 #[test]
 fn into_collection_iter_on_an_error_reply_yields_the_redis_error() {
-    let err = parse_owned(b"-ERR nope\r\n").into_collection_iter();
-    assert!(matches!(err, Err(crate::Error::Redis(_))));
+    let Err(error) = parse_owned(b"-ERR nope\r\n").into_collection_iter() else {
+        panic!("an error reply must not iterate as an empty sequence");
+    };
+    assert!(matches!(error.kind(), crate::ErrorKind::Redis(_)));
 }
 
 #[test]
@@ -308,17 +310,17 @@ fn a_tapeless_frame_carrying_bytes_past_its_scalar_trips_the_invariant() {
 fn a_malformed_tapeless_frame_is_rejected_rather_than_misread() {
     // A boolean is `t` or `f`; nothing else may decode as `false`.
     assert!(matches!(
-        tapeless_frame(b"#x\r\n").view(),
-        Err(Error::Client(ClientError::CannotParseBoolean))
+        tapeless_frame(b"#x\r\n").view().unwrap_err().kind(),
+        ErrorKind::Client(ClientError::CannotParseBoolean)
     ));
     // Only -1 is nil. Any other negative length is malformed, not null.
     assert!(matches!(
-        tapeless_frame(b"$-2\r\n").view(),
-        Err(Error::Client(ClientError::CannotParseBulkString))
+        tapeless_frame(b"$-2\r\n").view().unwrap_err().kind(),
+        ErrorKind::Client(ClientError::CannotParseBulkString)
     ));
     // A verbatim string must have room for its 4-byte format prefix.
     assert!(matches!(
-        tapeless_frame(b"=2\r\nab\r\n").view(),
-        Err(Error::Client(ClientError::VerbatimStringTooShort))
+        tapeless_frame(b"=2\r\nab\r\n").view().unwrap_err().kind(),
+        ErrorKind::Client(ClientError::VerbatimStringTooShort)
     ));
 }

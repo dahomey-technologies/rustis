@@ -1,9 +1,13 @@
 use crate::{
-    Error, RedisError, RedisErrorKind, Result,
-    commands::{ClientKillOptions, ConnectionCommands, StringCommands},
+    Error, ErrorKind, RedisError, RedisErrorKind, Result,
+    client::BatchPreparedCommand,
+    commands::{
+        ClientKillOptions, ConnectionCommands, GenericCommands, ListCommands, StringCommands,
+    },
     resp::cmd,
     tests::{get_default_config, get_test_client, get_test_client_with_config},
 };
+use bytes::Bytes;
 use serial_test::serial;
 
 #[tokio::test]
@@ -14,11 +18,11 @@ async fn unknown_command() -> Result<()> {
     let result = client.send::<()>(cmd("UNKNOWN").arg("arg"), None).await;
 
     assert!(matches!(
-        result,
-        Err(Error::Redis(RedisError {
+        result.unwrap_err().kind(),
+        ErrorKind::Redis(RedisError {
             kind: RedisErrorKind::Err,
             description
-        })) if description.starts_with("unknown command 'UNKNOWN'")
+        }) if description.starts_with("unknown command 'UNKNOWN'")
     ));
 
     Ok(())
@@ -65,6 +69,41 @@ fn moved_error_ipv6() {
             description
         }) if description.is_empty() && host == "2001:db8::1"
     ));
+}
+
+#[test]
+fn an_error_carries_no_command_until_one_is_attached() {
+    let error = Error::from(ErrorKind::Timeout);
+
+    assert!(matches!(error.kind(), ErrorKind::Timeout));
+    assert_eq!(None, error.command());
+    assert!(error.context().is_none());
+    assert_eq!(ErrorKind::Timeout.to_string(), error.to_string());
+}
+
+#[test]
+fn attaching_a_command_names_it_in_the_context_and_the_message() {
+    let error = Error::from(ErrorKind::Timeout).with_command(Bytes::from_static(b"BLMPOP"));
+
+    assert_eq!(Some("BLMPOP"), error.command());
+    assert_eq!("BLMPOP", error.context().unwrap().command());
+    assert!(
+        error.to_string().contains("BLMPOP"),
+        "the rendered message must name the command, got {error}"
+    );
+    // The variant stays reachable: attaching context is not a variant change.
+    assert!(matches!(error.kind(), ErrorKind::Timeout));
+}
+
+/// The site closest to the cause holds the best command, so an outer layer
+/// never overwrites what an inner one already attached.
+#[test]
+fn the_innermost_command_wins() {
+    let error = Error::from(ErrorKind::Timeout)
+        .with_command(Bytes::from_static(b"GET"))
+        .with_command(Bytes::from_static(b"SET"));
+
+    assert_eq!(Some("GET"), error.command());
 }
 
 #[tokio::test]
@@ -235,6 +274,70 @@ async fn kill_on_write() -> Result<()> {
         )
         .await;
     assert!(result.is_err());
+
+    Ok(())
+}
+
+/// `Error` is what every fallible call in the crate returns, so it has to keep
+/// slotting into the ecosystem that consumes errors: `?` into a `Box<dyn Error>`
+/// or an `anyhow::Error`, and crossing a task boundary.
+#[test]
+fn the_error_type_keeps_its_bounds() {
+    const fn assert_bounds<T: std::error::Error + Send + Sync + Clone + 'static>() {}
+    assert_bounds::<Error>();
+
+    let boxed: Box<dyn std::error::Error + Send + Sync> =
+        Box::new(Error::from(ErrorKind::Timeout).with_command(Bytes::from_static(b"GET")));
+    assert!(boxed.to_string().contains("GET"));
+}
+
+/// The commonest error of all: the server refused the command. It travels back
+/// through the read path rather than through the send path, which is a
+/// different route to the caller, and it has to name the command just the same
+/// — knowing a `WRONGTYPE` happened is useless without knowing to what.
+#[tokio::test]
+#[serial]
+async fn a_server_error_names_the_command_that_drew_it() -> Result<()> {
+    let client = get_test_client().await?;
+
+    client.del("a_list_key").await?;
+    client.lpush("a_list_key", "value").await?;
+
+    let result: Result<String> = client.get("a_list_key").await;
+    let error = result.expect_err("GET on a list must be refused by the server");
+
+    assert!(
+        matches!(error.kind(), ErrorKind::Redis(e) if e.kind == RedisErrorKind::WrongType),
+        "expected WRONGTYPE, got {error:?}"
+    );
+    assert_eq!(Some("GET"), error.command());
+
+    Ok(())
+}
+
+/// A batch reply is deserialized command by command, so an error inside it
+/// belongs to one command and not to the batch. The naming has to point at the
+/// command that actually failed — here the third, not the first, which is what
+/// naming a batch after its head would have reported.
+#[tokio::test]
+#[serial]
+async fn a_failing_command_inside_a_transaction_names_itself() -> Result<()> {
+    let client = get_test_client().await?;
+
+    client.del("a_list_for_tx").await?;
+    client.lpush("a_list_for_tx", "value").await?;
+
+    let mut transaction = client.create_transaction();
+    transaction.set("tx_ok_key", "value").forget();
+    transaction.get::<String>("a_list_for_tx").queue();
+    let result: Result<String> = transaction.execute().await;
+
+    let error = result.expect_err("GET on a list must be refused inside the transaction");
+    assert_eq!(
+        Some("GET"),
+        error.command(),
+        "the failing command must name itself, not the head of the batch: {error:?}"
+    );
 
     Ok(())
 }

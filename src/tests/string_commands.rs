@@ -1,5 +1,5 @@
 use crate::{
-    Error, RedisError, RedisErrorKind, Result,
+    ErrorKind, RedisError, RedisErrorKind, Result,
     commands::{
         DelexCondition, FlushingMode, GenericCommands, GetExOptions, IncrExOptions, LcsMatch,
         ServerCommands, SetCondition, SetExpiration, StringCommands,
@@ -90,12 +90,13 @@ async fn decr() -> Result<()> {
     client.set("key", "value").await?;
 
     let result = client.decr("key").await;
+    let error = result.unwrap_err();
     assert!(matches!(
-        result,
-        Err(Error::Redis(RedisError {
+        error.kind(),
+        ErrorKind::Redis(RedisError {
             kind: RedisErrorKind::Err,
             description: _
-        }))
+        })
     ));
 
     client.close().await?;
@@ -124,12 +125,13 @@ async fn decrby() -> Result<()> {
     client.set("key", "value").await?;
 
     let result = client.decrby("key", 2).await;
+    let error = result.unwrap_err();
     assert!(matches!(
-        result,
-        Err(Error::Redis(RedisError {
+        error.kind(),
+        ErrorKind::Redis(RedisError {
             kind: RedisErrorKind::Err,
             description: _
-        }))
+        })
     ));
 
     client.close().await?;
@@ -357,12 +359,13 @@ async fn incr() -> Result<()> {
     client.set("key", "value").await?;
 
     let result = client.incr("key").await;
+    let error = result.unwrap_err();
     assert!(matches!(
-        result,
-        Err(Error::Redis(RedisError {
+        error.kind(),
+        ErrorKind::Redis(RedisError {
             kind: RedisErrorKind::Err,
             description: _
-        }))
+        })
     ));
 
     client.close().await?;
@@ -474,12 +477,13 @@ async fn incrby() -> Result<()> {
     client.set("key", "value").await?;
 
     let result = client.incrby("key", 2).await;
+    let error = result.unwrap_err();
     assert!(matches!(
-        result,
-        Err(Error::Redis(RedisError {
+        error.kind(),
+        ErrorKind::Redis(RedisError {
             kind: RedisErrorKind::Err,
             description: _
-        }))
+        })
     ));
 
     client.close().await?;

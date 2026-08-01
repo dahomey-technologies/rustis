@@ -15,7 +15,7 @@
 //! bound but that the loss is counted and acted upon.
 
 use crate::{
-    ClientError, Error, Result,
+    ClientError, Error, ErrorKind, Result,
     client::{BackpressureConfig, Client, Config, IntoConfig, ReconnectionConfig},
     commands::{
         BlockingCommands, ClientTrackingOptions, ClientTrackingStatus, ConnectionCommands,
@@ -181,8 +181,13 @@ async fn a_command_refused_by_a_full_send_queue_reports_it() -> Result<()> {
     .await??;
 
     assert!(
-        matches!(error, Error::Client(ClientError::SendQueueFull)),
+        matches!(error.kind(), ErrorKind::Client(ClientError::SendQueueFull)),
         "a command shed by a full queue must report SendQueueFull, got {error:?}"
+    );
+    assert_eq!(
+        Some("PING"),
+        error.command(),
+        "a shed command must say what was shed, got {error:?}"
     );
 
     Ok(())
@@ -250,7 +255,9 @@ async fn a_command_already_queued_survives_the_reconnection_that_replays_it() ->
     for handle in handles {
         match timeout(Duration::from_secs(30), handle).await {
             Ok(Ok(Ok(()))) => accepted += 1,
-            Ok(Ok(Err(Error::Client(ClientError::SendQueueFull)))) => shed += 1,
+            Ok(Ok(Err(e))) if matches!(e.kind(), ErrorKind::Client(ClientError::SendQueueFull)) => {
+                shed += 1
+            }
             other => panic!("unexpected outcome for a queued command: {other:?}"),
         }
     }

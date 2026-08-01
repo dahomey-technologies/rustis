@@ -1,5 +1,5 @@
 use crate::{
-    Error, Result,
+    ErrorKind, Result,
     client::Client,
     commands::{ConnectionCommands, DebugCommands},
     sleep,
@@ -87,12 +87,14 @@ async fn standalone_server_crash_and_recover() -> Result<()> {
 }
 
 /// A command meant to take the server down succeeds by never answering. An
-/// `Error::Redis` would mean the opposite: the server stayed up long enough to
+/// `ErrorKind::Redis` would mean the opposite: the server stayed up long enough to
 /// reject what it was sent, which is how a wrong subcommand or a mis-encoded
 /// argument shows up here.
 fn check_died(result: Result<()>) -> Verdict {
     match result {
-        Err(Error::Redis(e)) => Err(format!("the server answered instead of dying: {e}")),
+        Err(e) if matches!(e.kind(), ErrorKind::Redis(_)) => {
+            Err(format!("the server answered instead of dying: {e}"))
+        }
         Err(_) => Ok(()),
         Ok(()) => Err("the server acknowledged instead of dying".to_owned()),
     }

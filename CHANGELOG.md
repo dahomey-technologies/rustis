@@ -10,6 +10,19 @@ Versions up to and including `0.19.3` are documented in the
 
 ### Changed
 
+- **Errors name the command they belong to.** `Error` is now a struct rather than an
+  enum: its variants moved to `ErrorKind`, reachable through `Error::kind()` and
+  `Error::into_kind()`, and it carries the command alongside them, reachable through
+  `Error::command()`. A client multiplexes hundreds of commands over one connection,
+  so `Err(Error::Timeout)` named nothing the application could act on, a shed command
+  did not say what had been shed, and a cross-slot refusal did not say which command
+  was refused. The command is attached wherever the client fails a command on its
+  behalf — a `command_timeout`, a full send queue, a lost connection, a deferred
+  serialization error, a mismatched-slot routing refusal — and is absent for the
+  errors raised outside any command, a connection timeout in particular. `Display`
+  appends it: `The I/O operation's timeout expired (while executing BLMPOP)`. Calling
+  code matching on `Error::Timeout` matches on `e.kind()` against
+  `ErrorKind::Timeout`, or on `e.into_kind()` to match by value.
 - **An empty collection no longer decodes as `None`.** `Option<T>` treated an empty
   RESP array as a nil, so `Option<Vec<T>>` over an `LRANGE`, `SMEMBERS` or `ZRANGE`
   could never observe an empty vector: "the collection is empty" and "the key does

@@ -1,5 +1,5 @@
 use crate::{
-    Error, RedisError, RedisErrorKind, Result,
+    ErrorKind, RedisError, RedisErrorKind, Result,
     client::{BatchPreparedCommand, Client, ClientPreparedCommand, ReconnectionConfig},
     commands::{
         ClientCachingMode, ClientInfoAttribute, ClientKillOptions, ClientListOptions,
@@ -22,20 +22,20 @@ async fn auth() -> Result<()> {
 
     let result = client.auth(Some("username"), "password").await;
     assert!(matches!(
-        result,
-        Err(Error::Redis(RedisError {
+        result.unwrap_err().kind(),
+        ErrorKind::Redis(RedisError {
             kind: RedisErrorKind::WrongPass,
             description: _
-        }))
+        })
     ));
 
     let result = client.auth(None::<String>, "password").await;
     assert!(matches!(
-        result,
-        Err(Error::Redis(RedisError {
+        result.unwrap_err().kind(),
+        ErrorKind::Redis(RedisError {
             kind: RedisErrorKind::Err,
             description: _
-        }))
+        })
     ));
 
     Ok(())
@@ -515,11 +515,11 @@ async fn client_unblock() -> Result<()> {
     spawn(async move {
         let result = client1.wait(2, 10000).await;
         matches!(
-            result,
-            Err(Error::Redis(RedisError {
+            result.unwrap_err().kind(),
+            ErrorKind::Redis(RedisError {
                 kind: RedisErrorKind::Unblocked,
                 description: _
-            }))
+            })
         )
     });
 

@@ -298,7 +298,7 @@ impl Default for RespLimits {
 
 #[inline]
 fn invalid_config(message: &'static str) -> Error {
-    Error::Client(ClientError::InvalidConfig(message))
+    Error::from(ClientError::InvalidConfig(message))
 }
 
 type Uri<'a> = (
@@ -558,7 +558,7 @@ impl FromStr for Config {
         } else if let Some(addr) = Self::parse_addr(str) {
             addr.into_config()
         } else {
-            Err(Error::Client(ClientError::ConfigParseError))
+            Err(Error::from(ClientError::ConfigParseError))
         }
     }
 }
@@ -650,9 +650,9 @@ impl Config {
         }
     }
 
-    /// Builds an [`Error::Client`] naming what the URI got wrong.
+    /// Builds an [`ErrorKind::Client`] naming what the URI got wrong.
     fn invalid_uri(message: String) -> Error {
-        Error::Client(ClientError::InvalidUri(message))
+        Error::from(ClientError::InvalidUri(message))
     }
 
     /// Removes `name` from the query and parses its value, reporting an error
@@ -673,7 +673,7 @@ impl Config {
     }
 
     fn parse_uri(uri: &str) -> Result<Config> {
-        let config_parse_error = || Error::Client(ClientError::ConfigParseError);
+        let config_parse_error = || Error::from(ClientError::ConfigParseError);
 
         let (scheme, username, password, hosts, path_segments, mut query) =
             Self::break_down_uri(uri).ok_or_else(config_parse_error)?;
@@ -1328,7 +1328,7 @@ impl FromStr for ReadPreference {
         match str {
             "master" => Ok(ReadPreference::Master),
             "prefer_replica" => Ok(ReadPreference::PreferReplica),
-            _ => Err(Error::Client(ClientError::InvalidUri(format!(
+            _ => Err(Error::from(ClientError::InvalidUri(format!(
                 "unknown read preference `{str}`"
             )))),
         }
@@ -1545,7 +1545,7 @@ impl IntoConfig for Url {
 /// Every variant carries a `max_attempts`, and every one of them defaults to `0`
 /// — retry forever. **Reaching a non-zero cap does not merely abandon the
 /// current attempt: it ends the client's network task permanently.** Queued
-/// commands are failed with [`Error::DisconnectedByPeer`](crate::Error::DisconnectedByPeer),
+/// commands are failed with [`ErrorKind::DisconnectedByPeer`](crate::ErrorKind::DisconnectedByPeer),
 /// the task returns, and every command issued afterwards fails — including long
 /// after the server has come back. The only recovery is to build a new
 /// [`Client`](crate::client::Client).

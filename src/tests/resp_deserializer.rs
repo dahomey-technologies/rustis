@@ -1,5 +1,5 @@
 use crate::{
-    ClientError, Error, RedisError, RedisErrorKind, Result,
+    ClientError, ErrorKind, RedisError, RedisErrorKind, Result,
     resp::{RespBuf, RespDeserializer, RespFrameParser, RespResponse, RespTapeMut, Value},
     tests::log_try_init,
 };
@@ -33,11 +33,11 @@ fn bool() -> Result<()> {
 
     let result: Result<bool> = deserialize("-ERR error\r\n"); // error
     assert!(matches!(
-        result,
-        Err(Error::Redis(RedisError {
+        result.unwrap_err().kind(),
+        ErrorKind::Redis(RedisError {
             kind: RedisErrorKind::Err,
             description: _
-        }))
+        })
     ));
 
     let result: bool = deserialize("#t\r\n")?; // true
@@ -91,8 +91,12 @@ fn bool() -> Result<()> {
     // `false`, and answering `false` would be inventing a value.
     for unreadable in ["+KO\r\n", "$5\r\nhello\r\n", "$0\r\n\r\n"] {
         let result: Result<bool> = deserialize(unreadable);
+        let error = result.unwrap_err();
         assert!(
-            matches!(result, Err(Error::Client(ClientError::CannotParseBoolean))),
+            matches!(
+                error.kind(),
+                ErrorKind::Client(ClientError::CannotParseBoolean)
+            ),
             "{unreadable:?} read as a bool"
         );
     }
@@ -146,11 +150,11 @@ fn integer() {
 
     let result: Result<i64> = deserialize("-ERR error\r\n"); // error
     assert!(matches!(
-        result,
-        Err(Error::Redis(RedisError {
+        result.unwrap_err().kind(),
+        ErrorKind::Redis(RedisError {
             kind: RedisErrorKind::Err,
             description: _
-        }))
+        })
     ));
 
     let result: i64 = deserialize(":12\r\n").unwrap(); // 12
@@ -181,10 +185,10 @@ fn integer_from_multi_element_array() {
     macro_rules! assert_rejected {
         ($($ty:ty),+) => {$(
             let result: Result<$ty> = deserialize("*2\r\n:12\r\n:13\r\n");
+            let error = result.unwrap_err();
             assert!(
-                matches!(
-                    result,
-                    Err(Error::Client(ClientError::CannotParseInteger))
+                matches!(error.kind(),
+                    ErrorKind::Client(ClientError::CannotParseInteger)
                 ),
                 "{} accepted a 2-element array",
                 stringify!($ty)
@@ -201,11 +205,11 @@ fn float() -> Result<()> {
 
     let result: Result<f64> = deserialize("-ERR error\r\n"); // error
     assert!(matches!(
-        result,
-        Err(Error::Redis(RedisError {
+        result.unwrap_err().kind(),
+        ErrorKind::Redis(RedisError {
             kind: RedisErrorKind::Err,
             description: _
-        }))
+        })
     ));
 
     let result: f64 = deserialize(":12\r\n")?; // 12
@@ -232,11 +236,11 @@ fn char() -> Result<()> {
 
     let result: Result<char> = deserialize("-ERR error\r\n"); // error
     assert!(matches!(
-        result,
-        Err(Error::Redis(RedisError {
+        result.unwrap_err().kind(),
+        ErrorKind::Redis(RedisError {
             kind: RedisErrorKind::Err,
             description: _
-        }))
+        })
     ));
 
     let result: char = deserialize("$1\r\nm\r\n")?; // b"m"
@@ -254,11 +258,11 @@ fn string() -> Result<()> {
 
     let result: Result<String> = deserialize("-ERR error\r\n"); // error
     assert!(matches!(
-        result,
-        Err(Error::Redis(RedisError {
+        result.unwrap_err().kind(),
+        ErrorKind::Redis(RedisError {
             kind: RedisErrorKind::Err,
             description: _
-        }))
+        })
     ));
 
     let result: String = deserialize("$5\r\nhello\r\n")?; // b"hello"
@@ -412,11 +416,11 @@ fn option() -> Result<()> {
 
     let result: Result<Option<String>> = deserialize("-ERR error\r\n"); // error
     assert!(matches!(
-        result,
-        Err(Error::Redis(RedisError {
+        result.unwrap_err().kind(),
+        ErrorKind::Redis(RedisError {
             kind: RedisErrorKind::Err,
             description: _
-        }))
+        })
     ));
 
     let result: Option<String> = deserialize("$5\r\nhello\r\n")?; // b"hello"
@@ -462,11 +466,11 @@ fn unit() -> Result<()> {
 
     let result: Result<()> = deserialize("-ERR error\r\n"); // error
     assert!(matches!(
-        result,
-        Err(Error::Redis(RedisError {
+        result.unwrap_err().kind(),
+        ErrorKind::Redis(RedisError {
             kind: RedisErrorKind::Err,
             description: _
-        }))
+        })
     ));
 
     let result: Result<()> = deserialize("+OK\r\n"); // "OK"
@@ -488,16 +492,16 @@ fn unit() -> Result<()> {
 fn unit_struct() -> Result<()> {
     log_try_init();
 
-    #[derive(Deserialize)]
+    #[derive(Deserialize, Debug)]
     struct Unit;
 
     let result: Result<Unit> = deserialize("-ERR error\r\n"); // error
     assert!(matches!(
-        result,
-        Err(Error::Redis(RedisError {
+        result.unwrap_err().kind(),
+        ErrorKind::Redis(RedisError {
             kind: RedisErrorKind::Err,
             description: _
-        }))
+        })
     ));
 
     let result: Result<Unit> = deserialize("_\r\n"); // null
@@ -513,16 +517,16 @@ fn unit_struct() -> Result<()> {
 fn newtype_struct() -> Result<()> {
     log_try_init();
 
-    #[derive(Deserialize)]
+    #[derive(Deserialize, Debug)]
     struct Millimeters(u8);
 
     let result: Result<Millimeters> = deserialize("-ERR error\r\n"); // error
     assert!(matches!(
-        result,
-        Err(Error::Redis(RedisError {
+        result.unwrap_err().kind(),
+        ErrorKind::Redis(RedisError {
             kind: RedisErrorKind::Err,
             description: _
-        }))
+        })
     ));
 
     let result: Millimeters = deserialize(":12\r\n")?; // 12
@@ -537,11 +541,11 @@ fn seq() -> Result<()> {
 
     let result: Result<Vec<i32>> = deserialize("-ERR error\r\n"); // error
     assert!(matches!(
-        result,
-        Err(Error::Redis(RedisError {
+        result.unwrap_err().kind(),
+        ErrorKind::Redis(RedisError {
             kind: RedisErrorKind::Err,
             description: _
-        }))
+        })
     ));
 
     let result: Vec<i32> = deserialize("*2\r\n:12\r\n:13\r\n")?; // [12, 13]
@@ -595,20 +599,20 @@ fn tuple() -> Result<()> {
 
     let result: Result<(i32, i32)> = deserialize("-ERR error\r\n"); // error
     assert!(matches!(
-        result,
-        Err(Error::Redis(RedisError {
+        result.unwrap_err().kind(),
+        ErrorKind::Redis(RedisError {
             kind: RedisErrorKind::Err,
             description: _
-        }))
+        })
     ));
 
     let result: Result<(i32, i32)> = deserialize("!9\r\nERR error\r\n"); // error
     assert!(matches!(
-        result,
-        Err(Error::Redis(RedisError {
+        result.unwrap_err().kind(),
+        ErrorKind::Redis(RedisError {
             kind: RedisErrorKind::Err,
             description: _
-        }))
+        })
     ));
 
     let result: (i32, i32) = deserialize("*2\r\n:12\r\n:13\r\n")?; // [12, 13]
@@ -629,11 +633,11 @@ fn tuple_struct() -> Result<()> {
 
     let result: Result<Rgb> = deserialize("-ERR error\r\n"); // error
     assert!(matches!(
-        result,
-        Err(Error::Redis(RedisError {
+        result.unwrap_err().kind(),
+        ErrorKind::Redis(RedisError {
             kind: RedisErrorKind::Err,
             description: _
-        }))
+        })
     ));
 
     let result: Rgb = deserialize("*3\r\n:12\r\n:13\r\n:14\r\n")?; // [12, 13, 14]
@@ -648,11 +652,11 @@ fn map() {
 
     let result: Result<HashMap<i32, i32>> = deserialize("-ERR error\r\n"); // error
     assert!(matches!(
-        result,
-        Err(Error::Redis(RedisError {
+        result.unwrap_err().kind(),
+        ErrorKind::Redis(RedisError {
             kind: RedisErrorKind::Err,
             description: _
-        }))
+        })
     ));
 
     let result: HashMap<i32, i32> = deserialize("*4\r\n:12\r\n:13\r\n:14\r\n:15\r\n").unwrap(); // [12, 13, 14, 15]
@@ -681,11 +685,11 @@ fn r#struct() {
 
     let result: Result<Person> = deserialize("-ERR error\r\n"); // error
     assert!(matches!(
-        result,
-        Err(Error::Redis(RedisError {
+        result.unwrap_err().kind(),
+        ErrorKind::Redis(RedisError {
             kind: RedisErrorKind::Err,
             description: _
-        }))
+        })
     ));
 
     let result: Person =
@@ -777,9 +781,10 @@ fn struct_flat_array_shapes() {
     // A missing required field is a serde error naming it, not a blanket
     // `CannotParseStruct`.
     let result: Result<Person> = deserialize("*2\r\n$2\r\nid\r\n:12\r\n");
+    let error = result.unwrap_err();
     assert!(
-        matches!(&result, Err(Error::Client(ClientError::SerdeDeserialize(msg))) if msg.contains("name")),
-        "{result:?}"
+        matches!(error.kind(), ErrorKind::Client(ClientError::SerdeDeserialize(msg)) if msg.contains("name")),
+        "{error:?}"
     );
 }
 
@@ -834,11 +839,11 @@ fn r#enum() {
 
     let result: Result<E> = deserialize("-ERR error\r\n"); // error
     assert!(matches!(
-        result,
-        Err(Error::Redis(RedisError {
+        result.unwrap_err().kind(),
+        ErrorKind::Redis(RedisError {
             kind: RedisErrorKind::Err,
             description: _
-        }))
+        })
     ));
 
     // unit_variant
@@ -987,15 +992,22 @@ fn out_of_range_integer_errors_instead_of_truncating() {
     // `:300` no longer silently truncates to 44 when deserialized as u8.
     let result: Result<u8> = deserialize(":300\r\n");
     assert!(
-        matches!(result, Err(Error::Client(ClientError::CannotParseInteger))),
-        "u8 from 300 should error, got {result:?}"
+        matches!(
+            result.unwrap_err().kind(),
+            ErrorKind::Client(ClientError::CannotParseInteger)
+        ),
+        "u8 from 300 should error"
     );
 
     // A negative wire integer into an unsigned target no longer wraps.
     let result: Result<u32> = deserialize(":-1\r\n");
+    let error = result.unwrap_err();
     assert!(
-        matches!(result, Err(Error::Client(ClientError::CannotParseInteger))),
-        "u32 from -1 should error, got {result:?}"
+        matches!(
+            error.kind(),
+            ErrorKind::Client(ClientError::CannotParseInteger)
+        ),
+        "u32 from -1 should error, got {error:?}"
     );
 
     // In-range values still deserialize.
@@ -1032,42 +1044,66 @@ fn lossy_double_to_integer_errors_instead_of_truncating() {
 
     // A fractional score has no exact integer value.
     let result: Result<i64> = deserialize(",3.9\r\n");
+    let error = result.unwrap_err();
     assert!(
-        matches!(result, Err(Error::Client(ClientError::CannotParseInteger))),
-        "i64 from 3.9 should error, got {result:?}"
+        matches!(
+            error.kind(),
+            ErrorKind::Client(ClientError::CannotParseInteger)
+        ),
+        "i64 from 3.9 should error, got {error:?}"
     );
 
     // Beyond the target's range, where an `as` cast would saturate.
     let result: Result<i64> = deserialize(",1e300\r\n");
+    let error = result.unwrap_err();
     assert!(
-        matches!(result, Err(Error::Client(ClientError::CannotParseInteger))),
-        "i64 from 1e300 should error, got {result:?}"
+        matches!(
+            error.kind(),
+            ErrorKind::Client(ClientError::CannotParseInteger)
+        ),
+        "i64 from 1e300 should error, got {error:?}"
     );
 
     // Out of range for the narrow target, in range for f64.
     let result: Result<i8> = deserialize(",300\r\n");
+    let error = result.unwrap_err();
     assert!(
-        matches!(result, Err(Error::Client(ClientError::CannotParseInteger))),
-        "i8 from 300 should error, got {result:?}"
+        matches!(
+            error.kind(),
+            ErrorKind::Client(ClientError::CannotParseInteger)
+        ),
+        "i8 from 300 should error, got {error:?}"
     );
 
     // A negative double has no value in an unsigned target.
     let result: Result<u32> = deserialize(",-1\r\n");
+    let error = result.unwrap_err();
     assert!(
-        matches!(result, Err(Error::Client(ClientError::CannotParseInteger))),
-        "u32 from -1.0 should error, got {result:?}"
+        matches!(
+            error.kind(),
+            ErrorKind::Client(ClientError::CannotParseInteger)
+        ),
+        "u32 from -1.0 should error, got {error:?}"
     );
 
     // NaN and the infinities are not integers.
     let result: Result<i64> = deserialize(",nan\r\n");
+    let error = result.unwrap_err();
     assert!(
-        matches!(result, Err(Error::Client(ClientError::CannotParseInteger))),
-        "i64 from NaN should error, got {result:?}"
+        matches!(
+            error.kind(),
+            ErrorKind::Client(ClientError::CannotParseInteger)
+        ),
+        "i64 from NaN should error, got {error:?}"
     );
     let result: Result<i64> = deserialize(",inf\r\n");
+    let error = result.unwrap_err();
     assert!(
-        matches!(result, Err(Error::Client(ClientError::CannotParseInteger))),
-        "i64 from inf should error, got {result:?}"
+        matches!(
+            error.kind(),
+            ErrorKind::Client(ClientError::CannotParseInteger)
+        ),
+        "i64 from inf should error, got {error:?}"
     );
 
     // An exactly representable double still deserializes to the integer.
@@ -1085,9 +1121,13 @@ fn negative_integer_to_u128_errors_instead_of_wrapping() {
 
     // A negative wire integer has no `u128` value.
     let result: Result<u128> = deserialize(":-1\r\n");
+    let error = result.unwrap_err();
     assert!(
-        matches!(result, Err(Error::Client(ClientError::CannotParseInteger))),
-        "u128 from -1 should error, got {result:?}"
+        matches!(
+            error.kind(),
+            ErrorKind::Client(ClientError::CannotParseInteger)
+        ),
+        "u128 from -1 should error, got {error:?}"
     );
 
     let value: u128 = deserialize(":42\r\n").unwrap();

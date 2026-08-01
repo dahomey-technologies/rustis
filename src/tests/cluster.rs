@@ -1,5 +1,5 @@
 use crate::{
-    ClientError, Error, RedisError, RedisErrorKind, Result,
+    ClientError, ErrorKind, RedisError, RedisErrorKind, Result,
     client::{BatchPreparedCommand, Client, ClientPreparedCommand, IntoConfig, ReconnectionConfig},
     commands::{
         ClientReplyMode, ClientTrackingOptions, ClientTrackingStatus, ClusterCommands,
@@ -85,12 +85,13 @@ async fn all_shards_one_succeeded() -> Result<()> {
     client.flushall(FlushingMode::Sync).await?;
 
     let result = client.script_kill().await;
+    let error = result.unwrap_err();
     assert!(matches!(
-        result,
-        Err(Error::Redis(RedisError {
+        error.kind(),
+        ErrorKind::Redis(RedisError {
             kind: RedisErrorKind::NotBusy,
             description: _
-        }))
+        })
     ));
 
     let sha1: String = client
@@ -504,7 +505,7 @@ async fn mid_batch_redirection_does_not_desync_following_responses() -> Result<(
 
     let values = results?
         .iter()
-        .map(|response| response.to::<String>())
+        .map(|(response, _)| response.to::<String>())
         .collect::<Result<Vec<_>>>()?;
     assert_eq!(
         vec!["A", "M", "B"],
@@ -801,9 +802,10 @@ async fn per_shard_error_surfaces_to_the_caller_without_reconnecting() -> Result
     admin.acl_deluser("clu03_user").await?;
     admin.del("clu03_a{1}").await?;
 
+    let error = result.unwrap_err();
     assert!(
-        matches!(&result, Err(Error::Redis(e)) if e.kind == RedisErrorKind::NoPerm),
-        "the failing shard's error must reach the caller, got {result:?}"
+        matches!(error.kind(), ErrorKind::Redis(e) if e.kind == RedisErrorKind::NoPerm),
+        "the failing shard's error must reach the caller, got {error:?}"
     );
     assert!(
         on_reconnect.try_recv().is_err(),
@@ -829,9 +831,10 @@ async fn cross_slot_transaction_is_rejected_instead_of_losing_atomicity() -> Res
     transaction.set("api01_b{3}", "value2").forget();
     let result: Result<()> = transaction.execute().await;
 
+    let error = result.unwrap_err();
     assert!(
-        matches!(result, Err(Error::Client(ClientError::CrossSlot))),
-        "a cross-slot transaction must be refused, got {result:?}"
+        matches!(error.kind(), ErrorKind::Client(ClientError::CrossSlot)),
+        "a cross-slot transaction must be refused, got {error:?}"
     );
 
     // Refused before sending: neither half may have been executed.
@@ -839,6 +842,31 @@ async fn cross_slot_transaction_is_rejected_instead_of_losing_atomicity() -> Res
     assert_eq!(vec![None], values);
     let values: Vec<Option<String>> = client.mget(["api01_b{3}"]).await?;
     assert_eq!(vec![None], values);
+
+    Ok(())
+}
+
+/// A command routed to a single node cannot span slots. The refusal has to name
+/// the command: `MSETNX` and the transaction above are two different mistakes,
+/// and an application that batches both needs to know which one it made.
+#[tokio::test]
+#[serial]
+async fn a_single_node_command_spanning_slots_names_the_command_it_refuses() -> Result<()> {
+    let client = get_cluster_test_client().await?;
+
+    let result: Result<bool> = client
+        .msetnx([("clu_slots_a{1}", "value1"), ("clu_slots_b{3}", "value2")])
+        .await;
+
+    let error = result.expect_err("a cross-slot MSETNX must be refused");
+    assert!(
+        matches!(
+            error.kind(),
+            ErrorKind::Client(ClientError::MismatchedKeySlots)
+        ),
+        "expected MismatchedKeySlots, got {error:?}"
+    );
+    assert_eq!(Some("MSETNX"), error.command());
 
     Ok(())
 }

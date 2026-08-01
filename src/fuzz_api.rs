@@ -35,7 +35,7 @@ pub fn parse_frame(data: &[u8]) {
 /// as they would arrive across TCP segments.
 ///
 /// This drives the decoder's chunk-boundary resume path: feeding the input in
-/// pieces makes partial frames exercise the `Error::EOF` suspend-and-resume
+/// pieces makes partial frames exercise the `ErrorKind::EOF` suspend-and-resume
 /// behaviour, in addition to the plain parse path.
 pub fn decode_chunked(data: &[u8], splits: &[u8]) {
     let mut decoder = BufferDecoder::new();

@@ -200,8 +200,10 @@ async fn vlinks() -> Result<()> {
         )
         .await?;
 
-    let result: Vec<Option<String>> = client.vlinks("key", "element").await?;
-    assert!(result.into_iter().all(|r| r.is_none()));
+    // One entry per HNSW layer, each holding the neighbours of `element`. The
+    // set holds that single element, so every layer is an empty list.
+    let layers: Vec<Vec<String>> = client.vlinks("key", "element").await?;
+    assert!(layers.iter().all(|layer| layer.is_empty()));
 
     Ok(())
 }

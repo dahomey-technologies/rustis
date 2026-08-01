@@ -546,14 +546,10 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
     where
         V: Visitor<'de>,
     {
+        // Only a nil is `None`. An empty array, map or set is a collection that
+        // happens to be empty — a different fact from a missing key, and the one
+        // `LRANGE` on an empty list reports.
         match self.view {
-            RespView::Array(ref resp_array_view) => {
-                if resp_array_view.len() == 0 {
-                    visitor.visit_none()
-                } else {
-                    visitor.visit_some(self)
-                }
-            }
             RespView::Null => visitor.visit_none(),
             RespView::Error(e) => Err(Error::Redis(RedisError::try_from(e)?)),
             _ => visitor.visit_some(self),

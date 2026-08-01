@@ -8,6 +8,24 @@ Versions up to and including `0.19.3` are documented in the
 
 ## [Unreleased]
 
+### Changed
+
+- **An empty collection no longer decodes as `None`.** `Option<T>` treated an empty
+  RESP array as a nil, so `Option<Vec<T>>` over an `LRANGE`, `SMEMBERS` or `ZRANGE`
+  could never observe an empty vector: "the collection is empty" and "the key does
+  not exist" collapsed into the same `None`. Only a nil — `*-1` in RESP2, `_` in
+  RESP3 — is `None` now; an empty array, map or set yields `Some` of an empty
+  collection. Blocking commands are unaffected: `BLPOP`, `BRPOP`, `BLMPOP`,
+  `BZMPOP`, `BZPOPMIN`/`BZPOPMAX` and `ZMPOP` reply nil on timeout, not an empty
+  array. Calling code that used `Option<Vec<T>>` as an emptiness test must switch
+  to `Vec<T>` and `.is_empty()`.
+- **`ts_get` returns `TsGetResult` instead of `Option<(u64, f64)>`.** The time
+  series module reports an empty series as an empty array rather than a nil, so
+  that command was the one relying on the conflation above. `TsGetResult` reads
+  that shape itself and derefs to `Option<(u64, f64)>`, so `assert_eq!(None,
+  *sample)` and `if let Some((ts, value)) = *sample` keep working; `.into()`
+  converts it to the plain option.
+
 ### Fixed
 
 - **`Value` equality is total on doubles.** `Value` asserts `Eq` and is hashed as a

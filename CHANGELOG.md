@@ -139,6 +139,14 @@ Versions up to and including `0.19.3` are documented in the
   covers the twelve integer widths, and `i128`/`u128` are supported. That unwrapping
   now also requires the element to be an integer, as the wire path already did.
 
+### Removed
+
+- **`examples/loop.rs`.** It was not an example of anything — a CPU load for
+  profiling, ten thousand `SET`/`GET` round trips in a loop — and it was the only
+  such probe not gated behind the `bench` feature, so it built under the default
+  features and shipped in the published `.crate` tarball. The remaining profiling
+  probes (`pprof_*`, `head_to_head`, `strace_workload`, …) stay behind `bench`.
+
 ## [0.22.0] - 2026-08-01
 
 ### Added

@@ -167,19 +167,6 @@ where
     }
 }
 
-pub(crate) struct ByteBufSeed;
-
-impl<'de> DeserializeSeed<'de> for ByteBufSeed {
-    type Value = Vec<u8>;
-
-    fn deserialize<D>(self, deserializer: D) -> std::result::Result<Self::Value, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        deserialize_byte_buf(deserializer)
-    }
-}
-
 /// Deserialize a byte slice (&\[u8\])
 pub fn deserialize_bytes<'de, D>(deserializer: D) -> std::result::Result<&'de [u8], D::Error>
 where

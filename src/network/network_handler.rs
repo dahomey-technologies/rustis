@@ -1,4 +1,4 @@
-use super::pub_sub_message::PubSubMessage;
+use super::pub_sub_push::PubSubPush;
 use crate::{
     ClientError, Connection, ConnectionState, Error, ErrorKind, JoinHandle, ReconnectionState,
     RedisError, RedisErrorKind, Result, RetryReason,
@@ -1209,10 +1209,10 @@ impl NetworkHandler {
         value: Result<RespResponse>,
     ) -> Option<Result<RespResponse>> {
         if let Ok(ref_value) = &value {
-            if let Ok(pub_sub_message) = PubSubMessage::try_from(ref_value) {
+            if let Ok(pub_sub_message) = PubSubPush::try_from(ref_value) {
                 match pub_sub_message {
-                    PubSubMessage::Message(channel_or_pattern, _)
-                    | PubSubMessage::SMessage(channel_or_pattern, _) => {
+                    PubSubPush::Message(channel_or_pattern, _)
+                    | PubSubPush::SMessage(channel_or_pattern, _) => {
                         #[cfg(test)]
                         let delivered_bytes = ref_value.retained_bytes();
                         match self.subscriptions.get_mut(channel_or_pattern) {
@@ -1230,9 +1230,9 @@ impl NetworkHandler {
                                     let error_desc = e.to_string();
                                     if let Ok(ref_value) = &e.into_inner()
                                         && let Some(
-                                            PubSubMessage::Message(channel_or_pattern, _)
-                                            | PubSubMessage::SMessage(channel_or_pattern, _),
-                                        ) = PubSubMessage::try_from(ref_value).ok()
+                                            PubSubPush::Message(channel_or_pattern, _)
+                                            | PubSubPush::SMessage(channel_or_pattern, _),
+                                        ) = PubSubPush::try_from(ref_value).ok()
                                     {
                                         warn!(
                                             "Cannot send pub/sub message to caller from channel `{}`: {error_desc}",
@@ -1250,9 +1250,9 @@ impl NetworkHandler {
                         }
                         None
                     }
-                    PubSubMessage::Subscribe(channel_or_pattern)
-                    | PubSubMessage::PSubscribe(channel_or_pattern)
-                    | PubSubMessage::SSubscribe(channel_or_pattern) => {
+                    PubSubPush::Subscribe(channel_or_pattern)
+                    | PubSubPush::PSubscribe(channel_or_pattern)
+                    | PubSubPush::SSubscribe(channel_or_pattern) => {
                         // Peek before popping: a mismatched confirmation must not
                         // consume (and silently drop) the pending subscriber. Only
                         // pop once we know the front entry is the one being confirmed.
@@ -1291,9 +1291,9 @@ impl NetworkHandler {
                         }
                         None
                     }
-                    PubSubMessage::Unsubscribe(channel_or_pattern)
-                    | PubSubMessage::PUnsubscribe(channel_or_pattern)
-                    | PubSubMessage::SUnsubscribe(channel_or_pattern) => {
+                    PubSubPush::Unsubscribe(channel_or_pattern)
+                    | PubSubPush::PUnsubscribe(channel_or_pattern)
+                    | PubSubPush::SUnsubscribe(channel_or_pattern) => {
                         self.subscriptions.remove(channel_or_pattern);
                         if let Some(remaining) = self.pending_unsubscriptions.front_mut() {
                             if remaining.len() > 1 {
@@ -1328,7 +1328,7 @@ impl NetworkHandler {
                             Some(value)
                         }
                     }
-                    PubSubMessage::PMessage(pattern, channel, _) => {
+                    PubSubPush::PMessage(pattern, channel, _) => {
                         #[cfg(test)]
                         let delivered_bytes = ref_value.retained_bytes();
                         match self.subscriptions.get_mut(pattern) {

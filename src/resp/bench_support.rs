@@ -17,7 +17,8 @@
 
 use crate::{
     Error, ErrorKind, Result,
-    client::BufferConfig,
+    client::{BufferConfig, PubSubMessage},
+    network::PubSubPush,
     resp::{
         BufferDecoder, Command, CommandEncoder, ParsedFrame, RespBuf, RespFrameParser,
         RespResponse, RespTapeMut,
@@ -25,6 +26,7 @@ use crate::{
 };
 use bytes::{Bytes, BytesMut};
 use serde::de::DeserializeOwned;
+use smallvec::SmallVec;
 use tokio_util::codec::{Decoder, Encoder as _};
 
 /// Parses one complete RESP frame from `bytes` and deserializes it into `T`.
@@ -37,6 +39,83 @@ pub fn bench_decode_to<T: DeserializeOwned>(bytes: &[u8]) -> Result<T> {
     let (frame, frame_len) = RespFrameParser::new(bytes, &mut tape).parse()?;
     let buf = RespBuf::from(Bytes::copy_from_slice(&bytes[..frame_len]));
     RespResponse::new(buf, frame).to()
+}
+
+/// A pub/sub push held the way the network task holds one, so delivery can be
+/// measured without the artefacts a per-call fixture adds.
+///
+/// Reparsing from raw bytes on every call would reallocate a parse tape and copy
+/// the frame into a fresh `Bytes`; in production the decoder recycles its tape
+/// and the frame is already a slice of the read buffer. Both artefacts are
+/// allocations, which is the quantity under test — they would drown the answer.
+/// This type pays them once, at construction, so each `deliver*` call is the
+/// per-message cost a subscriber actually pays.
+pub struct BenchPubSubPush {
+    buf: RespBuf,
+    tape: RespTapeMut,
+}
+
+impl BenchPubSubPush {
+    /// Parses `bytes` once and keeps the frame, as the read buffer holds it.
+    pub fn new(bytes: &[u8]) -> Result<Self> {
+        let mut tape = RespTapeMut::default();
+        let (_, frame_len) = RespFrameParser::new(bytes, &mut tape).parse()?;
+        Ok(Self {
+            buf: RespBuf::from(Bytes::copy_from_slice(&bytes[..frame_len])),
+            tape,
+        })
+    }
+
+    fn response(&mut self) -> Result<RespResponse> {
+        let (frame, _) = RespFrameParser::new(&self.buf, &mut self.tape).parse()?;
+        Ok(RespResponse::new(self.buf.clone(), frame))
+    }
+
+    /// Splits the push into its three segments, as every shape below starts by
+    /// doing.
+    fn segments(response: &RespResponse) -> Result<(&[u8], &[u8], &[u8])> {
+        match PubSubPush::try_from(response) {
+            Ok(PubSubPush::Message(channel, payload) | PubSubPush::SMessage(channel, payload)) => {
+                Ok((&[], channel, payload))
+            }
+            Ok(PubSubPush::PMessage(pattern, channel, payload)) => Ok((pattern, channel, payload)),
+            _ => Err(Error::from(ErrorKind::EOF)),
+        }
+    }
+
+    /// One delivery, shipped shape: parse the push, then build the
+    /// [`PubSubMessage`] a subscriber is handed.
+    #[inline(never)]
+    pub fn deliver(&mut self) -> Result<PubSubMessage> {
+        let response = self.response()?;
+        PubSubMessage::try_from(&response)
+    }
+
+    /// One delivery into one owned `Vec` per segment — the shape
+    /// `PubSubMessage` had before, at two allocations for a `message` and three
+    /// for a `pmessage`.
+    #[inline(never)]
+    pub fn deliver_owned(&mut self) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>)> {
+        let response = self.response()?;
+        let (pattern, channel, payload) = Self::segments(&response)?;
+        Ok((pattern.to_vec(), channel.to_vec(), payload.to_vec()))
+    }
+
+    /// One delivery into a 64-byte inline buffer that spills to the heap — no
+    /// allocation at all below the inline width, at the price of a wider message
+    /// to move on every delivery.
+    #[inline(never)]
+    pub fn deliver_inline(&mut self) -> Result<(SmallVec<[u8; 64]>, usize, usize)> {
+        let response = self.response()?;
+        let (pattern, channel, payload) = Self::segments(&response)?;
+        let channel_start = pattern.len();
+        let payload_start = channel_start + channel.len();
+        let mut buf = SmallVec::with_capacity(payload_start + payload.len());
+        buf.extend_from_slice(pattern);
+        buf.extend_from_slice(channel);
+        buf.extend_from_slice(payload);
+        Ok((buf, channel_start, payload_start))
+    }
 }
 
 /// Feeds `chunks` through `BufferDecoder` one at a time, as a socket would

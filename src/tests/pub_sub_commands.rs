@@ -155,8 +155,8 @@ async fn pubsub() -> Result<()> {
     regular_client.publish("mychannel", "mymessage").await?;
 
     let message = pub_sub_stream.next().await.unwrap()?;
-    assert_eq!(b"mychannel".to_vec(), message.channel);
-    assert_eq!(b"mymessage".to_vec(), message.payload);
+    assert_eq!(b"mychannel", message.channel());
+    assert_eq!(b"mymessage", message.payload());
 
     regular_client.set("key", "value").await?;
     let value: String = regular_client.get("key").await?;
@@ -168,8 +168,8 @@ async fn pubsub() -> Result<()> {
     regular_client.publish("mychannel2", "mymessage2").await?;
 
     let message = pub_sub_stream.next().await.unwrap()?;
-    let channel: String = String::from_utf8(message.channel).unwrap();
-    let payload: String = String::from_utf8(message.payload).unwrap();
+    let channel = std::str::from_utf8(message.channel()).unwrap();
+    let payload = std::str::from_utf8(message.payload()).unwrap();
 
     assert_eq!("mychannel2", channel);
     assert_eq!("mymessage2", payload);
@@ -222,15 +222,15 @@ async fn subscribe_to_multiple_channels() -> Result<()> {
     regular_client.publish("mychannel2", "mymessage2").await?;
 
     let message = pub_sub_stream.next().await.unwrap()?;
-    let channel: String = String::from_utf8(message.channel).unwrap();
-    let payload: String = String::from_utf8(message.payload).unwrap();
+    let channel = std::str::from_utf8(message.channel()).unwrap();
+    let payload = std::str::from_utf8(message.payload()).unwrap();
 
     assert_eq!("mychannel1", channel);
     assert_eq!("mymessage1", payload);
 
     let message = pub_sub_stream.next().await.unwrap()?;
-    let channel: String = String::from_utf8(message.channel).unwrap();
-    let payload: String = String::from_utf8(message.payload).unwrap();
+    let channel = std::str::from_utf8(message.channel()).unwrap();
+    let payload = std::str::from_utf8(message.payload()).unwrap();
 
     assert_eq!("mychannel2", channel);
     assert_eq!("mymessage2", payload);
@@ -259,36 +259,36 @@ async fn subscribe_to_multiple_patterns() -> Result<()> {
     regular_client.publish("mychannel22", "mymessage22").await?;
 
     let message = pub_sub_stream.next().await.unwrap()?;
-    let pattern: String = String::from_utf8(message.pattern).unwrap();
-    let channel: String = String::from_utf8(message.channel).unwrap();
-    let payload: String = String::from_utf8(message.payload).unwrap();
+    let pattern = std::str::from_utf8(message.pattern()).unwrap();
+    let channel = std::str::from_utf8(message.channel()).unwrap();
+    let payload = std::str::from_utf8(message.payload()).unwrap();
 
     assert_eq!("mychannel1*", pattern);
     assert_eq!("mychannel11", channel);
     assert_eq!("mymessage11", payload);
 
     let message = pub_sub_stream.next().await.unwrap()?;
-    let pattern: String = String::from_utf8(message.pattern).unwrap();
-    let channel: String = String::from_utf8(message.channel).unwrap();
-    let payload: String = String::from_utf8(message.payload).unwrap();
+    let pattern = std::str::from_utf8(message.pattern()).unwrap();
+    let channel = std::str::from_utf8(message.channel()).unwrap();
+    let payload = std::str::from_utf8(message.payload()).unwrap();
 
     assert_eq!("mychannel1*", pattern);
     assert_eq!("mychannel12", channel);
     assert_eq!("mymessage12", payload);
 
     let message = pub_sub_stream.next().await.unwrap()?;
-    let pattern: String = String::from_utf8(message.pattern).unwrap();
-    let channel: String = String::from_utf8(message.channel).unwrap();
-    let payload: String = String::from_utf8(message.payload).unwrap();
+    let pattern = std::str::from_utf8(message.pattern()).unwrap();
+    let channel = std::str::from_utf8(message.channel()).unwrap();
+    let payload = std::str::from_utf8(message.payload()).unwrap();
 
     assert_eq!("mychannel2*", pattern);
     assert_eq!("mychannel21", channel);
     assert_eq!("mymessage21", payload);
 
     let message = pub_sub_stream.next().await.unwrap()?;
-    let pattern: String = String::from_utf8(message.pattern).unwrap();
-    let channel: String = String::from_utf8(message.channel).unwrap();
-    let payload: String = String::from_utf8(message.payload).unwrap();
+    let pattern = std::str::from_utf8(message.pattern()).unwrap();
+    let channel = std::str::from_utf8(message.channel()).unwrap();
+    let payload = std::str::from_utf8(message.payload()).unwrap();
 
     assert_eq!("mychannel2*", pattern);
     assert_eq!("mychannel22", channel);
@@ -391,8 +391,8 @@ async fn pubsub_shardchannels() -> Result<()> {
     regular_client.spublish("mychannel", "mymessage").await?;
 
     let message = pub_sub_stream.next().await.unwrap()?;
-    let channel: String = String::from_utf8(message.channel).unwrap();
-    let payload: String = String::from_utf8(message.payload).unwrap();
+    let channel = std::str::from_utf8(message.channel()).unwrap();
+    let payload = std::str::from_utf8(message.payload()).unwrap();
 
     assert_eq!("mychannel", channel);
     assert_eq!("mymessage", payload);
@@ -407,8 +407,8 @@ async fn pubsub_shardchannels() -> Result<()> {
     regular_client.spublish("mychannel2", "mymessage2").await?;
 
     let message = pub_sub_stream.next().await.unwrap()?;
-    let channel: String = String::from_utf8(message.channel).unwrap();
-    let payload: String = String::from_utf8(message.payload).unwrap();
+    let channel = std::str::from_utf8(message.channel()).unwrap();
+    let payload = std::str::from_utf8(message.payload()).unwrap();
 
     assert_eq!("mychannel2", channel);
     assert_eq!("mymessage2", payload);
@@ -438,15 +438,15 @@ async fn subscribe_to_multiple_shardchannels() -> Result<()> {
         .await?;
 
     let message = pub_sub_stream.next().await.unwrap()?;
-    let channel: String = String::from_utf8(message.channel).unwrap();
-    let payload: String = String::from_utf8(message.payload).unwrap();
+    let channel = std::str::from_utf8(message.channel()).unwrap();
+    let payload = std::str::from_utf8(message.payload()).unwrap();
 
     assert_eq!("mychannel1{1}", channel);
     assert_eq!("mymessage1", payload);
 
     let message = pub_sub_stream.next().await.unwrap()?;
-    let channel: String = String::from_utf8(message.channel).unwrap();
-    let payload: String = String::from_utf8(message.payload).unwrap();
+    let channel = std::str::from_utf8(message.channel()).unwrap();
+    let payload = std::str::from_utf8(message.payload()).unwrap();
 
     assert_eq!("mychannel2{1}", channel);
     assert_eq!("mymessage2", payload);
@@ -588,8 +588,8 @@ async fn sunsubscribe() -> Result<()> {
         .spublish("mychannel2{1}", "mymessage")
         .await?;
     let message = pub_sub_stream.next().await.unwrap()?;
-    assert_eq!(b"mychannel2{1}".to_vec(), message.channel);
-    assert_eq!(b"mymessage".to_vec(), message.payload);
+    assert_eq!(b"mychannel2{1}", message.channel());
+    assert_eq!(b"mymessage", message.payload());
 
     pub_sub_stream.close().await?;
 
@@ -660,8 +660,8 @@ async fn additional_sub() -> Result<()> {
     regular_client.publish("mychannel1", "mymessage1").await?;
 
     let message = pub_sub_stream.next().await.unwrap()?;
-    let channel: String = String::from_utf8(message.channel).unwrap();
-    let payload: String = String::from_utf8(message.payload).unwrap();
+    let channel = std::str::from_utf8(message.channel()).unwrap();
+    let payload = std::str::from_utf8(message.payload()).unwrap();
 
     assert_eq!("mychannel1", channel);
     assert_eq!("mymessage1", payload);
@@ -674,15 +674,15 @@ async fn additional_sub() -> Result<()> {
     regular_client.publish("mychannel2", "mymessage2").await?;
 
     let message = pub_sub_stream.next().await.unwrap()?;
-    let channel: String = String::from_utf8(message.channel).unwrap();
-    let payload: String = String::from_utf8(message.payload).unwrap();
+    let channel = std::str::from_utf8(message.channel()).unwrap();
+    let payload = std::str::from_utf8(message.payload()).unwrap();
 
     assert_eq!("mychannel1", channel);
     assert_eq!("mymessage1", payload);
 
     let message = pub_sub_stream.next().await.unwrap()?;
-    let channel: String = String::from_utf8(message.channel).unwrap();
-    let payload: String = String::from_utf8(message.payload).unwrap();
+    let channel = std::str::from_utf8(message.channel()).unwrap();
+    let payload = std::str::from_utf8(message.payload()).unwrap();
 
     assert_eq!("mychannel2", channel);
     assert_eq!("mymessage2", payload);
@@ -696,22 +696,22 @@ async fn additional_sub() -> Result<()> {
     regular_client.publish("otherchannel", "mymessage3").await?;
 
     let message = pub_sub_stream.next().await.unwrap()?;
-    let channel: String = String::from_utf8(message.channel).unwrap();
-    let payload: String = String::from_utf8(message.payload).unwrap();
+    let channel = std::str::from_utf8(message.channel()).unwrap();
+    let payload = std::str::from_utf8(message.payload()).unwrap();
 
     assert_eq!("mychannel1", channel);
     assert_eq!("mymessage1", payload);
 
     let message = pub_sub_stream.next().await.unwrap()?;
-    let channel: String = String::from_utf8(message.channel).unwrap();
-    let payload: String = String::from_utf8(message.payload).unwrap();
+    let channel = std::str::from_utf8(message.channel()).unwrap();
+    let payload = std::str::from_utf8(message.payload()).unwrap();
 
     assert_eq!("mychannel2", channel);
     assert_eq!("mymessage2", payload);
 
     let message = pub_sub_stream.next().await.unwrap()?;
-    let channel: String = String::from_utf8(message.channel).unwrap();
-    let payload: String = String::from_utf8(message.payload).unwrap();
+    let channel = std::str::from_utf8(message.channel()).unwrap();
+    let payload = std::str::from_utf8(message.payload()).unwrap();
 
     assert_eq!("otherchannel", channel);
     assert_eq!("mymessage3", payload);
@@ -749,16 +749,16 @@ async fn auto_resubscribe() -> Result<()> {
         .await?;
 
     let message = pub_sub_stream.try_next().await?.unwrap();
-    let channel: String = String::from_utf8(message.channel).unwrap();
-    let payload: String = String::from_utf8(message.payload).unwrap();
+    let channel = std::str::from_utf8(message.channel()).unwrap();
+    let payload = std::str::from_utf8(message.payload()).unwrap();
 
     assert_eq!("mychannel", channel);
     assert_eq!("mymessage", payload);
 
     let message = pub_sub_stream.try_next().await?.unwrap();
-    let pattern: String = String::from_utf8(message.pattern).unwrap();
-    let channel: String = String::from_utf8(message.channel).unwrap();
-    let payload: String = String::from_utf8(message.payload).unwrap();
+    let pattern = std::str::from_utf8(message.pattern()).unwrap();
+    let channel = std::str::from_utf8(message.channel()).unwrap();
+    let payload = std::str::from_utf8(message.payload()).unwrap();
 
     assert_eq!("otherchannel", channel);
     assert_eq!("o*", pattern);
@@ -840,7 +840,7 @@ async fn concurrent_subscribe() -> Result<()> {
     regular_client.publish("mychannel1", "new").await?;
 
     let message1 = pub_sub_stream1.next().await.unwrap()?;
-    assert_eq!(b"new".to_vec(), message1.payload);
+    assert_eq!(b"new", message1.payload());
 
     Ok(())
 }
@@ -861,15 +861,15 @@ async fn unsubscribe() -> Result<()> {
     regular_client.publish("mychannel2", "mymessage2").await?;
 
     let message = pub_sub_stream.next().await.unwrap()?;
-    let channel: String = String::from_utf8(message.channel).unwrap();
-    let payload: String = String::from_utf8(message.payload).unwrap();
+    let channel = std::str::from_utf8(message.channel()).unwrap();
+    let payload = std::str::from_utf8(message.payload()).unwrap();
 
     assert_eq!("mychannel1", channel);
     assert_eq!("mymessage1", payload);
 
     let message = pub_sub_stream.next().await.unwrap()?;
-    let channel: String = String::from_utf8(message.channel).unwrap();
-    let payload: String = String::from_utf8(message.payload).unwrap();
+    let channel = std::str::from_utf8(message.channel()).unwrap();
+    let payload = std::str::from_utf8(message.payload()).unwrap();
 
     assert_eq!("mychannel2", channel);
     assert_eq!("mymessage2", payload);
@@ -879,15 +879,15 @@ async fn unsubscribe() -> Result<()> {
     regular_client.publish("mychannel1", "mymessage12").await?;
 
     let message = pub_sub_stream.next().await.unwrap()?;
-    let channel: String = String::from_utf8(message.channel).unwrap();
-    let payload: String = String::from_utf8(message.payload).unwrap();
+    let channel = std::str::from_utf8(message.channel()).unwrap();
+    let payload = std::str::from_utf8(message.payload()).unwrap();
 
     assert_eq!("mychannel1", channel);
     assert_eq!("mymessage11", payload);
 
     let message = pub_sub_stream.next().await.unwrap()?;
-    let channel: String = String::from_utf8(message.channel).unwrap();
-    let payload: String = String::from_utf8(message.payload).unwrap();
+    let channel = std::str::from_utf8(message.channel()).unwrap();
+    let payload = std::str::from_utf8(message.payload()).unwrap();
 
     assert_eq!("mychannel1", channel);
     assert_eq!("mymessage12", payload);
@@ -990,16 +990,16 @@ async fn split() -> Result<()> {
 
     let join_handle_stream = spawn(async move {
         let message1 = stream.next().await.unwrap().unwrap();
-        assert_eq!(b"mychannel1", message1.channel.as_slice());
-        assert_eq!(b"mymessage1", message1.payload.as_slice());
+        assert_eq!(b"mychannel1", message1.channel());
+        assert_eq!(b"mymessage1", message1.payload());
 
         let message2 = stream.next().await.unwrap().unwrap();
-        assert_eq!(b"mychannel2", message2.channel.as_slice());
-        assert_eq!(b"mymessage2", message2.payload.as_slice());
+        assert_eq!(b"mychannel2", message2.channel());
+        assert_eq!(b"mymessage2", message2.payload());
 
         let message3 = stream.next().await.unwrap().unwrap();
-        assert_eq!(b"mychannel3", message3.channel.as_slice());
-        assert_eq!(b"mymessage3", message3.payload.as_slice());
+        assert_eq!(b"mychannel3", message3.channel());
+        assert_eq!(b"mymessage3", message3.payload());
     });
 
     join_handle_stream.await?;

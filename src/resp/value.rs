@@ -16,6 +16,11 @@ pub enum Value {
     /// [RESP Integer](https://redis.io/docs/latest/develop/reference/protocol-spec/#integers)
     Integer(i64),
     /// [RESP Double](https://redis.io/docs/latest/develop/reference/protocol-spec/#doubles)
+    ///
+    /// Equality on this variant is total, as `Value` is `Eq` and usable as a
+    /// [`Value::Map`] key: all NaNs are equal to each other — so a `,nan` reply
+    /// equals itself — and `-0.0` equals `0.0`. Both depart from IEEE-754,
+    /// which has no reflexive NaN.
     Double(f64),
     /// [RESP Bulk String](https://redis.io/docs/latest/develop/reference/protocol-spec/#bulk-strings)
     BulkString(Vec<u8>),
@@ -50,6 +55,22 @@ impl Value {
     }
 }
 
+/// Canonical bit pattern a [`Value::Double`] is compared and hashed on.
+///
+/// `Value` asserts `Eq`, which demands a reflexive equality, so the IEEE-754
+/// rules are not usable as they stand: every NaN collapses onto a single
+/// pattern, and the two zeros — equal under `==` — onto the positive one.
+/// `Hash` and `PartialEq` share this function so they cannot drift apart.
+fn canonical_double_bits(d: f64) -> u64 {
+    if d.is_nan() {
+        f64::NAN.to_bits()
+    } else if d == 0.0 {
+        0.0f64.to_bits()
+    } else {
+        d.to_bits()
+    }
+}
+
 impl Hash for Value {
     fn hash<H: Hasher>(&self, state: &mut H) {
         // A RESP3 map is `HashMap<Value, Value>`, so any variant can appear as a
@@ -61,13 +82,7 @@ impl Hash for Value {
         match self {
             Value::SimpleString(s) => s.hash(state),
             Value::Integer(i) => i.hash(state),
-            // `PartialEq` compares doubles with `==`, under which `0.0 == -0.0`;
-            // the hash must agree, so normalize the sign of zero before hashing
-            // the bit pattern (which otherwise differs for the two zeros).
-            Value::Double(d) => {
-                let normalized = if *d == 0.0 { 0.0 } else { *d };
-                normalized.to_bits().hash(state);
-            }
+            Value::Double(d) => canonical_double_bits(*d).hash(state),
             Value::BulkString(bs) => bs.hash(state),
             Value::Boolean(b) => b.hash(state),
             Value::Array(v) | Value::Set(v) | Value::Push(v) => v.hash(state),
@@ -94,7 +109,9 @@ impl PartialEq for Value {
         match (self, other) {
             (Self::SimpleString(l0), Self::SimpleString(r0)) => l0 == r0,
             (Self::Integer(l0), Self::Integer(r0)) => l0 == r0,
-            (Self::Double(l0), Self::Double(r0)) => l0 == r0,
+            (Self::Double(l0), Self::Double(r0)) => {
+                canonical_double_bits(*l0) == canonical_double_bits(*r0)
+            }
             (Self::Boolean(l0), Self::Boolean(r0)) => l0 == r0,
             (Self::BulkString(l0), Self::BulkString(r0)) => l0 == r0,
             (Self::Array(l0), Self::Array(r0)) => l0 == r0,

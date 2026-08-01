@@ -1,5 +1,5 @@
 use crate::{
-    Error, ErrorKind, RedisError, RedisErrorKind, Result,
+    ClientError, Error, ErrorKind, RedisError, RedisErrorKind, Result,
     client::BatchPreparedCommand,
     commands::{
         ClientKillOptions, ConnectionCommands, GenericCommands, ListCommands, StringCommands,
@@ -313,6 +313,87 @@ async fn a_server_error_names_the_command_that_drew_it() -> Result<()> {
     assert_eq!(Some("GET"), error.command());
 
     Ok(())
+}
+
+fn redis(kind: RedisErrorKind) -> Error {
+    Error::from(ErrorKind::Redis(RedisError {
+        kind,
+        description: String::new(),
+    }))
+}
+
+fn client(client_error: ClientError) -> Error {
+    Error::from(ErrorKind::Client(client_error))
+}
+
+fn io() -> Error {
+    Error::from(ErrorKind::IO(std::sync::Arc::new(std::io::Error::new(
+        std::io::ErrorKind::ConnectionReset,
+        "reset",
+    ))))
+}
+
+/// The connection is what died, so the command never got an answer and the
+/// client will have to reconnect. A reply the parser could not decode belongs
+/// here too: the byte stream is desynchronized, so the connection is done.
+#[test]
+fn a_connection_error_is_told_from_a_command_error() {
+    assert!(io().is_connection_error());
+    assert!(Error::from(ErrorKind::EOF).is_connection_error());
+    assert!(Error::from(ErrorKind::DisconnectedByPeer).is_connection_error());
+    assert!(client(ClientError::CannotParseInteger).is_connection_error());
+    assert!(client(ClientError::UnknownRespTag('@')).is_connection_error());
+
+    // The server answered, and answered an error: the connection is fine.
+    assert!(!redis(RedisErrorKind::WrongType).is_connection_error());
+    // A decode error raised past framing fails one command, not the stream.
+    assert!(!client(ClientError::MismatchedKeySlots).is_connection_error());
+    assert!(!client(ClientError::CannotParseBytes).is_connection_error());
+    assert!(!Error::from(ErrorKind::Timeout).is_connection_error());
+    assert!(!Error::from(ErrorKind::Aborted).is_connection_error());
+}
+
+/// A timeout is its own answer: the command may or may not have run, which is
+/// neither a connection failure nor a server refusal.
+#[test]
+fn a_timeout_is_its_own_class() {
+    assert!(Error::from(ErrorKind::Timeout).is_timeout());
+
+    assert!(!io().is_timeout());
+    assert!(!redis(RedisErrorKind::TryAgain).is_timeout());
+    assert!(!Error::from(ErrorKind::Timeout).is_server_error());
+    assert!(!Error::from(ErrorKind::Timeout).is_connection_error());
+}
+
+/// The server error is the one class the application can act on by name — a
+/// `WRONGTYPE` is a bug in the calling code, a `NOAUTH` a bug in the config.
+#[test]
+fn a_server_error_is_a_reply_the_server_chose_to_send() {
+    assert!(redis(RedisErrorKind::WrongType).is_server_error());
+    assert!(redis(RedisErrorKind::Other).is_server_error());
+
+    assert!(!io().is_server_error());
+    assert!(!client(ClientError::CannotParseInteger).is_server_error());
+}
+
+/// What a caller wanting to replay a command needs, in one predicate: the
+/// transient failures, whatever layer they came from.
+#[test]
+fn a_retryable_error_covers_every_transient_layer() {
+    assert!(io().is_retryable());
+    assert!(Error::from(ErrorKind::EOF).is_retryable());
+    assert!(Error::from(ErrorKind::Timeout).is_retryable());
+    assert!(redis(RedisErrorKind::TryAgain).is_retryable());
+    assert!(redis(RedisErrorKind::ClusterDown).is_retryable());
+    assert!(redis(RedisErrorKind::MasterDown).is_retryable());
+    assert!(redis(RedisErrorKind::NoMasterLink).is_retryable());
+
+    // Replaying these produces the very same error.
+    assert!(!redis(RedisErrorKind::WrongType).is_retryable());
+    assert!(!redis(RedisErrorKind::NoAuth).is_retryable());
+    assert!(!redis(RedisErrorKind::Err).is_retryable());
+    assert!(!client(ClientError::MismatchedKeySlots).is_retryable());
+    assert!(!Error::from(ErrorKind::Aborted).is_retryable());
 }
 
 /// A batch reply is deserialized command by command, so an error inside it

@@ -8,6 +8,19 @@ Versions up to and including `0.19.3` are documented in the
 
 ## [Unreleased]
 
+### Added
+
+- **`Error` classifies itself.** `is_connection_error()`, `is_timeout()`,
+  `is_server_error()` and `is_retryable()` answer the questions every caller asks
+  of a failure: whose fault is it, and is it worth trying again. `ErrorKind` and
+  `ClientError` are `#[non_exhaustive]`, so this classification could not be
+  written outside the crate — a downstream `match` must end in a catch-all arm and
+  therefore silently misclassifies every variant added afterwards.
+  `is_connection_error()` covers the RESP framing failures too, since a stream the
+  parser lost track of costs the connection. `is_retryable()` reports a transient
+  failure, not a command that certainly did not run: its documentation says so,
+  because a timeout or a lost connection can follow a write the server applied.
+
 ### Changed
 
 - **Errors name the command they belong to.** `Error` is now a struct rather than an

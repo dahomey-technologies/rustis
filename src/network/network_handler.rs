@@ -1648,22 +1648,7 @@ impl NetworkHandler {
 fn is_connection_level_error(error: &Error) -> bool {
     match error.kind() {
         ErrorKind::IO(_) | ErrorKind::EOF => true,
-        ErrorKind::Client(client_error) => matches!(
-            client_error,
-            ClientError::CannotParseInteger
-                | ClientError::CannotParseDouble
-                | ClientError::CannotParseBulkString
-                | ClientError::CannotParseBulkError
-                | ClientError::CannotParseVerbatimString
-                | ClientError::CannotParseBoolean
-                | ClientError::CannotParseMap
-                | ClientError::CannotParseSequence
-                | ClientError::UnknownRespTag(_)
-                | ClientError::BulkLengthTooLarge
-                | ClientError::CollectionLengthTooLarge
-                | ClientError::MaxNestingDepthExceeded
-                | ClientError::VerbatimStringTooShort
-        ),
+        ErrorKind::Client(client_error) => client_error.is_framing_error(),
         _ => false,
     }
 }
@@ -1759,6 +1744,33 @@ mod tests {
             ClientError::MaxNestingDepthExceeded
         )));
         assert!(is_connection_level_error(&Error::from(ErrorKind::EOF)));
+    }
+
+    /// The handler's allow-list is deliberately narrower than what a user calls
+    /// a connection failure: it only names the errors that can arrive on the
+    /// read path. Whatever it does tear the connection down for, though, the
+    /// user has to see as a connection failure too, or the two answers
+    /// contradict each other for the same error.
+    #[test]
+    fn the_public_predicate_agrees_on_every_connection_level_error() {
+        for error in [
+            Error::from(ClientError::CannotParseInteger),
+            Error::from(ClientError::UnknownRespTag('?')),
+            Error::from(ClientError::MaxNestingDepthExceeded),
+            Error::from(ClientError::VerbatimStringTooShort),
+            Error::from(ClientError::BulkLengthTooLarge),
+            Error::from(ErrorKind::EOF),
+            Error::from(ErrorKind::IO(std::sync::Arc::new(std::io::Error::new(
+                std::io::ErrorKind::ConnectionReset,
+                "reset",
+            )))),
+        ] {
+            assert!(is_connection_level_error(&error));
+            assert!(
+                error.is_connection_error(),
+                "the handler reconnects on {error:?} but the user is told the connection is fine"
+            );
+        }
     }
 
     /// `READONLY` is the one command error that says something about the *node*

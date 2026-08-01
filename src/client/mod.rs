@@ -143,6 +143,18 @@ redis|rediss[+sentinel]://[[<username>]:<password>@]<host>[:<port>]/<service>[/<
 
 `service` is the required name of the sentinel service
 
+### Unix socket
+
+```text
+unix://<path>[?db=<database>]
+```
+
+`path` is the absolute path of the socket the server listens on. It is the whole path of the
+URI, so the database is the `db` query parameter here rather than the last path segment, and
+there is no authority to carry credentials: set [`Config::username`] / [`Config::password`] on
+the config. [`keep_alive`](Config::keep_alive) and [`no_delay`](Config::no_delay) describe a TCP
+socket and are not applied.
+
 ### Schemes
 The URL scheme is used to detect the server type:
 * `redis://` - Non secure TCP connection to a standalone Redis server
@@ -151,6 +163,8 @@ The URL scheme is used to detect the server type:
 * `rediss+sentinel://` or `rediss-sentinel://` - Secure (TSL) TCP connection to a Redis sentinel network
 * `redis+cluster://` or `redis-cluster://` - Non secure TCP connection to a Redis cluster
 * `rediss+cluster://` or `rediss-cluster://` - Secure (TSL) TCP connection to a Redis cluster
+* `unix://`, `redis+unix://` or `redis-unix://` - Connection to a standalone Redis server
+  listening on a Unix domain socket
 
 ### QueryParameters
 Query parameters set optional configuration fields of the struct [`Config`] or its
@@ -175,6 +189,8 @@ does not parse, is rejected with an error rather than ignored.
   failing before connecting to the next Sentinel instance (default `250` ms).
 * [`sentinel_username`](SentinelConfig::username) - (Sentinel only) Sentinel username
 * [`sentinel_password`](SentinelConfig::password) - (Sentinel only) Sentinel password
+* `db` - (Unix socket only) The default database, which the TCP schemes spell as the last
+  path segment instead (default `0`).
 
 ### Rotating credentials
 
@@ -184,6 +200,26 @@ short-lived token (AWS ElastiCache IAM, GCP Memorystore IAM, Azure Entra ID, Vau
 reconnection authenticates with the current token. [`SentinelConfig::credentials_provider`] does
 the same for the Sentinel instances themselves. Neither has a URL representation; both are set on
 the config itself. See [`CredentialsProvider`].
+
+### Supplying the transport
+
+[`ServerConfig::Custom`] takes a [`TransportFactory`], which hands the client a byte stream to
+speak RESP over instead of one it opens itself: an in-memory pipe, a tunnel, an
+SSH-forwarded channel, a TLS stack configured elsewhere. It is asked for a stream at every dial,
+so a reconnection gets a fresh one. Like a credentials provider, it has no URL representation.
+
+```
+use rustis::client::{Config, CustomTransport, ServerConfig, TransportReader, TransportWriter};
+
+let mut config = Config::default();
+config.server = ServerConfig::Custom(CustomTransport::new(|| async {
+    let (client_side, server_side) = tokio::io::duplex(4096);
+    // drive `server_side` with a server of your own here
+    drop(server_side);
+    let (reader, writer) = tokio::io::split(client_side);
+    Ok((Box::new(reader) as TransportReader, Box::new(writer) as TransportWriter))
+}));
+```
 
 ### Example
 
@@ -484,6 +520,7 @@ mod pooled_client_manager;
 mod prepared_command;
 mod pub_sub_stream;
 mod transaction;
+mod transport_factory;
 
 pub(crate) use bounded_channel::*;
 
@@ -500,3 +537,4 @@ pub use pooled_client_manager::*;
 pub use prepared_command::*;
 pub use pub_sub_stream::*;
 pub use transaction::*;
+pub use transport_factory::*;

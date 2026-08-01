@@ -1,12 +1,13 @@
 use crate::{
     ClientError, Error, Result,
-    client::{Credentials, CredentialsProvider},
+    client::{Credentials, CredentialsProvider, CustomTransport},
 };
 #[cfg(feature = "native-tls")]
 use native_tls::{Certificate, Identity, Protocol, TlsConnector, TlsConnectorBuilder};
 use std::{
     collections::HashMap,
     fmt::{self, Display, Write},
+    path::PathBuf,
     str::FromStr,
     sync::Arc,
     time::Duration,
@@ -675,6 +676,16 @@ impl Config {
     fn parse_uri(uri: &str) -> Result<Config> {
         let config_parse_error = || Error::from(ClientError::ConfigParseError);
 
+        // A Unix socket URI has no authority and its path is a filesystem path,
+        // so none of the host/port breakdown below applies to it.
+        if let Some(path) = uri
+            .strip_prefix("unix://")
+            .or_else(|| uri.strip_prefix("redis+unix://"))
+            .or_else(|| uri.strip_prefix("redis-unix://"))
+        {
+            return Self::parse_unix_socket_uri(path);
+        }
+
         let (scheme, username, password, hosts, path_segments, mut query) =
             Self::break_down_uri(uri).ok_or_else(config_parse_error)?;
         let mut hosts = hosts;
@@ -804,54 +815,100 @@ impl Config {
         };
 
         if let Some(ref mut query) = query {
-            if let Some(millis) = Self::take_query_param::<u64>(query, "connect_timeout")? {
-                config.connect_timeout = Duration::from_millis(millis);
-            }
-
-            if let Some(millis) = Self::take_query_param::<u64>(query, "command_timeout")? {
-                config.command_timeout = Duration::from_millis(millis);
-            }
-
-            if let Some(auto_resubscribe) = Self::take_query_param(query, "auto_resubscribe")? {
-                config.auto_resubscribe = auto_resubscribe;
-            }
-
-            if let Some(auto_remonitor) = Self::take_query_param(query, "auto_remonitor")? {
-                config.auto_remonitor = auto_remonitor;
-            }
-
-            if let Some(connection_name) = query.remove("connection_name") {
-                config.connection_name = connection_name;
-            }
-
-            if let Some(keep_alive) = Self::take_query_param::<u64>(query, "keep_alive")? {
-                // 0 is the way to spell "no keep-alive" in a URL.
-                config.keep_alive = (keep_alive > 0).then(|| Duration::from_millis(keep_alive));
-            }
-
-            if let Some(no_delay) = Self::take_query_param(query, "no_delay")? {
-                config.no_delay = no_delay;
-            }
-
-            if let Some(retry_on_error) = Self::take_query_param(query, "retry_on_error")? {
-                config.retry_on_error = retry_on_error;
-            }
-
-            if let Some(max_command_attempts) =
-                Self::take_query_param(query, "max_command_attempts")?
-            {
-                config.max_command_attempts = max_command_attempts;
-            }
-
-            // Whatever is left is a key this client does not know: a typo, or a
-            // knob borrowed from another server type. Dropping it silently leaves
-            // the default in place behind the caller's back.
-            if let Some(name) = query.keys().min() {
-                return Err(Self::invalid_uri(format!(
-                    "unknown query parameter `{name}`"
-                )));
-            }
+            Self::apply_query_params(&mut config, query)?;
         }
+
+        Ok(config)
+    }
+
+    /// Reads the query parameters every scheme shares off `query`, taking each
+    /// one it knows. Whatever is left is unknown and rejected.
+    fn apply_query_params(config: &mut Config, query: &mut HashMap<String, String>) -> Result<()> {
+        if let Some(millis) = Self::take_query_param::<u64>(query, "connect_timeout")? {
+            config.connect_timeout = Duration::from_millis(millis);
+        }
+
+        if let Some(millis) = Self::take_query_param::<u64>(query, "command_timeout")? {
+            config.command_timeout = Duration::from_millis(millis);
+        }
+
+        if let Some(auto_resubscribe) = Self::take_query_param(query, "auto_resubscribe")? {
+            config.auto_resubscribe = auto_resubscribe;
+        }
+
+        if let Some(auto_remonitor) = Self::take_query_param(query, "auto_remonitor")? {
+            config.auto_remonitor = auto_remonitor;
+        }
+
+        if let Some(connection_name) = query.remove("connection_name") {
+            config.connection_name = connection_name;
+        }
+
+        if let Some(keep_alive) = Self::take_query_param::<u64>(query, "keep_alive")? {
+            // 0 is the way to spell "no keep-alive" in a URL.
+            config.keep_alive = (keep_alive > 0).then(|| Duration::from_millis(keep_alive));
+        }
+
+        if let Some(no_delay) = Self::take_query_param(query, "no_delay")? {
+            config.no_delay = no_delay;
+        }
+
+        if let Some(retry_on_error) = Self::take_query_param(query, "retry_on_error")? {
+            config.retry_on_error = retry_on_error;
+        }
+
+        if let Some(max_command_attempts) = Self::take_query_param(query, "max_command_attempts")? {
+            config.max_command_attempts = max_command_attempts;
+        }
+
+        // Whatever is left is a key this client does not know: a typo, or a
+        // knob borrowed from another server type. Dropping it silently leaves
+        // the default in place behind the caller's back.
+        if let Some(name) = query.keys().min() {
+            return Err(Self::invalid_uri(format!(
+                "unknown query parameter `{name}`"
+            )));
+        }
+
+        Ok(())
+    }
+
+    /// Parses what follows the scheme of a `unix://` URI: an absolute socket
+    /// path, optionally followed by a query.
+    fn parse_unix_socket_uri(after_scheme: &str) -> Result<Config> {
+        let (path, query) = match after_scheme.split_once('?') {
+            Some((path, query)) => (path, Some(query)),
+            None => (after_scheme, None),
+        };
+
+        // A socket path is absolute and names a file: an empty one, or one that
+        // is only the root, addresses nothing.
+        if path.is_empty() || path == "/" {
+            return Err(Self::invalid_uri(
+                "a unix socket URI needs the path of the socket".to_owned(),
+            ));
+        }
+
+        let mut query = match query {
+            Some(query) => query
+                .split('&')
+                .map(|s| s.split_once('=').map(|(k, v)| (k.to_owned(), v.to_owned())))
+                .collect::<Option<HashMap<String, String>>>()
+                .ok_or_else(|| Error::from(ClientError::ConfigParseError))?,
+            None => HashMap::new(),
+        };
+
+        let mut config = Config {
+            server: ServerConfig::UnixSocket {
+                path: PathBuf::from(percent_decode(path)),
+            },
+            // The whole path is the socket, so the database has nowhere to sit
+            // but the query.
+            database: Self::take_query_param(&mut query, "db")?.unwrap_or(DEFAULT_DATABASE),
+            ..Default::default()
+        };
+
+        Self::apply_query_params(&mut config, &mut query)?;
 
         Ok(config)
     }
@@ -968,12 +1025,16 @@ impl Display for Config {
                 ServerConfig::Standalone { host: _, port: _ } => f.write_str("rediss://")?,
                 ServerConfig::Sentinel(_) => f.write_str("rediss+sentinel://")?,
                 ServerConfig::Cluster(_) => f.write_str("rediss+cluster://")?,
+                ServerConfig::UnixSocket { path: _ } => f.write_str("unix://")?,
+                ServerConfig::Custom(_) => f.write_str("custom://")?,
             }
         } else {
             match &self.server {
                 ServerConfig::Standalone { host: _, port: _ } => f.write_str("redis://")?,
                 ServerConfig::Sentinel(_) => f.write_str("redis+sentinel://")?,
                 ServerConfig::Cluster(_) => f.write_str("redis+cluster://")?,
+                ServerConfig::UnixSocket { path: _ } => f.write_str("unix://")?,
+                ServerConfig::Custom(_) => f.write_str("custom://")?,
             }
         }
 
@@ -982,15 +1043,24 @@ impl Display for Config {
             ServerConfig::Standalone { host: _, port: _ } => f.write_str("redis://")?,
             ServerConfig::Sentinel(_) => f.write_str("redis+sentinel://")?,
             ServerConfig::Cluster(_) => f.write_str("redis+cluster://")?,
+            ServerConfig::UnixSocket { path: _ } => f.write_str("unix://")?,
+            ServerConfig::Custom(_) => f.write_str("custom://")?,
         }
 
-        if let Some(username) = &self.username {
-            f.write_str(username)?;
-        }
+        // Neither a unix socket URI nor an injected transport has an authority,
+        // so there is nowhere to put credentials in them.
+        if !matches!(
+            &self.server,
+            ServerConfig::UnixSocket { .. } | ServerConfig::Custom(_)
+        ) {
+            if let Some(username) = &self.username {
+                f.write_str(username)?;
+            }
 
-        if self.password.is_some() {
-            // never leak the password in clear text (e.g. when logging a config)
-            f.write_str(":***@")?;
+            if self.password.is_some() {
+                // never leak the password in clear text (e.g. when logging a config)
+                f.write_str(":***@")?;
+            }
         }
 
         match &self.server {
@@ -1033,16 +1103,33 @@ impl Display for Config {
                         .join(","),
                 )?;
             }
-        }
-
-        if self.database > 0 {
-            f.write_char('/')?;
-            f.write_str(&self.database.to_string())?;
+            ServerConfig::UnixSocket { path } => {
+                f.write_str(&path.display().to_string())?;
+            }
+            // an injected transport has no address to name
+            ServerConfig::Custom(_) => {}
         }
 
         // query
 
         let mut query_separator = false;
+
+        // The socket path is the whole path, and an injected transport has no
+        // path at all, so in both cases the database goes in the query.
+        let database_in_path = matches!(
+            &self.server,
+            ServerConfig::Standalone { .. } | ServerConfig::Sentinel(_) | ServerConfig::Cluster(_)
+        );
+
+        if self.database > 0 {
+            if database_in_path {
+                f.write_char('/')?;
+                f.write_str(&self.database.to_string())?;
+            } else {
+                query_separator = true;
+                f.write_fmt(format_args!("?db={}", self.database))?;
+            }
+        }
 
         let connect_timeout = self.connect_timeout.as_millis() as u64;
         if connect_timeout != DEFAULT_CONNECT_TIMEOUT {
@@ -1205,6 +1292,22 @@ pub enum ServerConfig {
     Sentinel(SentinelConfig),
     /// Configuration for connecting to a Redis [`Cluster`](https://redis.io/docs/management/scaling/)
     Cluster(ClusterConfig),
+    /// Configuration for connecting to a server listening on a Unix domain socket.
+    ///
+    /// Spelled `unix:///var/run/redis.sock` in a URI. The socket path is the
+    /// whole URI path, so the database is a `db` query parameter here rather
+    /// than the last path segment.
+    ///
+    /// [`keep_alive`](Config::keep_alive) and [`no_delay`](Config::no_delay)
+    /// describe a TCP socket and are not applied.
+    UnixSocket {
+        /// Filesystem path of the socket the server listens on.
+        path: PathBuf,
+    },
+    /// A byte stream supplied by the caller instead of one the client opens.
+    ///
+    /// See [`TransportFactory`].
+    Custom(CustomTransport),
 }
 
 impl Default for ServerConfig {
@@ -1758,6 +1861,69 @@ mod parse_tests {
     #[test]
     fn ipv6_uri() {
         assert_eq!(("::1".to_owned(), 6379), standalone("redis://[::1]:6379"));
+    }
+
+    fn unix_socket(uri: &str) -> Config {
+        let config = Config::from_str(uri).unwrap();
+        match &config.server {
+            ServerConfig::UnixSocket { .. } => config,
+            other => panic!("expected UnixSocket, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn unix_socket_uri() {
+        for uri in [
+            "unix:///var/run/redis.sock",
+            "redis+unix:///var/run/redis.sock",
+        ] {
+            let config = unix_socket(uri);
+            assert!(matches!(
+                &config.server,
+                ServerConfig::UnixSocket { path } if path == &PathBuf::from("/var/run/redis.sock")
+            ));
+            assert_eq!(DEFAULT_DATABASE, config.database);
+        }
+    }
+
+    #[test]
+    fn unix_socket_uri_round_trips_through_display() {
+        let config = unix_socket("unix:///var/run/redis.sock");
+        assert_eq!("unix:///var/run/redis.sock", config.to_string());
+    }
+
+    /// The path is the whole path, so the database has nowhere to sit but the
+    /// query — unlike the TCP schemes, where it is the last path segment.
+    #[test]
+    fn unix_socket_uri_takes_its_database_from_the_query() {
+        let config = unix_socket("unix:///var/run/redis.sock?db=3");
+        assert_eq!(3, config.database);
+        assert_eq!("unix:///var/run/redis.sock?db=3", config.to_string());
+    }
+
+    #[test]
+    fn unix_socket_uri_accepts_the_common_query_parameters() {
+        let config = unix_socket("unix:///var/run/redis.sock?connection_name=app");
+        assert_eq!("app", config.connection_name);
+    }
+
+    #[test]
+    fn a_unix_socket_uri_without_a_path_is_rejected() {
+        assert!(Config::from_str("unix://").is_err());
+        assert!(Config::from_str("unix:///").is_err());
+    }
+
+    /// An injected transport has no URI, and its `Display` must not pretend
+    /// otherwise nor reveal anything about the factory behind it.
+    #[test]
+    fn a_custom_transport_displays_opaquely() {
+        let config = Config {
+            server: ServerConfig::Custom(CustomTransport::new(|| async {
+                Err(Error::from(ClientError::ConfigParseError))
+            })),
+            ..Default::default()
+        };
+        assert_eq!("custom://", config.to_string());
     }
 
     #[test]

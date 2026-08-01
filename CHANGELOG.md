@@ -10,6 +10,19 @@ Versions up to and including `0.19.3` are documented in the
 
 ### Added
 
+- **The transport is open: Unix sockets, and a caller-supplied stream.**
+  `ServerConfig::UnixSocket { path }` reaches a server listening on a Unix domain
+  socket, spelled `unix:///var/run/redis.sock` in a URI — the socket path being the
+  whole URI path, the database is a `db` query parameter there rather than the last
+  path segment, and `keep_alive` / `no_delay`, which describe a TCP socket, are not
+  applied. `ServerConfig::Custom` takes a `TransportFactory`, which hands the client
+  any `AsyncRead` + `AsyncWrite` pair to speak RESP over: a `tokio::io::duplex` pipe
+  driven by a server of your own, a tunnel, a TLS stack configured elsewhere. The
+  trait is implemented for any closure returning a future, and is asked for a stream
+  at every dial rather than handed one once, so a reconnection gets a fresh stream —
+  the same reason `CredentialsProvider` is consulted at every handshake. Neither has
+  a `Debug` or `Display` that reveals anything about the factory behind it.
+
 - **`Error` classifies itself.** `is_connection_error()`, `is_timeout()`,
   `is_server_error()` and `is_retryable()` answer the questions every caller asks
   of a failure: whose fault is it, and is it worth trying again. `ErrorKind` and

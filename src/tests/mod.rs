@@ -28,6 +28,8 @@ mod cuckoo_commands;
 mod debug_commands;
 mod error;
 #[cfg(feature = "tokio-runtime")]
+mod fake_server;
+#[cfg(feature = "tokio-runtime")]
 mod fault_injection_proxy;
 mod from_value;
 mod generic_commands;
@@ -66,6 +68,8 @@ mod time_series_commands;
 mod tls;
 mod top_k_commands;
 mod transaction;
+#[cfg(feature = "tokio-runtime")]
+mod transport;
 mod util;
 mod value;
 mod value_deserialize;

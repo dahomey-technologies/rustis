@@ -6,6 +6,22 @@ All notable changes to this project are documented here. The format is based on
 Versions up to and including `0.19.3` are documented in the
 [GitHub releases](https://github.com/dahomey-technologies/rustis/releases).
 
+## [Unreleased]
+
+### Fixed
+
+- **The two deserializers agree on their coercions.** A reply read as a `Value` and
+  the same reply read straight off the wire went through two different `Deserializer`
+  implementations, which disagreed: `Value` rejected an integer or a boolean that the
+  wire path renders as text, so `client.incr(k)` typed as a `String` succeeded while
+  `Value::into::<String>()` on the same reply failed; a one-element array unwrapped to
+  an integer for every width on the wire but only for `i64`/`u64` from a `Value`; and
+  `i128`/`u128` were unimplemented on the `Value` side. The `Value` deserializer now
+  applies the wire path's rules: numbers and booleans are readable as text through
+  both `deserialize_str` and `deserialize_string`, the one-element-array unwrapping
+  covers the twelve integer widths, and `i128`/`u128` are supported. That unwrapping
+  now also requires the element to be an integer, as the wire path already did.
+
 ## [0.22.0] - 2026-08-01
 
 ### Added

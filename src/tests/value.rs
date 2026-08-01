@@ -5,7 +5,10 @@ use crate::{
     tests::{get_test_client, log_try_init},
 };
 use serial_test::serial;
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::{
+    collections::{BTreeSet, HashMap, HashSet, hash_map::DefaultHasher},
+    hash::{Hash, Hasher},
+};
 
 #[tokio::test]
 #[serial]
@@ -101,6 +104,39 @@ fn display() {
     ]);
 
     tracing::debug!("{value}");
+}
+
+#[test]
+fn double_equality() {
+    fn hash_of(value: &Value) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        value.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    // `Value` asserts `Eq`, so double equality is reflexive: a `,nan` reply
+    // equals itself and can be looked up as a map key.
+    assert_eq!(Value::Double(f64::NAN), Value::Double(f64::NAN));
+    assert_eq!(
+        Value::Array(vec![Value::Double(f64::NAN)]),
+        Value::Array(vec![Value::Double(f64::NAN)])
+    );
+
+    // Every NaN payload collapses onto the same value, for both `==` and `Hash`.
+    let other_nan = Value::Double(f64::from_bits(f64::NAN.to_bits() | 1));
+    assert_eq!(Value::Double(f64::NAN), other_nan);
+    assert_eq!(hash_of(&Value::Double(f64::NAN)), hash_of(&other_nan));
+
+    // The two zeros are equal and hash equally.
+    assert_eq!(Value::Double(0.0), Value::Double(-0.0));
+    assert_eq!(hash_of(&Value::Double(0.0)), hash_of(&Value::Double(-0.0)));
+
+    // Distinct doubles stay distinct.
+    assert_ne!(Value::Double(1.0), Value::Double(2.0));
+    assert_ne!(Value::Double(f64::NAN), Value::Double(1.0));
+
+    let map = HashMap::from([(Value::Double(f64::NAN), Value::Integer(12))]);
+    assert_eq!(Some(&Value::Integer(12)), map.get(&Value::Double(f64::NAN)));
 }
 
 #[test]

@@ -10,6 +10,16 @@ Versions up to and including `0.19.3` are documented in the
 
 ### Fixed
 
+- **`Value` equality is total on doubles.** `Value` asserts `Eq` and is hashed as a
+  `Value::Map` key, yet doubles were compared with `==`, under which a NaN is not
+  even equal to itself. `,nan` is a legal RESP double — T-Digest and TimeSeries
+  return it for an empty sketch or an empty bucket — so a `nan` key inserted in a
+  map could never be looked up again, and two identical replies containing one
+  compared unequal as `Array`, `Set` or `Push`. Doubles are now compared and hashed
+  on a canonical bit pattern: all NaNs are equal to each other, and `-0.0` equals
+  `0.0` as before. The only observable change is `Value::Double(f64::NAN)` now
+  equalling itself.
+
 - **The two deserializers agree on their coercions.** A reply read as a `Value` and
   the same reply read straight off the wire went through two different `Deserializer`
   implementations, which disagreed: `Value` rejected an integer or a boolean that the

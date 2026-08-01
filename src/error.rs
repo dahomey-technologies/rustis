@@ -222,6 +222,36 @@ pub enum ClientError {
     CollectionLengthTooLarge,
 }
 
+impl ClientError {
+    /// Whether this error was raised while framing the byte stream, as opposed
+    /// to while decoding an already-framed reply into the caller's type.
+    ///
+    /// A framing failure leaves the reader at an unknown offset: the bytes that
+    /// follow can no longer be attributed to any command, so the connection —
+    /// not the caller at the head of the receive queue — is what the error
+    /// belongs to. A decode failure happens past that point, on a frame whose
+    /// bounds are known, and fails exactly one command.
+    #[inline]
+    pub(crate) fn is_framing_error(&self) -> bool {
+        matches!(
+            self,
+            ClientError::CannotParseInteger
+                | ClientError::CannotParseDouble
+                | ClientError::CannotParseBulkString
+                | ClientError::CannotParseBulkError
+                | ClientError::CannotParseVerbatimString
+                | ClientError::CannotParseBoolean
+                | ClientError::CannotParseMap
+                | ClientError::CannotParseSequence
+                | ClientError::UnknownRespTag(_)
+                | ClientError::BulkLengthTooLarge
+                | ClientError::CollectionLengthTooLarge
+                | ClientError::MaxNestingDepthExceeded
+                | ClientError::VerbatimStringTooShort
+        )
+    }
+}
+
 /// What an [`struct@Error`] is, independently of the command it belongs to.
 #[derive(Debug, Error, Clone)]
 #[non_exhaustive]
@@ -422,6 +452,94 @@ impl Error {
     #[must_use]
     pub fn command(&self) -> Option<&str> {
         self.context.as_ref().map(|c| c.command())
+    }
+
+    /// Whether the connection to the server is what failed: the transport
+    /// broke, the peer went away, or a reply could not be framed.
+    ///
+    /// True for a transport or TLS failure, an end of stream, a disconnection,
+    /// the loss of the network task, and a RESP framing failure — the last one
+    /// because a stream the parser lost track of cannot carry another command,
+    /// so the client drops the connection and reconnects. False for anything the
+    /// server answered ([`is_server_error`](Error::is_server_error)), for a
+    /// timeout ([`is_timeout`](Error::is_timeout)), and for a decode failure on
+    /// a well-framed reply, which fails one command only.
+    ///
+    /// The command may or may not have run: the answer, if any, was lost with
+    /// the connection.
+    #[must_use]
+    pub fn is_connection_error(&self) -> bool {
+        match &self.kind {
+            ErrorKind::IO(_)
+            | ErrorKind::EOF
+            | ErrorKind::DisconnectedByPeer
+            | ErrorKind::OneshotCanceled(_)
+            | ErrorKind::MpscSend(_) => true,
+            #[cfg(any(feature = "native-tls", feature = "rustls"))]
+            ErrorKind::Tls(_) => true,
+            #[cfg(feature = "rustls")]
+            ErrorKind::InvalidDnsName(_) => true,
+            #[cfg(feature = "tokio-runtime")]
+            ErrorKind::TokioJoin(_) => true,
+            ErrorKind::Client(client_error) => client_error.is_framing_error(),
+            _ => false,
+        }
+    }
+
+    /// Whether a deadline expired before the operation completed.
+    ///
+    /// Covers both [`Config::connect_timeout`](crate::client::Config::connect_timeout)
+    /// and [`Config::command_timeout`](crate::client::Config::command_timeout);
+    /// [`command`](Error::command) tells them apart, being `None` for a
+    /// connection that never got to send anything. A blocking command reaching
+    /// its own server-side timeout is not an error at all — it replies nil, so
+    /// it arrives as `None`.
+    #[must_use]
+    pub fn is_timeout(&self) -> bool {
+        matches!(self.kind, ErrorKind::Timeout)
+    }
+
+    /// Whether the server answered, and answered an error.
+    ///
+    /// The connection is healthy and the command reached the server: what
+    /// failed is the command itself — a wrong type, a missing script, a refused
+    /// authentication. Match on
+    /// [`RedisError::kind`](crate::RedisError) for the exact code.
+    #[must_use]
+    pub fn is_server_error(&self) -> bool {
+        matches!(self.kind, ErrorKind::Redis(_))
+    }
+
+    /// Whether the failure is transient, so that sending the command again may
+    /// succeed.
+    ///
+    /// True for every [connection error](Error::is_connection_error), for a
+    /// [timeout](Error::is_timeout), and for the server codes that ask for a
+    /// replay: `TRYAGAIN`, `CLUSTERDOWN`, `MASTERDOWN` and `NOMASTERLINK`.
+    ///
+    /// # Warning
+    ///
+    /// Transient does not mean the command did not run. A connection that dies
+    /// or a deadline that expires after the server applied the write leaves no
+    /// way to tell it apart from one that died before. Replay only commands
+    /// that are safe to apply twice, or make them idempotent first — `INCR`
+    /// replayed on a lost reply counts twice.
+    #[must_use]
+    pub fn is_retryable(&self) -> bool {
+        if self.is_connection_error() || self.is_timeout() {
+            return true;
+        }
+
+        matches!(
+            &self.kind,
+            ErrorKind::Redis(RedisError {
+                kind: RedisErrorKind::TryAgain
+                    | RedisErrorKind::ClusterDown
+                    | RedisErrorKind::MasterDown
+                    | RedisErrorKind::NoMasterLink,
+                ..
+            })
+        )
     }
 
     /// Names the command this error belongs to, unless one is already named.

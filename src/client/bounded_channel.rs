@@ -61,15 +61,11 @@ struct Shared {
 
 /// Error returned when the subscriber is gone, so nothing can receive.
 ///
-/// Carries the message back so the caller can report what was lost.
+/// The message is not carried back: the sender knows which channel it was
+/// routing, and a subscriber that is gone is gone for good, so there is nobody
+/// to hand it to later.
 #[derive(Debug)]
-pub(crate) struct SendError(Item);
-
-impl SendError {
-    pub(crate) fn into_inner(self) -> Item {
-        self.0
-    }
-}
+pub(crate) struct SendError;
 
 impl std::fmt::Display for SendError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -115,7 +111,7 @@ impl BoundedSender {
     /// which is the same condition the previous unbounded channel reported.
     pub(crate) fn send(&self, item: Item) -> std::result::Result<(), SendError> {
         if self.shared.receiver_alive.load(Ordering::Acquire) == 0 {
-            return Err(SendError(item));
+            return Err(SendError);
         }
 
         let cost = item
@@ -331,14 +327,14 @@ mod tests {
         );
     }
 
-    /// Sending to a departed subscriber must fail and hand the message back,
-    /// which is how the network task reports what it could not deliver.
+    /// Sending to a departed subscriber must fail rather than queue a message
+    /// nobody will ever pop: that failure is what tells the network task to
+    /// unsubscribe.
     #[test]
-    fn sending_to_a_departed_subscriber_returns_the_message() {
+    fn sending_to_a_departed_subscriber_fails() {
         let (sender, receiver) = bounded_channel(0);
         drop(receiver);
 
-        let error = sender.send(response(1, 100)).unwrap_err();
-        assert_eq!(1, id_of(&error.into_inner()));
+        assert!(sender.send(response(1, 100)).is_err());
     }
 }

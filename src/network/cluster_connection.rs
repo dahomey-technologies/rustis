@@ -1,7 +1,7 @@
 use super::pub_sub_message::PubSubMessage;
 use crate::{
-    ClientError, ConnectionState, Error, RedisError, RedisErrorKind, Result, RetryReason,
-    StandaloneConnection,
+    ClientError, ConnectionState, Error, ErrorKind, RedisError, RedisErrorKind, Result,
+    RetryReason, StandaloneConnection,
     client::{ClusterConfig, Config, ReadPreference},
     commands::{
         ClusterCommands, ClusterHealthStatus, ClusterNodeResult, ClusterShardResult,
@@ -277,7 +277,7 @@ impl ClusterNodeResult {
         match (self.port, self.tls_port) {
             (None, Some(port)) => Ok(port),
             (Some(port), None) => Ok(port),
-            _ => Err(Error::Client(ClientError::ClusterConfig)),
+            _ => Err(Error::from(ClientError::ClusterConfig)),
         }
     }
 }
@@ -341,7 +341,7 @@ impl ClusterConnection {
             Self::connect_to_cluster(cluster_config, config, connection_state).await?;
         let first_node = nodes
             .get_mut(0)
-            .ok_or_else(|| Error::Client(ClientError::ClusterConfig))?;
+            .ok_or_else(|| Error::from(ClientError::ClusterConfig))?;
 
         let tag = first_node.connection.tag();
 
@@ -526,7 +526,7 @@ impl ClusterConnection {
                         .await?;
                     self.transaction_state = TransactionState::default();
                 } else {
-                    return Err(Error::Client(ClientError::ExecCalledWithoutMulti));
+                    return Err(Error::from(ClientError::ExecCalledWithoutMulti));
                 }
             }
             _ => self.internal_feed(command, &ask_reasons).await?,
@@ -684,7 +684,7 @@ impl ClusterConnection {
                 is_key.then(|| {
                     let (node_index, should_ask) = self
                         .get_node_index_by_slot(slot, ask_reasons, for_read)
-                        .ok_or_else(|| Error::Client(ClientError::ClusterConfig))?;
+                        .ok_or_else(|| Error::from(ClientError::ClusterConfig))?;
                     Ok((node_index, slot, arg, should_ask))
                 })
             })
@@ -712,7 +712,7 @@ impl ClusterConnection {
         let mut node = self
             .nodes
             .first_mut()
-            .ok_or_else(|| Error::Client(ClientError::InconsistentRoutingState))?;
+            .ok_or_else(|| Error::from(ClientError::InconsistentRoutingState))?;
 
         for (node_index, slot, key, should_ask) in node_slot_keys_ask {
             if slot != last_slot {
@@ -740,7 +740,7 @@ impl ClusterConnection {
                 node = self
                     .nodes
                     .get_mut(node_index)
-                    .ok_or_else(|| Error::Client(ClientError::InconsistentRoutingState))?;
+                    .ok_or_else(|| Error::from(ClientError::InconsistentRoutingState))?;
                 last_node_index = node_index;
             }
         }
@@ -796,15 +796,17 @@ impl ClusterConnection {
 
         if let Some(first_slot) = slots.next() {
             if !slots.all(|s| s == first_slot) {
-                return Err(Error::Client(ClientError::MismatchedKeySlots));
+                return Err(
+                    Error::from(ClientError::MismatchedKeySlots).with_command(command.name_bytes())
+                );
             }
 
             self.get_node_index_by_slot(first_slot, ask_reasons, for_read)
-                .ok_or_else(|| Error::Client(ClientError::ClusterConfig))
+                .ok_or_else(|| Error::from(ClientError::ClusterConfig))
         } else {
             self.get_random_node_index()
                 .map(|node_idx| (node_idx, false))
-                .ok_or_else(|| Error::Client(ClientError::ClusterConfig))
+                .ok_or_else(|| Error::from(ClientError::ClusterConfig))
         }
     }
 
@@ -818,7 +820,7 @@ impl ClusterConnection {
         let node = self
             .nodes
             .get_mut(node_idx)
-            .ok_or_else(|| Error::Client(ClientError::InconsistentRoutingState))?;
+            .ok_or_else(|| Error::from(ClientError::InconsistentRoutingState))?;
         if should_ask {
             node.connection.asking().await?;
         }
@@ -842,7 +844,7 @@ impl ClusterConnection {
     }
 
     fn request_policy_special(&mut self, _command: &Command) -> Result<()> {
-        Err(Error::Client(ClientError::CommandNotSupportedInCluster))
+        Err(Error::from(ClientError::CommandNotSupportedInCluster))
     }
 
     /// A pending request is orphaned once one of its still-unresolved
@@ -942,7 +944,7 @@ impl ClusterConnection {
             // and which the vanished node may well have already run.
             if self.front_request_references_missing_node() {
                 self.pending_requests.pop_front();
-                return Some(Err(Error::DisconnectedByPeer));
+                return Some(Err(Error::from(ErrorKind::DisconnectedByPeer)));
             }
 
             if let Some(ri) = self.pending_requests.front()
@@ -983,7 +985,7 @@ impl ClusterConnection {
             // `select_all` reports the index of the future it resolved, so this
             // always addresses a node we are holding.
             let Some(node) = self.nodes.get(node_idx) else {
-                return Some(Err(Error::Client(ClientError::InconsistentRoutingState)));
+                return Some(Err(Error::from(ClientError::InconsistentRoutingState)));
             };
             let node_id = &node.id;
 
@@ -1003,11 +1005,11 @@ impl ClusterConnection {
                     "Received unexpected message: {result:?} from {}",
                     node.connection.tag()
                 );
-                return Some(Err(Error::Client(ClientError::UnexpectedMessageReceived)));
+                return Some(Err(Error::from(ClientError::UnexpectedMessageReceived)));
             };
 
             if !self.store_sub_request_result(req_idx, sub_req_idx, result) {
-                return Some(Err(Error::Client(ClientError::InconsistentRoutingState)));
+                return Some(Err(Error::from(ClientError::InconsistentRoutingState)));
             }
         }
     }
@@ -1026,7 +1028,7 @@ impl ClusterConnection {
             // See `read()`: an orphaned front request must not block the queue.
             if self.front_request_references_missing_node() {
                 self.pending_requests.pop_front();
-                return Poll::Ready(Some(Err(Error::DisconnectedByPeer)));
+                return Poll::Ready(Some(Err(Error::from(ErrorKind::DisconnectedByPeer))));
             }
 
             if let Some(ri) = self.pending_requests.front()
@@ -1069,7 +1071,7 @@ impl ClusterConnection {
 
             // The index comes from the `enumerate` over `self.nodes` just above.
             let Some(node) = self.nodes.get(node_idx) else {
-                return Poll::Ready(Some(Err(Error::Client(
+                return Poll::Ready(Some(Err(Error::from(
                     ClientError::InconsistentRoutingState,
                 ))));
             };
@@ -1091,13 +1093,13 @@ impl ClusterConnection {
                     node = %node.connection.tag(),
                     "Received unexpected message: {result:?}"
                 );
-                return Poll::Ready(Some(Err(Error::Client(
+                return Poll::Ready(Some(Err(Error::from(
                     ClientError::UnexpectedMessageReceived,
                 ))));
             };
 
             if !self.store_sub_request_result(req_idx, sub_req_idx, result) {
-                return Poll::Ready(Some(Err(Error::Client(
+                return Poll::Ready(Some(Err(Error::from(
                     ClientError::InconsistentRoutingState,
                 ))));
             }
@@ -1265,7 +1267,7 @@ impl ClusterConnection {
             let node = self
                 .nodes
                 .get_mut(node_index)
-                .ok_or_else(|| Error::Client(ClientError::InconsistentRoutingState))?;
+                .ok_or_else(|| Error::from(ClientError::InconsistentRoutingState))?;
             if redirection.should_ask {
                 node.connection.asking().await?;
             }
@@ -1351,7 +1353,7 @@ impl ClusterConnection {
                 "read failed and will be retried. reasons: {:?}",
                 retry_reasons
             );
-            return Some(Err(Error::Retry(retry_reasons)));
+            return Some(Err(Error::from(ErrorKind::Retry(retry_reasons))));
         }
 
         // The response_policy tip is set for commands that reply with scalar data types,
@@ -1437,26 +1439,26 @@ impl ClusterConnection {
                 RespView::Integer(i, _) => match &mut integer {
                     Integer::Single(current) => *current = f(*current, i),
                     Integer::Null => integer = Integer::Single(i),
-                    Integer::Array(_) => return Some(Err(Error::Client(ClientError::Unexpected))),
+                    Integer::Array(_) => return Some(Err(Error::from(ClientError::Unexpected))),
                 },
                 RespView::Array(resp_array)
                 | RespView::Set(resp_array)
                 | RespView::Push(resp_array) => match &mut integer {
                     Integer::Single(_) => {
-                        return Some(Err(Error::Client(ClientError::Unexpected)));
+                        return Some(Err(Error::from(ClientError::Unexpected)));
                     }
                     Integer::Array(items) => {
                         // Unequal per-shard array lengths must not be silently
                         // truncated by `zip`: an uncombined tail would be a wrong
                         // aggregate reported as success.
                         if items.len() != resp_array.len() {
-                            return Some(Err(Error::Client(ClientError::Unexpected)));
+                            return Some(Err(Error::from(ClientError::Unexpected)));
                         }
                         for (item, view) in items.iter_mut().zip(resp_array) {
                             match view {
                                 Ok(RespView::Integer(i, _)) => *item = f(*item, i),
                                 Ok(_) => {
-                                    return Some(Err(Error::Client(ClientError::Unexpected)));
+                                    return Some(Err(Error::from(ClientError::Unexpected)));
                                 }
                                 Err(e) => return Some(Err(e)),
                             }
@@ -1469,7 +1471,7 @@ impl ClusterConnection {
                             match view {
                                 Ok(RespView::Integer(i, _)) => int_array.push(i),
                                 Ok(_) => {
-                                    return Some(Err(Error::Client(ClientError::Unexpected)));
+                                    return Some(Err(Error::from(ClientError::Unexpected)));
                                 }
                                 Err(e) => return Some(Err(e)),
                             }
@@ -1478,7 +1480,7 @@ impl ClusterConnection {
                         integer = Integer::Array(int_array)
                     }
                 },
-                _ => return Some(Err(Error::Client(ClientError::Unexpected))),
+                _ => return Some(Err(Error::from(ClientError::Unexpected))),
             }
         }
 
@@ -1493,9 +1495,7 @@ impl ClusterConnection {
         &mut self,
         _sub_results: Vec<Result<RespResponse>>,
     ) -> Option<Result<RespResponse>> {
-        Some(Err(Error::Client(
-            ClientError::CommandNotSupportedInCluster,
-        )))
+        Some(Err(Error::from(ClientError::CommandNotSupportedInCluster)))
     }
 
     fn no_response_policy(
@@ -1686,7 +1686,7 @@ impl ClusterConnection {
         #[cfg_attr(not(test), allow(unused_mut))]
         let Some(mut shard_info_list) = Self::discover_shards(&cluster_config.nodes, config).await
         else {
-            return Err(Error::Client(ClientError::ClusterConfig));
+            return Err(Error::from(ClientError::ClusterConfig));
         };
 
         // Test-only: build a topology that ignores a node the cluster does know.
@@ -1706,7 +1706,7 @@ impl ClusterConnection {
                 .into_iter()
                 .find(|n| n.role == "master" && n.health == ClusterHealthStatus::Online)
             else {
-                return Err(Error::Client(ClientError::ClusterConfig));
+                return Err(Error::from(ClientError::ClusterConfig));
             };
             let master_id: NodeId = master_info.id.as_str().into();
 
@@ -1784,7 +1784,7 @@ impl ClusterConnection {
 
         let addresses = self.discovery_addresses();
         let Some(shard_info_list) = Self::discover_shards(&addresses, &self.config).await else {
-            return Err(Error::Client(ClientError::ClusterConfig));
+            return Err(Error::from(ClientError::ClusterConfig));
         };
 
         for shard_info in shard_info_list {
@@ -1844,7 +1844,7 @@ impl ClusterConnection {
         #[cfg_attr(not(test), allow(unused_mut))]
         let Some(mut shard_info_list) = Self::discover_shards(&addresses, &self.config).await
         else {
-            return Err(Error::Client(ClientError::ClusterConfig));
+            return Err(Error::from(ClientError::ClusterConfig));
         };
 
         // Test-only: simulate a discovery reply that describes no node at all.
@@ -1862,7 +1862,7 @@ impl ClusterConnection {
         // mutated at this point, so the previous topology stays in place.
         if shard_info_list.is_empty() {
             warn!("Ignoring a cluster topology describing no node");
-            return Err(Error::Client(ClientError::ClusterConfig));
+            return Err(Error::from(ClientError::ClusterConfig));
         }
 
         // filter out nodes that do not exist anymore
@@ -1886,12 +1886,12 @@ impl ClusterConnection {
             // with no node at all is a malformed topology, not something to index.
             let first_is_master = match shard_info.nodes.first() {
                 Some(first) => first.role == "master",
-                None => return Err(Error::Client(ClientError::ClusterConfig)),
+                None => return Err(Error::from(ClientError::ClusterConfig)),
             };
             if !first_is_master {
                 let Some(master_idx) = shard_info.nodes.iter().position(|n| n.role == "master")
                 else {
-                    return Err(Error::Client(ClientError::ClusterConfig));
+                    return Err(Error::from(ClientError::ClusterConfig));
                 };
 
                 // swap first node & master node

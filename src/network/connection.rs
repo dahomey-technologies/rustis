@@ -1,5 +1,5 @@
 use crate::{
-    ClusterConnection, ConnectionState, Error, Future, Result, RetryReason, SentinelConnection,
+    ClusterConnection, ConnectionState, ErrorKind, Future, Result, RetryReason, SentinelConnection,
     StandaloneConnection,
     client::{Config, PreparedCommand, ServerConfig},
     commands::InternalPubSubCommands,
@@ -89,7 +89,9 @@ impl Connection {
     pub(crate) async fn send(&mut self, command: &Command) -> Result<RespResponse> {
         self.feed(command, &[]).await?;
         self.flush().await?;
-        self.read().await.ok_or_else(|| Error::DisconnectedByPeer)?
+        self.read()
+            .await
+            .ok_or_else(|| ErrorKind::DisconnectedByPeer)?
     }
 
     /// Hands the cluster variant a fresh copy of the connection-state registry, for

@@ -253,7 +253,7 @@ mod tests {
     )]
     use super::Json;
     use crate::{
-        ClientError, Error,
+        ClientError, Error, ErrorKind,
         resp::{Command, FastPathCommandBuilder, RespBuf, cmd},
     };
     use serde::{Deserialize, Serialize};
@@ -290,7 +290,7 @@ mod tests {
         let mut command: Command = FastPathCommandBuilder::set("key", Json(&FailingSerialize));
         let error = command.take_serialization_error();
         assert!(
-            matches!(&error, Some(Error::Client(ClientError::SerdeSerialize(m))) if m.contains("Cannot serialize to json")),
+            matches!(error.as_ref().map(Error::kind), Some(ErrorKind::Client(ClientError::SerdeSerialize(m))) if m.contains("Cannot serialize to json")),
             "unexpected error: {error:?}"
         );
     }
@@ -301,9 +301,10 @@ mod tests {
         // synthetic one.
         let map: BTreeMap<(u8, u8), u8> = BTreeMap::from([((1, 2), 3)]);
         let command: Command = FastPathCommandBuilder::set("key", Json(&map));
+        let error = serialization_error_of(command).expect("a deferred serialization error");
         assert!(matches!(
-            serialization_error_of(command),
-            Some(Error::Client(ClientError::SerdeSerialize(_)))
+            error.kind(),
+            ErrorKind::Client(ClientError::SerdeSerialize(_))
         ));
     }
 
@@ -322,9 +323,10 @@ mod tests {
     #[test]
     fn the_generic_builder_defers_the_same_error() {
         let command: Command = cmd("SET").key("key").arg(Json(&FailingSerialize)).into();
+        let error = serialization_error_of(command).expect("a deferred serialization error");
         assert!(matches!(
-            serialization_error_of(command),
-            Some(Error::Client(ClientError::SerdeSerialize(_)))
+            error.kind(),
+            ErrorKind::Client(ClientError::SerdeSerialize(_))
         ));
     }
 

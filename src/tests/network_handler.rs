@@ -1,5 +1,5 @@
 use crate::{
-    ClientError, Error, Result, RetryReason,
+    ClientError, ErrorKind, Result, RetryReason,
     client::{Client, ClientPreparedCommand, ReconnectionConfig},
     commands::{
         ClientReplyMode, ConnectionCommands, GenericCommands, PubSubCommands, StringCommands,
@@ -258,12 +258,13 @@ async fn retryable_command_fails_after_max_command_attempts() -> Result<()> {
     )
     .await?;
 
+    let error = result.unwrap_err();
     assert!(
         matches!(
-            result,
-            Err(Error::Client(ClientError::MaxCommandAttemptsReached))
+            error.kind(),
+            ErrorKind::Client(ClientError::MaxCommandAttemptsReached)
         ),
-        "expected MaxCommandAttemptsReached, got {result:?}"
+        "expected MaxCommandAttemptsReached, got {error:?}"
     );
 
     Ok(())

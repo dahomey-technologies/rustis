@@ -296,7 +296,7 @@ where
     const I128_MAX_EXCLUSIVE: f64 = 170_141_183_460_469_231_731_687_303_715_884_105_728.0;
 
     if !d.is_finite() || d.fract() != 0. || !(I128_MIN..I128_MAX_EXCLUSIVE).contains(&d) {
-        return Err(Error::Client(ClientError::CannotParseInteger));
+        return Err(Error::from(ClientError::CannotParseInteger));
     }
 
     #[expect(
@@ -305,7 +305,7 @@ where
     )]
     let integral = d as i128;
 
-    T::try_from(integral).map_err(|_| Error::Client(ClientError::CannotParseInteger))
+    T::try_from(integral).map_err(|_| Error::from(ClientError::CannotParseInteger))
 }
 
 /// Reads a boolean out of a textual reply — a simple string or a bulk string,
@@ -321,7 +321,7 @@ pub(crate) fn bool_from_text(bytes: &[u8]) -> Result<bool, Error> {
     match bytes {
         b"OK" | b"1" | b"true" => Ok(true),
         b"0" | b"false" => Ok(false),
-        _ => Err(Error::Client(ClientError::CannotParseBoolean)),
+        _ => Err(Error::from(ClientError::CannotParseBoolean)),
     }
 }
 

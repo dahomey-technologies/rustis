@@ -335,6 +335,21 @@ impl Command {
         &self.buffer[start..start + len]
     }
 
+    /// The command name as an owned [`Bytes`], for the callers that must outlive
+    /// the command — an error naming the command it belongs to, in particular.
+    ///
+    /// Costs one atomic increment and no copy: the command buffer is a plain
+    /// `BytesMut::freeze()`, not a recycled one, so a slice of it may be held.
+    #[expect(
+        clippy::arithmetic_side_effects,
+        reason = "invariant: same as `name`, `name_layout` is builder-produced \
+                  and always lands inside `buffer`."
+    )]
+    pub(crate) fn name_bytes(&self) -> Bytes {
+        let (start, len) = self.name_layout;
+        self.buffer.slice(start..start + len)
+    }
+
     pub fn get_arg(&self, index: usize) -> Option<Bytes> {
         let arg_layout = *self.args_layout.get(index)?;
         Some(self.buffer.slice(arg_layout.range()))
@@ -613,7 +628,7 @@ impl CommandBuilder {
             return self;
         }
         let Some(groups) = group_count(counter.count, step) else {
-            self.record_serialization_error(Error::Client(ClientError::InvalidArgumentGroupStep));
+            self.record_serialization_error(Error::from(ClientError::InvalidArgumentGroupStep));
             return self;
         };
         debug_assert_eq!(
@@ -806,7 +821,7 @@ impl CommandBuilder {
             return self;
         }
         let Some(groups) = group_count(counter.count, step) else {
-            self.record_serialization_error(Error::Client(ClientError::InvalidArgumentGroupStep));
+            self.record_serialization_error(Error::from(ClientError::InvalidArgumentGroupStep));
             return self;
         };
         debug_assert_eq!(
@@ -1025,8 +1040,12 @@ mod tests {
     fn arg_serialization_error_is_deferred_not_panicked() {
         let mut command: Command = cmd("PING").arg(FailingSerialize).into();
         assert!(matches!(
-            command.take_serialization_error(),
-            Some(crate::Error::Client(crate::ClientError::SerdeSerialize(_)))
+            command
+                .take_serialization_error()
+                .map(crate::Error::into_kind),
+            Some(crate::ErrorKind::Client(
+                crate::ClientError::SerdeSerialize(_)
+            ))
         ));
         // The error is taken once, not re-yielded.
         assert!(command.take_serialization_error().is_none());
@@ -1096,16 +1115,20 @@ mod tests {
             .arg_with_count_and_step(["f1", "v1"], 0)
             .into();
         assert!(matches!(
-            command.take_serialization_error(),
-            Some(crate::Error::Client(
+            command
+                .take_serialization_error()
+                .map(crate::Error::into_kind),
+            Some(crate::ErrorKind::Client(
                 crate::ClientError::InvalidArgumentGroupStep
             ))
         ));
 
         let mut command: Command = cmd("MSETEX").key_with_count_and_step(["k", "v"], 0).into();
         assert!(matches!(
-            command.take_serialization_error(),
-            Some(crate::Error::Client(
+            command
+                .take_serialization_error()
+                .map(crate::Error::into_kind),
+            Some(crate::ErrorKind::Client(
                 crate::ClientError::InvalidArgumentGroupStep
             ))
         ));

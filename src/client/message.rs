@@ -210,6 +210,12 @@ impl Message {
     /// The connection identity comes from the surrounding span, so this takes no
     /// tag: every caller is the network task, which is already inside it.
     pub(crate) fn send_error(self, error: Error) {
+        // The caller has many commands in flight and no other way to tell which
+        // one this answers, so the error names the command it fails.
+        let error = match self.command_name() {
+            Some(command) => error.with_command(command),
+            None => error,
+        };
         match self.kind {
             MessageKind::Single {
                 result_sender: Some(result_sender),
@@ -278,6 +284,16 @@ impl Message {
             .map(|command| command.bytes().len())
             .sum::<usize>()
             + QUEUED_MESSAGE_OVERHEAD
+    }
+
+    /// The name of the command this message stands for, to name it in an error.
+    ///
+    /// A batch is named by its first command: the errors raised here fail the
+    /// whole batch, so any of its commands identifies it, and the first one is
+    /// the one the caller wrote first. `None` for an invalidation, which
+    /// registers a sink instead of carrying a command.
+    pub(crate) fn command_name(&self) -> Option<Bytes> {
+        self.commands().next().map(Command::name_bytes)
     }
 
     pub(crate) fn commands(&self) -> CommandsIteratorRef<'_> {

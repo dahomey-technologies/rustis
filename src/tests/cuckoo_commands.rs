@@ -1,5 +1,5 @@
 use crate::{
-    Error, RedisError, RedisErrorKind, Result,
+    ErrorKind, RedisError, RedisErrorKind, Result,
     commands::{
         CfInsertOptions, CfReserveOptions, CfScanDumpResult, CuckooCommands, FlushingMode,
         ServerCommands, StringCommands,
@@ -24,12 +24,13 @@ async fn cf_add() -> Result<()> {
 
     client.set("key", "item").await?;
     let result = client.cf_add("key", "item").await;
+    let error = result.unwrap_err();
     assert!(matches!(
-        result,
-        Err(Error::Redis(RedisError {
+        error.kind(),
+        ErrorKind::Redis(RedisError {
             kind: RedisErrorKind::WrongType,
             description: _
-        }))
+        })
     ));
 
     Ok(())

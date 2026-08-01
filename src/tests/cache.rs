@@ -1,5 +1,5 @@
 use crate::{
-    ClientError, Error, Result,
+    ClientError, Error, ErrorKind, Result,
     cache::Cache,
     client::Client,
     commands::{
@@ -58,9 +58,13 @@ async fn cache_key_serializing_to_zero_args_errors_instead_of_panicking() -> Res
     // A key that serializes to zero arguments (e.g. `None`) must surface a clean
     // error rather than panicking the caller thread.
     let result: Result<String> = cache.get(None::<String>).await;
+    let error = result.unwrap_err();
     assert!(
-        matches!(result, Err(Error::Client(ClientError::InvalidCacheKey))),
-        "expected InvalidCacheKey, got {result:?}"
+        matches!(
+            error.kind(),
+            ErrorKind::Client(ClientError::InvalidCacheKey)
+        ),
+        "expected InvalidCacheKey, got {error:?}"
     );
 
     Ok(())

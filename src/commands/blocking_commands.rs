@@ -76,7 +76,7 @@ where
 ///
 /// [`command_timeout`](crate::client::Config::command_timeout) does not rescue
 /// this. It bounds how long *the caller* waits for a reply, and then returns
-/// [`Error::Timeout`](crate::Error::Timeout) — the server keeps blocking the
+/// [`ErrorKind::Timeout`](crate::ErrorKind::Timeout) — the server keeps blocking the
 /// connection until the command's own `timeout` argument expires, so the
 /// commands queued behind it are still stuck.
 ///

@@ -1,5 +1,5 @@
 use crate::{
-    ClientError, Error, Result,
+    ClientError, ErrorKind, Result,
     client::{
         Client, Config, Credentials, IntoConfig, ReconnectionConfig, SentinelConfig, ServerConfig,
     },
@@ -459,7 +459,8 @@ fn an_unknown_query_parameter_is_rejected() {
         // a read preference only means something to a cluster client
         "redis://127.0.0.1?read_preference=prefer_replica",
     ] {
-        let Err(Error::Client(ClientError::InvalidUri(message))) = uri.into_config() else {
+        let error = uri.into_config().unwrap_err();
+        let ErrorKind::Client(ClientError::InvalidUri(message)) = error.kind() else {
             panic!("`{uri}` should be rejected as an unknown query parameter");
         };
         assert!(
@@ -483,7 +484,8 @@ fn an_unparsable_query_parameter_value_is_rejected() {
         "redis+sentinel://127.0.0.1:6379/myservice?wait_between_failures=250ms",
         "redis+cluster://127.0.0.1:7000?read_preference=replica",
     ] {
-        let Err(Error::Client(ClientError::InvalidUri(message))) = uri.into_config() else {
+        let error = uri.into_config().unwrap_err();
+        let ErrorKind::Client(ClientError::InvalidUri(message)) = error.kind() else {
             panic!("`{uri}` should be rejected as an unparsable parameter value");
         };
         let name = uri.rsplit_once('?').unwrap().1.split('=').next().unwrap();
@@ -547,10 +549,11 @@ fn validate_rejects_knobs_whose_zero_value_would_break_the_connection() {
     fn assert_rejected(name: &str, zero_it: impl FnOnce(&mut Config)) {
         let mut config = Config::default();
         zero_it(&mut config);
+        let error = config.validate().unwrap_err();
         assert!(
             matches!(
-                config.validate(),
-                Err(Error::Client(ClientError::InvalidConfig(_)))
+                error.kind(),
+                ErrorKind::Client(ClientError::InvalidConfig(_))
             ),
             "{name} = 0 must be rejected"
         );
@@ -580,9 +583,10 @@ fn validate_rejects_a_zero_sentinel_discovery_round_cap() {
     sentinel_config.max_discovery_rounds = 0;
     config.server = ServerConfig::Sentinel(sentinel_config);
 
+    let error = config.validate().unwrap_err();
     assert!(matches!(
-        config.validate(),
-        Err(Error::Client(ClientError::InvalidConfig(_)))
+        error.kind(),
+        ErrorKind::Client(ClientError::InvalidConfig(_))
     ));
 }
 
@@ -592,7 +596,8 @@ fn validate_names_the_offending_knob() {
     // with an opaque message is the worst kind of startup failure.
     let mut config = Config::default();
     config.limits.max_bulk_length = 0;
-    let Err(Error::Client(ClientError::InvalidConfig(message))) = config.validate() else {
+    let error = config.validate().unwrap_err();
+    let ErrorKind::Client(ClientError::InvalidConfig(message)) = error.kind() else {
         panic!("expected an InvalidConfig error");
     };
     assert!(

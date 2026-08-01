@@ -1,7 +1,7 @@
 use super::pub_sub_message::PubSubMessage;
 use crate::{
-    ClientError, Connection, ConnectionState, Error, JoinHandle, ReconnectionState, RedisError,
-    RedisErrorKind, Result, RetryReason,
+    ClientError, Connection, ConnectionState, Error, ErrorKind, JoinHandle, ReconnectionState,
+    RedisError, RedisErrorKind, Result, RetryReason,
     client::{Config, Message, MessageKind},
     commands::InternalPubSubCommands,
     resp::{
@@ -601,7 +601,7 @@ impl NetworkHandler {
                 self.queued_bytes,
                 msg.commands()
             );
-            msg.send_error(Error::Client(ClientError::SendQueueFull));
+            msg.send_error(Error::from(ClientError::SendQueueFull));
             return;
         }
 
@@ -622,8 +622,7 @@ impl NetworkHandler {
                                     self.status,
                                     String::from_utf8_lossy(channel_or_pattern)
                                 );
-                                collision_error =
-                                    Some(Error::Client(ClientError::AlreadySubscribed));
+                                collision_error = Some(Error::from(ClientError::AlreadySubscribed));
                                 break;
                             }
                         }
@@ -690,7 +689,7 @@ impl NetworkHandler {
                         "network disconnected, sending command in error: {:?}",
                         msg.commands()
                     );
-                    msg.send_error(Error::DisconnectedByPeer);
+                    msg.send_error(Error::from(ErrorKind::DisconnectedByPeer));
                 }
             }
             Status::EnteringMonitor => self.queue_message(msg),
@@ -1073,14 +1072,17 @@ impl NetworkHandler {
 
                         let mut should_retry = false;
 
-                        if let Err(Error::Retry(_)) = &result {
+                        if let Err(e) = &result
+                            && matches!(e.kind(), ErrorKind::Retry(_))
+                        {
                             should_retry = true;
                         } else if message_to_receive.message.retry_reasons.is_some() {
                             should_retry = true;
                         }
 
                         if should_retry {
-                            if let Err(Error::Retry(reasons)) = result {
+                            if let Err(ErrorKind::Retry(reasons)) = result.map_err(Error::into_kind)
+                            {
                                 if let Some(retry_reasons) =
                                     &mut message_to_receive.message.retry_reasons
                                 {
@@ -1103,7 +1105,7 @@ impl NetworkHandler {
                                 debug!(
                                     "Message reached the maximum number of attempts, failing it"
                                 );
-                                message_to_receive.message.send_error(Error::Client(
+                                message_to_receive.message.send_error(Error::from(
                                     ClientError::MaxCommandAttemptsReached,
                                 ));
                             }
@@ -1120,6 +1122,17 @@ impl NetworkHandler {
                             }
                         } else {
                             trace!("Will respond to: {:?}", message_to_receive.message);
+
+                            // This path answers the caller directly instead of
+                            // going through `Message::send_error`, so it names
+                            // the command itself. It carries the server's own
+                            // errors — a `WRONGTYPE`, a `NOPERM` — which are
+                            // exactly the ones a caller cannot act on without
+                            // knowing what drew them.
+                            let result = match (result, message_to_receive.message.command_name()) {
+                                (Err(e), Some(command)) => Err(e.with_command(command)),
+                                (result, _) => result,
+                            };
 
                             match message_to_receive.message.kind {
                                 MessageKind::Single {
@@ -1159,17 +1172,18 @@ impl NetworkHandler {
                             message_to_receive.pending_responses.push(value);
                             message_to_receive.num_commands -= 1;
                         }
-                        Err(Error::Retry(reasons)) => {
-                            if let Some(retry_reasons) =
-                                &mut message_to_receive.message.retry_reasons
-                            {
-                                retry_reasons.extend(reasons);
-                            } else {
-                                message_to_receive.message.retry_reasons =
-                                    Some(Vec::from_iter(reasons));
+                        Err(e) => {
+                            if let ErrorKind::Retry(reasons) = e.into_kind() {
+                                if let Some(retry_reasons) =
+                                    &mut message_to_receive.message.retry_reasons
+                                {
+                                    retry_reasons.extend(reasons);
+                                } else {
+                                    message_to_receive.message.retry_reasons =
+                                        Some(Vec::from_iter(reasons));
+                                }
                             }
                         }
-                        _ => (),
                     }
                 }
             }
@@ -1256,7 +1270,7 @@ impl NetworkHandler {
                                 )
                                 .is_some()
                             {
-                                return Some(Err(Error::Client(ClientError::AlreadySubscribed)));
+                                return Some(Err(Error::from(ClientError::AlreadySubscribed)));
                             }
 
                             if pending_sub.more_to_come {
@@ -1271,7 +1285,7 @@ impl NetworkHandler {
                             );
                             // Surface the anomaly to the caller instead of reporting
                             // a spurious success; the pending entry is left intact.
-                            self.receive_result(Err(Error::Client(
+                            self.receive_result(Err(Error::from(
                                 ClientError::UnexpectedSubscriptionConfirmation,
                             )));
                         }
@@ -1394,13 +1408,13 @@ impl NetworkHandler {
             if !message_to_receive.message.retry_on_error {
                 message_to_receive
                     .message
-                    .send_error(Error::DisconnectedByPeer);
+                    .send_error(Error::from(ErrorKind::DisconnectedByPeer));
             } else {
                 message_to_receive.message.attempts += 1;
                 if max_attempts_reached(message_to_receive.message.attempts, max_command_attempts) {
                     message_to_receive
                         .message
-                        .send_error(Error::Client(ClientError::MaxCommandAttemptsReached));
+                        .send_error(Error::from(ClientError::MaxCommandAttemptsReached));
                 } else {
                     retained_to_receive.push_back(message_to_receive);
                 }
@@ -1416,13 +1430,13 @@ impl NetworkHandler {
             if !message_to_send.message.retry_on_error {
                 message_to_send
                     .message
-                    .send_error(Error::DisconnectedByPeer);
+                    .send_error(Error::from(ErrorKind::DisconnectedByPeer));
             } else {
                 message_to_send.message.attempts += 1;
                 if max_attempts_reached(message_to_send.message.attempts, max_command_attempts) {
                     message_to_send
                         .message
-                        .send_error(Error::Client(ClientError::MaxCommandAttemptsReached));
+                        .send_error(Error::from(ClientError::MaxCommandAttemptsReached));
                 } else {
                     self.queued_bytes += message_to_send.message.queued_bytes();
                     retained_to_send.push_back(message_to_send);
@@ -1461,12 +1475,12 @@ impl NetworkHandler {
                 while let Some(message_to_receive) = self.messages_to_receive.pop_front() {
                     message_to_receive
                         .message
-                        .send_error(Error::DisconnectedByPeer);
+                        .send_error(Error::from(ErrorKind::DisconnectedByPeer));
                 }
                 while let Some(message_to_send) = self.messages_to_send.pop_front() {
                     message_to_send
                         .message
-                        .send_error(Error::DisconnectedByPeer);
+                        .send_error(Error::from(ErrorKind::DisconnectedByPeer));
                 }
                 self.queued_bytes = 0;
                 return false;
@@ -1625,16 +1639,16 @@ impl NetworkHandler {
 /// not to whichever caller happens to sit at the head of the receive queue; it must
 /// trigger a reconnect (clean purge + replay) instead of being dispatched as that
 /// caller's result. Per-message errors that legitimately arrive here — a cluster
-/// `Error::Retry` (ASK/MOVED) and a `Error::Redis` command error from a failing
+/// `ErrorKind::Retry` (ASK/MOVED) and a `ErrorKind::Redis` command error from a failing
 /// shard — must be delivered to the caller, so this is a positive allow-list of the
 /// framing/transport errors: anything unlisted is treated as per-message, which is
 /// the safe default (a stray error reaches one caller instead of churning the whole
 /// connection).
 #[inline]
 fn is_connection_level_error(error: &Error) -> bool {
-    match error {
-        Error::IO(_) | Error::EOF => true,
-        Error::Client(client_error) => matches!(
+    match error.kind() {
+        ErrorKind::IO(_) | ErrorKind::EOF => true,
+        ErrorKind::Client(client_error) => matches!(
             client_error,
             ClientError::CannotParseInteger
                 | ClientError::CannotParseDouble
@@ -1663,7 +1677,7 @@ fn is_connection_level_error(error: &Error) -> bool {
 /// so the trigger for rediscovering the master through the sentinels.
 ///
 /// A command error arrives here as a successfully read error *frame*, not as an
-/// `Err`: the `Error::Redis` only exists once a caller deserializes it. The tag
+/// `Err`: the `ErrorKind::Redis` only exists once a caller deserializes it. The tag
 /// check comes first, so an ordinary reply never pays for a view.
 #[inline]
 fn indicates_demoted_master(result: &Result<RespResponse>) -> bool {
@@ -1674,8 +1688,9 @@ fn indicates_demoted_master(result: &Result<RespResponse>) -> bool {
                     if matches!(RedisError::try_from(message),
                         Ok(error) if error.kind == RedisErrorKind::Readonly))
         }
-        Err(Error::Redis(error)) => error.kind == RedisErrorKind::Readonly,
-        Err(_) => false,
+        Err(e) => {
+            matches!(e.kind(), ErrorKind::Redis(error) if error.kind == RedisErrorKind::Readonly)
+        }
     }
 }
 
@@ -1711,37 +1726,39 @@ mod tests {
         assert!(max_attempts_reached(3, 3));
         assert!(max_attempts_reached(4, 3));
     }
-    use crate::{ClientError, Error, RedisError, RedisErrorKind};
+    use crate::{ClientError, Error, ErrorKind, RedisError, RedisErrorKind};
 
     #[test]
     fn per_message_errors_are_not_connection_level() {
         // Cluster redirection and a failing-shard Redis error must reach the
         // caller, not tear down the connection.
-        assert!(!is_connection_level_error(
-            &Error::Retry(Default::default())
-        ));
-        assert!(!is_connection_level_error(&Error::Redis(RedisError {
-            kind: RedisErrorKind::NoPerm,
-            description: "no permission".to_owned(),
-        })));
+        assert!(!is_connection_level_error(&Error::from(ErrorKind::Retry(
+            Default::default()
+        ))));
+        assert!(!is_connection_level_error(&Error::from(ErrorKind::Redis(
+            RedisError {
+                kind: RedisErrorKind::NoPerm,
+                description: "no permission".to_owned(),
+            }
+        ))));
         // A caller-side client error is not a stream desync either.
-        assert!(!is_connection_level_error(&Error::Client(
+        assert!(!is_connection_level_error(&Error::from(
             ClientError::CrossSlot
         )));
     }
 
     #[test]
     fn decode_and_transport_errors_are_connection_level() {
-        assert!(is_connection_level_error(&Error::Client(
+        assert!(is_connection_level_error(&Error::from(
             ClientError::CannotParseInteger
         )));
-        assert!(is_connection_level_error(&Error::Client(
+        assert!(is_connection_level_error(&Error::from(
             ClientError::UnknownRespTag('?')
         )));
-        assert!(is_connection_level_error(&Error::Client(
+        assert!(is_connection_level_error(&Error::from(
             ClientError::MaxNestingDepthExceeded
         )));
-        assert!(is_connection_level_error(&Error::EOF));
+        assert!(is_connection_level_error(&Error::from(ErrorKind::EOF)));
     }
 
     /// `READONLY` is the one command error that says something about the *node*
@@ -1764,14 +1781,16 @@ mod tests {
 
         // And the same signal already turned into an `Error`, as the cluster path
         // hands per-shard errors up.
-        assert!(indicates_demoted_master(&Err(Error::Redis(RedisError {
-            kind: RedisErrorKind::Readonly,
-            description: "You can't write against a read only replica.".to_owned(),
-        }))));
-        assert!(!indicates_demoted_master(&Err(Error::Retry(
-            Default::default()
+        assert!(indicates_demoted_master(&Err(Error::from(
+            ErrorKind::Redis(RedisError {
+                kind: RedisErrorKind::Readonly,
+                description: "You can't write against a read only replica.".to_owned(),
+            })
         ))));
-        assert!(!indicates_demoted_master(&Err(Error::EOF)));
+        assert!(!indicates_demoted_master(&Err(Error::from(
+            ErrorKind::Retry(Default::default())
+        ))));
+        assert!(!indicates_demoted_master(&Err(Error::from(ErrorKind::EOF))));
     }
 
     /// Decodes `str`, which must hold exactly one complete frame.
@@ -1790,9 +1809,11 @@ mod tests {
     /// reconnection substitutes for it.
     #[test]
     fn readonly_stays_a_per_message_error() {
-        assert!(!is_connection_level_error(&Error::Redis(RedisError {
-            kind: RedisErrorKind::Readonly,
-            description: "You can't write against a read only replica.".to_owned(),
-        })));
+        assert!(!is_connection_level_error(&Error::from(ErrorKind::Redis(
+            RedisError {
+                kind: RedisErrorKind::Readonly,
+                description: "You can't write against a read only replica.".to_owned(),
+            }
+        ))));
     }
 }

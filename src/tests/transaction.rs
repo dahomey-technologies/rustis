@@ -1,5 +1,5 @@
 use crate::{
-    Error, RedisError, RedisErrorKind, Result,
+    ErrorKind, RedisError, RedisErrorKind, Result,
     client::BatchPreparedCommand,
     commands::{
         FlushingMode, ListCommands, ServerCommands, StringCommands, TransactionCommands,
@@ -48,12 +48,13 @@ async fn transaction_error() -> Result<()> {
     transaction.queue(cmd("UNKNOWN"));
     let result: Result<String> = transaction.execute().await;
 
+    let error = result.unwrap_err();
     assert!(matches!(
-        result,
-        Err(Error::Redis(RedisError {
+        error.kind(),
+        ErrorKind::Redis(RedisError {
             kind: RedisErrorKind::Err,
             description: _
-        }))
+        })
     ));
 
     let mut transaction = client.create_transaction();
@@ -62,12 +63,13 @@ async fn transaction_error() -> Result<()> {
     transaction.lpop::<()>("key1", 1).queue();
     let result: Result<String> = transaction.execute().await;
 
+    let error = result.unwrap_err();
     assert!(matches!(
-        result,
-        Err(Error::Redis(RedisError {
+        error.kind(),
+        ErrorKind::Redis(RedisError {
             kind: RedisErrorKind::WrongType,
             description: _
-        }))
+        })
     ));
 
     Ok(())
@@ -104,7 +106,8 @@ async fn watch() -> Result<()> {
 
     transaction.set("key", value).queue();
     let result: Result<()> = transaction.execute().await;
-    assert!(matches!(result, Err(Error::Aborted)));
+    let error = result.unwrap_err();
+    assert!(matches!(error.kind(), ErrorKind::Aborted));
 
     Ok(())
 }

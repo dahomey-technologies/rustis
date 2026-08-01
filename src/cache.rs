@@ -289,12 +289,12 @@ impl Cache {
         // 2. Fetch missing keys from Redis server if any
         if !missing_keys.is_empty() {
             let missing_prepared_command = self.client.mget::<R>(missing_keys);
-            let response = self
+            let (response, _) = self
                 .client
                 .internal_send(missing_prepared_command.command, None)
                 .await?;
             let Ok(collection_iter) = response.clone().into_collection_iter() else {
-                return Err(Error::Client(ClientError::ExpectedArrayForMGet));
+                return Err(Error::from(ClientError::ExpectedArrayForMGet));
             };
 
             for (idx_in_missing, response) in collection_iter.enumerate() {
@@ -608,7 +608,7 @@ impl Cache {
         let generation_before = self.generation_counter.load(Ordering::SeqCst);
 
         let command_bytes = command.bytes().clone();
-        let response = self.client.internal_send(command, None).await?;
+        let (response, _) = self.client.internal_send(command, None).await?;
         let deserializer = RespDeserializer::new(response.view()?);
         let deserialized = R::deserialize(deserializer)?;
 
@@ -656,7 +656,7 @@ fn key_to_bulk_string(key: &impl Serialize) -> Result<BulkString> {
     args.into_iter()
         .next()
         .map(Into::into)
-        .ok_or_else(|| Error::Client(ClientError::InvalidCacheKey))
+        .ok_or_else(|| Error::from(ClientError::InvalidCacheKey))
 }
 
 /// What to do with a freshly inserted cache entry once the response is in, given

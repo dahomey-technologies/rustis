@@ -1,5 +1,5 @@
 use crate::{
-    ClientError, Error, RedisError, RedisErrorKind, Result,
+    ClientError, ErrorKind, RedisError, RedisErrorKind, Result,
     client::{Client, ReconnectionConfig},
     commands::{
         AclCatOptions, AclDryRunOptions, AclGenPassOptions, AclLogOptions, BgsaveOptions,
@@ -149,11 +149,11 @@ async fn acl_load() -> Result<()> {
 
     let result = client.acl_load().await;
     assert!(matches!(
-        result,
-        Err(Error::Redis(RedisError {
+        result.unwrap_err().kind(),
+        ErrorKind::Redis(RedisError {
             kind: RedisErrorKind::Err,
             description: _
-        }))
+        })
     ));
 
     Ok(())
@@ -186,11 +186,11 @@ async fn acl_save() -> Result<()> {
 
     let result = client.acl_save().await;
     assert!(matches!(
-        result,
-        Err(Error::Redis(RedisError {
+        result.unwrap_err().kind(),
+        ErrorKind::Redis(RedisError {
             kind: RedisErrorKind::Err,
             description: _
-        }))
+        })
     ));
 
     Ok(())
@@ -211,11 +211,11 @@ async fn acl_setuser() -> Result<()> {
 
     let result = client.set("key", "value").await;
     assert!(matches!(
-        result,
-        Err(Error::Redis(RedisError {
+        result.unwrap_err().kind(),
+        ErrorKind::Redis(RedisError {
             kind: RedisErrorKind::NoPerm,
             description: _
-        }))
+        })
     ));
 
     client.acl_setuser("foo", ["~key"]).await?;
@@ -549,11 +549,11 @@ async fn failover() -> Result<()> {
 
     let result = client.failover(FailOverOptions::default()).await;
     assert!(matches!(
-        result,
-        Err(Error::Redis(RedisError {
+        result.unwrap_err().kind(),
+        ErrorKind::Redis(RedisError {
             kind: RedisErrorKind::Err,
             description
-        })) if description == "FAILOVER requires connected replicas."
+        }) if description == "FAILOVER requires connected replicas."
     ));
 
     Ok(())
@@ -993,22 +993,22 @@ async fn module_unload_and_loadex() -> Result<()> {
     // would break every search, json and probabilistic test that follows.
     let result = client.module_unload("nosuchmodule").await;
     assert!(matches!(
-        result,
-        Err(Error::Redis(RedisError {
+        result.unwrap_err().kind(),
+        ErrorKind::Redis(RedisError {
             kind: RedisErrorKind::Err,
             description: _
-        }))
+        })
     ));
 
     let result = client
         .module_loadex("/nonexistent/module.so", ModuleLoadexOptions::default())
         .await;
     assert!(matches!(
-        result,
-        Err(Error::Redis(RedisError {
+        result.unwrap_err().kind(),
+        ErrorKind::Redis(RedisError {
             kind: RedisErrorKind::Err,
             description: _
-        }))
+        })
     ));
 
     // The five bundled modules are still there.
@@ -1071,7 +1071,7 @@ async fn monitor() -> Result<()> {
         let result = monitor_stream
             .next()
             .await
-            .ok_or_else(|| Error::Client(ClientError::Unexpected))?;
+            .ok_or_else(|| ErrorKind::Client(ClientError::Unexpected))?;
         if result.database != 2 || result.command != "SET" {
             continue;
         }
@@ -1135,7 +1135,7 @@ async fn auto_remonitor() -> Result<()> {
         let result = monitor_stream
             .next()
             .await
-            .ok_or_else(|| Error::Client(ClientError::Unexpected))?;
+            .ok_or_else(|| ErrorKind::Client(ClientError::Unexpected))?;
         if result.database != 2 || result.command != "SET" {
             continue;
         }
@@ -1306,8 +1306,9 @@ async fn shutdown_abort() -> Result<()> {
 
     let result = client.shutdown(ShutdownOptions::default().abort()).await;
 
-    let Err(Error::Redis(e)) = result else {
-        panic!("expected the server to report that nothing is shutting down: {result:?}");
+    let error = result.unwrap_err();
+    let ErrorKind::Redis(e) = error.kind() else {
+        panic!("expected the server to report that nothing is shutting down: {error:?}");
     };
     assert!(e.description.contains("No shutdown in progress"));
 

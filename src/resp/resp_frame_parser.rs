@@ -1,5 +1,5 @@
 use crate::{
-    ClientError, Error, Result,
+    ClientError, Error, ErrorKind, Result,
     client::RespLimits,
     resp::{
         ATTRIBUTE_TAG, MAP_TAG, NULL_TAG, RespTape, RespTapeMut, TAPE_LEN_TAG, is_collection_tag,
@@ -59,7 +59,7 @@ enum CollectionHeader {
 /// attribute is a map that never reaches the tape, and is read here so its header
 /// is bounded by the same rules. A cardinality above `max_collection_length` is
 /// rejected here, where the count is known, so no caller can forget to bound an
-/// attacker-controlled loop. [`Error::EOF`] when the header has not fully
+/// attacker-controlled loop. [`ErrorKind::EOF`] when the header has not fully
 /// arrived, so the streaming decoder can retry once more bytes are read.
 #[expect(
     clippy::arithmetic_side_effects,
@@ -73,18 +73,19 @@ fn parse_collection_header(
     at: usize,
     max_collection_length: usize,
 ) -> Result<CollectionHeader> {
-    let tag = *data.get(at).ok_or_else(|| Error::EOF)?;
+    let tag = *data.get(at).ok_or_else(|| ErrorKind::EOF)?;
     let (n, end) = parse_int_at(data, at + 1)?;
     if n == -1 {
         return Ok(CollectionHeader::Null { end });
     }
     let is_map_shaped = matches!(tag, MAP_TAG | ATTRIBUTE_TAG);
     if n < 0 {
-        return Err(Error::Client(if is_map_shaped {
+        return Err(if is_map_shaped {
             ClientError::CannotParseMap
         } else {
             ClientError::CannotParseSequence
-        }));
+        }
+        .into());
     }
     // Cap the announced cardinality before it is narrowed, and before it is
     // doubled. Narrowing `n` to a `usize` first would truncate on a 32-bit target,
@@ -100,10 +101,10 @@ fn parse_collection_header(
     let multiplier: u64 = if is_map_shaped { 2 } else { 1 };
     let wide_count = n.cast_unsigned() * multiplier;
     if wide_count > max_collection_length as u64 {
-        return Err(Error::Client(ClientError::CollectionLengthTooLarge));
+        return Err(Error::from(ClientError::CollectionLengthTooLarge));
     }
     let Ok(count) = usize::try_from(wide_count) else {
-        return Err(Error::Client(ClientError::CollectionLengthTooLarge));
+        return Err(Error::from(ClientError::CollectionLengthTooLarge));
     };
     Ok(CollectionHeader::Open { count, end })
 }
@@ -112,7 +113,7 @@ fn parse_collection_header(
 /// followed by `2n` values) starting at `pos`, returning the offset of the first
 /// non-attribute byte. Attributes are out-of-band metadata that may legally
 /// precede any value, so they are skipped wherever a value is expected and never
-/// surfaced — neither as a frame nor as a tape node. [`Error::EOF`] if an
+/// surfaced — neither as a frame nor as a tape node. [`ErrorKind::EOF`] if an
 /// attribute is only partially present; the caller then rewinds and retries.
 #[expect(
     clippy::arithmetic_side_effects,
@@ -127,14 +128,14 @@ fn skip_leading_attributes(
 ) -> Result<usize> {
     while data.get(pos) == Some(&ATTRIBUTE_TAG) {
         if depth >= limits.max_nesting_depth {
-            return Err(Error::Client(ClientError::MaxNestingDepthExceeded));
+            return Err(Error::from(ClientError::MaxNestingDepthExceeded));
         }
         let CollectionHeader::Open { count, end } =
             parse_collection_header(data, pos, limits.max_collection_length)?
         else {
             // RESP3 defines no null attribute: `|-1\r\n` is malformed, not an
             // attribute with nothing to skip.
-            return Err(Error::Client(ClientError::CannotParseMap));
+            return Err(Error::from(ClientError::CannotParseMap));
         };
         pos = skip_children(data, end, count, depth + 1, limits)?;
     }
@@ -161,7 +162,7 @@ fn skip_children(
 /// Advances past exactly one value at `pos` — a scalar, or a nested collection
 /// with all of its descendants — returning the offset just past it. Used only to
 /// consume attribute payloads, which carry no tape, so it walks the structure
-/// without recording anything. [`Error::EOF`] if the value is incomplete.
+/// without recording anything. [`ErrorKind::EOF`] if the value is incomplete.
 ///
 /// This is the one place that recurses where the element loop does not, and it
 /// can afford to: an attribute is never suspended half-way. A truncated one
@@ -175,13 +176,13 @@ fn skip_children(
 )]
 fn skip_one_value(data: &[u8], pos: usize, depth: usize, limits: &RespLimits) -> Result<usize> {
     let pos = skip_leading_attributes(data, pos, depth, limits)?;
-    let tag = *data.get(pos).ok_or_else(|| Error::EOF)?;
+    let tag = *data.get(pos).ok_or_else(|| ErrorKind::EOF)?;
     if is_collection_tag(tag) {
         match parse_collection_header(data, pos, limits.max_collection_length)? {
             CollectionHeader::Null { end } => Ok(end),
             CollectionHeader::Open { count, end } => {
                 if depth >= limits.max_nesting_depth {
-                    return Err(Error::Client(ClientError::MaxNestingDepthExceeded));
+                    return Err(Error::from(ClientError::MaxNestingDepthExceeded));
                 }
                 skip_children(data, end, count, depth + 1, limits)
             }
@@ -212,7 +213,7 @@ pub(crate) struct OpenCollection {
 /// of [`OpenCollection`], not recursion: each step consumes exactly one unit (an
 /// element, a collection header, or a run of attributes) and is atomic with
 /// respect to `pos` — it either advances past its whole unit or, on
-/// [`Error::EOF`], leaves `pos` at the unit's start.
+/// [`ErrorKind::EOF`], leaves `pos` at the unit's start.
 ///
 /// The stack is explicit so that a half-received frame can be suspended and
 /// resumed byte-for-byte across TCP chunks: the collections still open live in a
@@ -284,7 +285,7 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
     }
 
     /// One-shot parse of a single frame from a complete buffer. Returns the frame
-    /// and its byte length, or [`Error::EOF`] if the buffer stops mid-frame: a
+    /// and its byte length, or [`ErrorKind::EOF`] if the buffer stops mid-frame: a
     /// one-shot caller has no next chunk, so where [`Self::parse_resumable`]
     /// suspends, this reports an error.
     ///
@@ -296,7 +297,7 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
         let mut stack = Vec::new();
         match self.parse_resumable(&mut stack)? {
             Some(frame) => Ok((frame, self.pos)),
-            None => Err(Error::EOF),
+            None => Err(Error::from(ErrorKind::EOF)),
         }
     }
 
@@ -322,7 +323,7 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
         if self.buf.get(self.pos) == Some(&ATTRIBUTE_TAG) {
             match skip_leading_attributes(self.buf, self.pos, 0, &self.limits) {
                 Ok(at) => self.pos = at,
-                Err(Error::EOF) => {
+                Err(e) if matches!(e.kind(), ErrorKind::EOF) => {
                     self.pos = frame_start;
                     return Ok(None);
                 }
@@ -343,7 +344,7 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
                 self.pos = end;
                 Ok(Some(ParsedFrame::Scalar { at: value_pos }))
             }
-            Err(Error::EOF) => {
+            Err(e) if matches!(e.kind(), ErrorKind::EOF) => {
                 self.pos = value_pos;
                 Ok(None)
             }
@@ -379,7 +380,7 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
                 });
                 self.run_collection_loop(stack)
             }
-            Err(Error::EOF) => {
+            Err(e) if matches!(e.kind(), ErrorKind::EOF) => {
                 self.pos = at;
                 Ok(None)
             }
@@ -419,7 +420,7 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
                     continue;
                 }
                 if !is_collection_tag(done.tag) {
-                    return Err(Error::Client(ClientError::Unexpected));
+                    return Err(Error::from(ClientError::Unexpected));
                 }
                 return Ok(Some(ParsedFrame::Collection(self.tape.split_freeze())));
             }
@@ -429,7 +430,7 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
             let child_start = self.pos;
             match self.emit_one_child(stack) {
                 Ok(()) => {}
-                Err(Error::EOF) => {
+                Err(e) if matches!(e.kind(), ErrorKind::EOF) => {
                     self.pos = child_start;
                     return Ok(None);
                 }
@@ -437,13 +438,13 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
             }
         }
 
-        Err(Error::Client(ClientError::Unexpected))
+        Err(Error::from(ClientError::Unexpected))
     }
 
     /// Emits the tape node(s) for the value at `self.pos` and advances past it.
     /// A scalar (or null collection) emits one node and credits the current
     /// collection; a nested collection pushes a new stack level whose completion
-    /// later credits this one. Writes nothing on [`Error::EOF`], so the caller can
+    /// later credits this one. Writes nothing on [`ErrorKind::EOF`], so the caller can
     /// rewind and resume.
     #[inline]
     fn emit_one_child(&mut self, stack: &mut Vec<OpenCollection>) -> Result<()> {
@@ -453,7 +454,7 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
         if self.buf.get(at) == Some(&ATTRIBUTE_TAG) {
             at = skip_leading_attributes(self.buf, at, stack.len(), &self.limits)?;
         }
-        let tag = *self.buf.get(at).ok_or_else(|| Error::EOF)?;
+        let tag = *self.buf.get(at).ok_or_else(|| ErrorKind::EOF)?;
 
         if is_collection_tag(tag) {
             match parse_collection_header(self.buf, at, self.limits.max_collection_length)? {
@@ -466,7 +467,7 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
                 }
                 CollectionHeader::Open { count, end } => {
                     if stack.len() >= self.limits.max_nesting_depth {
-                        return Err(Error::Client(ClientError::MaxNestingDepthExceeded));
+                        return Err(Error::from(ClientError::MaxNestingDepthExceeded));
                     }
                     let head = self.tape.push(tag, 0);
                     self.tape.push(TAPE_LEN_TAG, count as u64);

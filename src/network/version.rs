@@ -18,7 +18,7 @@ impl TryFrom<&str> for Version {
         let (Some(major), Some(minor), Some(revision), None) =
             (split.next(), split.next(), split.next(), split.next())
         else {
-            return Err(Error::Client(ClientError::CannotParseRedisServerVersion));
+            return Err(Error::from(ClientError::CannotParseRedisServerVersion));
         };
 
         let (Some(major), Some(minor), Some(revision)) = (
@@ -26,7 +26,7 @@ impl TryFrom<&str> for Version {
             atoi::atoi(minor.as_bytes()),
             atoi::atoi(revision.as_bytes()),
         ) else {
-            return Err(Error::Client(ClientError::CannotParseRedisServerVersion));
+            return Err(Error::from(ClientError::CannotParseRedisServerVersion));
         };
 
         Ok(Version {

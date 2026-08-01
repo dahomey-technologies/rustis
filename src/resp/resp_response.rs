@@ -1,5 +1,5 @@
 use crate::{
-    ClientError, Error, RedisError, Result,
+    ClientError, Error, ErrorKind, RedisError, Result,
     resp::{
         ARRAY_TAG, BULK_ERROR_TAG, MAP_TAG, NULL_TAG, PUSH_TAG, ParsedFrame, RespBuf,
         RespDeserializer, RespTape, SET_TAG, SIMPLE_ERROR_TAG, SIMPLE_STRING_TAG, ScalarKind,
@@ -314,7 +314,9 @@ impl RespResponse {
         if self.is_error()
             && let Ok(RespView::Error(message)) = self.view()
         {
-            return Err(Error::Redis(RedisError::try_from(message)?));
+            return Err(Error::from(ErrorKind::Redis(RedisError::try_from(
+                message,
+            )?)));
         }
         match self {
             RespResponse::Frame { buf, tape, root }
@@ -324,7 +326,7 @@ impl RespResponse {
                 let len = tape.node(root + 1).payload_index();
                 Ok(RespResponseIter::new(buf, tape, root, len))
             }
-            _ => Err(Error::Client(ClientError::Unexpected)),
+            _ => Err(Error::from(ClientError::Unexpected)),
         }
     }
 }
@@ -389,16 +391,16 @@ fn decode_value(kind: ScalarKind, data: &[u8], value: Range<usize>) -> Result<Re
     // enough that constructing one eagerly only to drop it costs measurably.
     let value = data
         .get(value)
-        .ok_or_else(|| Error::Client(ClientError::Unexpected))?;
+        .ok_or_else(|| Error::from(ClientError::Unexpected))?;
     Ok(match kind {
         ScalarKind::SimpleString => RespView::SimpleString(value),
         ScalarKind::Error => RespView::Error(value),
         ScalarKind::Integer => RespView::Integer(
-            atoi::atoi(value).ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?,
+            atoi::atoi(value).ok_or_else(|| Error::from(ClientError::CannotParseInteger))?,
             value,
         ),
         ScalarKind::Double => RespView::Double(
-            fast_float2::parse(value).map_err(|_| Error::Client(ClientError::CannotParseDouble))?,
+            fast_float2::parse(value).map_err(|_| Error::from(ClientError::CannotParseDouble))?,
             value,
         ),
         ScalarKind::BulkString => RespView::BulkString(value),
@@ -718,7 +720,7 @@ impl Iterator for RespResponseIter {
             // different element, silently.
             let Ok(root) = u32::try_from(root) else {
                 self.remaining = 0;
-                return Some(Err(Error::Client(ClientError::Unexpected)));
+                return Some(Err(Error::from(ClientError::Unexpected)));
             };
             return Some(Ok(RespResponse::Frame {
                 buf: self.buf.clone(),

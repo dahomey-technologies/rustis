@@ -236,6 +236,32 @@ the `{my}` hash tag guarantees in the example above.
 This does not apply to the strongly typed command API ([`commands`]): those functions already
 mark their keys.
 
+# Errors
+Every fallible call returns [`Result<T>`](crate::Result), whose error is [`Error`].
+An `Error` is what went wrong, [`kind()`](Error::kind), plus the command it belongs
+to, [`command()`](Error::command):
+
+```
+use rustis::{Error, ErrorKind, Result};
+
+fn report(result: Result<String>) {
+    if let Err(e) = result {
+        match e.kind() {
+            ErrorKind::Timeout => eprintln!("{:?} timed out", e.command()),
+            ErrorKind::Redis(redis_error) => eprintln!("the server refused it: {redis_error}"),
+            _ => eprintln!("{e}"),
+        }
+    }
+}
+```
+
+The command matters because a client multiplexes: a single connection carries
+hundreds of commands at once, so a bare "the operation timed out" names nothing
+the application can act on. It is set for every error the client raises on behalf
+of a command, and absent for the ones raised outside any — a connection timeout,
+for instance. `Display` appends it, so a logged error reads
+`The I/O operation's timeout expired (while executing BLMPOP)`.
+
 # Client-side caching
 See the module [`cache`] to discover how you can implement client-side caching.
 */

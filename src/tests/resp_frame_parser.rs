@@ -99,9 +99,10 @@ fn parse_oversized_bulk_string_length_is_rejected_before_payload() {
     // rejected outright, not returned as `EOF` — otherwise the streaming
     // decoder would keep buffering, waiting for bytes that never come.
     let resp = b"$536870913\r\n"; // 512 MiB + 1, no payload
+    let error = parse(resp).unwrap_err();
     assert!(matches!(
-        parse(resp),
-        Err(crate::Error::Client(crate::ClientError::BulkLengthTooLarge))
+        error.kind(),
+        crate::ErrorKind::Client(crate::ClientError::BulkLengthTooLarge)
     ));
 }
 
@@ -110,11 +111,10 @@ fn parse_oversized_collection_length_is_rejected() {
     // A collection cardinality beyond MAX_COLLECTION_LENGTH must be
     // rejected before the element loop runs.
     let resp = b"*134217729\r\n"; // 128 Mi + 1 elements
+    let error = parse(resp).unwrap_err();
     assert!(matches!(
-        parse(resp),
-        Err(crate::Error::Client(
-            crate::ClientError::CollectionLengthTooLarge
-        ))
+        error.kind(),
+        crate::ErrorKind::Client(crate::ClientError::CollectionLengthTooLarge)
     ));
 }
 
@@ -123,11 +123,10 @@ fn parse_oversized_map_length_is_rejected() {
     // The map arm doubles the declared length; a value that overflows the cap
     // only after doubling must still be caught.
     let resp = b"%67108865\r\n"; // 64 Mi + 1 pairs => 128 Mi + 2 elements
+    let error = parse(resp).unwrap_err();
     assert!(matches!(
-        parse(resp),
-        Err(crate::Error::Client(
-            crate::ClientError::CollectionLengthTooLarge
-        ))
+        error.kind(),
+        crate::ErrorKind::Client(crate::ClientError::CollectionLengthTooLarge)
     ));
 }
 
@@ -142,20 +141,18 @@ fn parse_collection_length_wider_than_pointer_is_rejected() {
     // The assertion is pointer-width sensitive by nature: on a 32-bit target the
     // value below narrows to 1, which is exactly the defect being pinned.
     let resp = format!("*{}\r\n$3\r\nfoo\r\n", u64::from(u32::MAX) + 2);
+    let error = parse(resp.as_bytes()).unwrap_err();
     assert!(matches!(
-        parse(resp.as_bytes()),
-        Err(crate::Error::Client(
-            crate::ClientError::CollectionLengthTooLarge
-        ))
+        error.kind(),
+        crate::ErrorKind::Client(crate::ClientError::CollectionLengthTooLarge)
     ));
 
     // Same for the map arm, whose count is doubled before the cap comparison.
     let resp = format!("%{}\r\n$3\r\nfoo\r\n$3\r\nbar\r\n", u64::from(u32::MAX) + 2);
+    let error = parse(resp.as_bytes()).unwrap_err();
     assert!(matches!(
-        parse(resp.as_bytes()),
-        Err(crate::Error::Client(
-            crate::ClientError::CollectionLengthTooLarge
-        ))
+        error.kind(),
+        crate::ErrorKind::Client(crate::ClientError::CollectionLengthTooLarge)
     ));
 }
 
@@ -192,12 +189,12 @@ fn an_attribute_header_with_a_negative_length_errors_as_a_map() {
     // negative value is malformed. Both report the map error, so neither is
     // mistaken for a reply that simply carried no attribute.
     assert!(matches!(
-        parse(b"|-1\r\n"),
-        Err(crate::Error::Client(crate::ClientError::CannotParseMap))
+        parse(b"|-1\r\n").unwrap_err().kind(),
+        crate::ErrorKind::Client(crate::ClientError::CannotParseMap)
     ));
     assert!(matches!(
-        parse(b"|-2\r\n"),
-        Err(crate::Error::Client(crate::ClientError::CannotParseMap))
+        parse(b"|-2\r\n").unwrap_err().kind(),
+        crate::ErrorKind::Client(crate::ClientError::CannotParseMap)
     ));
 }
 
@@ -250,10 +247,8 @@ fn a_lowered_nesting_limit_rejects_a_frame_the_default_accepts() {
         ..Default::default()
     };
     assert!(matches!(
-        parse_with_limits(&resp, limits),
-        Err(crate::Error::Client(
-            crate::ClientError::MaxNestingDepthExceeded
-        ))
+        parse_with_limits(&resp, limits).unwrap_err().kind(),
+        crate::ErrorKind::Client(crate::ClientError::MaxNestingDepthExceeded)
     ));
 }
 
@@ -267,8 +262,8 @@ fn a_lowered_bulk_limit_rejects_a_length_the_default_accepts() {
         ..Default::default()
     };
     assert!(matches!(
-        parse_with_limits(resp, limits),
-        Err(crate::Error::Client(crate::ClientError::BulkLengthTooLarge))
+        parse_with_limits(resp, limits).unwrap_err().kind(),
+        crate::ErrorKind::Client(crate::ClientError::BulkLengthTooLarge)
     ));
 }
 
@@ -282,10 +277,8 @@ fn a_lowered_collection_limit_rejects_a_cardinality_the_default_accepts() {
         ..Default::default()
     };
     assert!(matches!(
-        parse_with_limits(resp, limits),
-        Err(crate::Error::Client(
-            crate::ClientError::CollectionLengthTooLarge
-        ))
+        parse_with_limits(resp, limits).unwrap_err().kind(),
+        crate::ErrorKind::Client(crate::ClientError::CollectionLengthTooLarge)
     ));
 }
 
@@ -302,10 +295,8 @@ fn a_lowered_collection_limit_is_enforced_on_an_attribute_header() {
         ..Default::default()
     };
     assert!(matches!(
-        parse_with_limits(resp, limits),
-        Err(crate::Error::Client(
-            crate::ClientError::CollectionLengthTooLarge
-        ))
+        parse_with_limits(resp, limits).unwrap_err().kind(),
+        crate::ErrorKind::Client(crate::ClientError::CollectionLengthTooLarge)
     ));
 }
 
@@ -327,10 +318,8 @@ fn a_lowered_nesting_limit_counts_depth_inside_an_attribute_payload() {
     };
     assert!(parse_with_limits(within, limits).is_ok());
     assert!(matches!(
-        parse_with_limits(beyond, limits),
-        Err(crate::Error::Client(
-            crate::ClientError::MaxNestingDepthExceeded
-        ))
+        parse_with_limits(beyond, limits).unwrap_err().kind(),
+        crate::ErrorKind::Client(crate::ClientError::MaxNestingDepthExceeded)
     ));
 }
 
@@ -371,7 +360,7 @@ fn a_lowered_bulk_limit_is_enforced_inside_a_collection() {
         ..Default::default()
     };
     assert!(matches!(
-        parse_with_limits(resp, limits),
-        Err(crate::Error::Client(crate::ClientError::BulkLengthTooLarge))
+        parse_with_limits(resp, limits).unwrap_err().kind(),
+        crate::ErrorKind::Client(crate::ClientError::BulkLengthTooLarge)
     ));
 }

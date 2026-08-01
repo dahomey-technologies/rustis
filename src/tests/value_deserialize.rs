@@ -1,5 +1,5 @@
 use crate::{
-    Error, RedisError, RedisErrorKind, Result,
+    ErrorKind, RedisError, RedisErrorKind, Result,
     resp::{RespBuf, RespDeserializer, RespFrameParser, RespResponse, RespTapeMut, Value},
     tests::log_try_init,
 };
@@ -69,22 +69,22 @@ fn bulk_string() -> Result<()> {
     assert_eq!(Value::BulkString(b"hel\r\nlo".to_vec()), result);
 
     let result = deserialize_value("$5\r\nhello\r");
-    assert!(matches!(result, Err(Error::EOF)));
+    assert!(matches!(result.unwrap_err().kind(), ErrorKind::EOF));
 
     let result = deserialize_value("$5\r\nhello");
-    assert!(matches!(result, Err(Error::EOF)));
+    assert!(matches!(result.unwrap_err().kind(), ErrorKind::EOF));
 
     let result = deserialize_value("$5\r");
-    assert!(matches!(result, Err(Error::EOF)));
+    assert!(matches!(result.unwrap_err().kind(), ErrorKind::EOF));
 
     let result = deserialize_value("$5");
-    assert!(matches!(result, Err(Error::EOF)));
+    assert!(matches!(result.unwrap_err().kind(), ErrorKind::EOF));
 
     let result = deserialize_value("$");
-    assert!(matches!(result, Err(Error::EOF)));
+    assert!(matches!(result.unwrap_err().kind(), ErrorKind::EOF));
 
     let result = deserialize_value("$6\r\nhello\r\n");
-    assert!(matches!(result, Err(Error::EOF)));
+    assert!(matches!(result.unwrap_err().kind(), ErrorKind::EOF));
 
     Ok(())
 }
@@ -197,11 +197,11 @@ fn error() -> Result<()> {
     let result = deserialize_value("-ERR error\r\n");
     println!("result: {result:?}");
     assert!(matches!(
-        result,
-        Err(Error::Redis(RedisError {
+        result.unwrap_err().kind(),
+        ErrorKind::Redis(RedisError {
             kind: RedisErrorKind::Err,
             description
-        })) if description == "error"
+        }) if description == "error"
     ));
 
     Ok(())
@@ -214,21 +214,21 @@ fn blob_error() -> Result<()> {
     let result = deserialize_value("!9\r\nERR error\r\n");
     println!("result: {result:?}");
     assert!(matches!(
-        result,
-        Err(Error::Redis(RedisError {
+        result.unwrap_err().kind(),
+        ErrorKind::Redis(RedisError {
             kind: RedisErrorKind::Err,
             description
-        })) if description == "error"
+        }) if description == "error"
     ));
 
     let result = deserialize_value("!11\r\nERR er\r\nror\r\n");
     println!("result: {result:?}");
     assert!(matches!(
-        result,
-        Err(Error::Redis(RedisError {
+        result.unwrap_err().kind(),
+        ErrorKind::Redis(RedisError {
             kind: RedisErrorKind::Err,
             description
-        })) if description == "er\r\nror"
+        }) if description == "er\r\nror"
     ));
 
     Ok(())

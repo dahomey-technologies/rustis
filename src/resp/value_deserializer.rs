@@ -1,5 +1,5 @@
 use crate::{
-    ClientError, Error, Result,
+    ClientError, Error, ErrorKind, Result,
     resp::{
         Value,
         util::{bool_from_text, double_to_int, is_field_value_array},
@@ -22,7 +22,7 @@ use std::{
 fn single_char(str: &str) -> Result<char> {
     match str.as_bytes() {
         &[b] => Ok(b as char),
-        _ => Err(Error::Client(ClientError::CannotParseChar)),
+        _ => Err(Error::from(ClientError::CannotParseChar)),
     }
 }
 
@@ -35,7 +35,7 @@ fn single_char(str: &str) -> Result<char> {
 fn single_integer(values: &[Value]) -> Result<i64> {
     match values {
         [Value::Integer(i)] => Ok(*i),
-        _ => Err(Error::Client(ClientError::CannotParseInteger)),
+        _ => Err(Error::from(ClientError::CannotParseInteger)),
     }
 }
 
@@ -56,7 +56,7 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::Map(values) => visitor.visit_map(MapAccess::new(values)),
             Value::Set(values) => visitor.visit_seq(SeqAccess::new(values)),
             Value::Push(values) => visitor.visit_seq(SeqAccess::new(values)),
-            Value::Error(e) => Err(Error::Redis(e.clone())),
+            Value::Error(e) => Err(Error::from(ErrorKind::Redis(e.clone()))),
             Value::Null => visitor.visit_none(),
         }
     }
@@ -73,9 +73,9 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::SimpleString(s) => bool_from_text(s.as_bytes())?,
             Value::BulkString(s) => bool_from_text(s)?,
             Value::Boolean(b) => *b,
-            Value::Error(e) => return Err(Error::Redis(e.clone())),
+            Value::Error(e) => return Err(Error::from(ErrorKind::Redis(e.clone()))),
             _ => {
-                return Err(Error::Client(ClientError::CannotParseBoolean));
+                return Err(Error::from(ClientError::CannotParseBoolean));
             }
         };
 
@@ -88,17 +88,17 @@ impl<'de> Deserializer<'de> for &'de Value {
     {
         let result = match self {
             Value::Integer(i) => {
-                i8::try_from(*i).map_err(|_| Error::Client(ClientError::CannotParseInteger))?
+                i8::try_from(*i).map_err(|_| Error::from(ClientError::CannotParseInteger))?
             }
             Value::Double(d) => double_to_int::<i8>(*d)?,
             Value::Null => 0,
             Value::BulkString(s) => str::from_utf8(s)?.parse::<i8>()?,
             Value::SimpleString(s) => s.parse::<i8>()?,
             Value::Array(a) => i8::try_from(single_integer(a)?)
-                .map_err(|_| Error::Client(ClientError::CannotParseInteger))?,
-            Value::Error(e) => return Err(Error::Redis(e.clone())),
+                .map_err(|_| Error::from(ClientError::CannotParseInteger))?,
+            Value::Error(e) => return Err(Error::from(ErrorKind::Redis(e.clone()))),
             _ => {
-                return Err(Error::Client(ClientError::CannotParseInteger));
+                return Err(Error::from(ClientError::CannotParseInteger));
             }
         };
 
@@ -111,17 +111,17 @@ impl<'de> Deserializer<'de> for &'de Value {
     {
         let result = match self {
             Value::Integer(i) => {
-                i16::try_from(*i).map_err(|_| Error::Client(ClientError::CannotParseInteger))?
+                i16::try_from(*i).map_err(|_| Error::from(ClientError::CannotParseInteger))?
             }
             Value::Double(d) => double_to_int::<i16>(*d)?,
             Value::Null => 0,
             Value::BulkString(s) => str::from_utf8(s)?.parse::<i16>()?,
             Value::SimpleString(s) => s.parse::<i16>()?,
             Value::Array(a) => i16::try_from(single_integer(a)?)
-                .map_err(|_| Error::Client(ClientError::CannotParseInteger))?,
-            Value::Error(e) => return Err(Error::Redis(e.clone())),
+                .map_err(|_| Error::from(ClientError::CannotParseInteger))?,
+            Value::Error(e) => return Err(Error::from(ErrorKind::Redis(e.clone()))),
             _ => {
-                return Err(Error::Client(ClientError::CannotParseInteger));
+                return Err(Error::from(ClientError::CannotParseInteger));
             }
         };
 
@@ -134,17 +134,17 @@ impl<'de> Deserializer<'de> for &'de Value {
     {
         let result = match self {
             Value::Integer(i) => {
-                i32::try_from(*i).map_err(|_| Error::Client(ClientError::CannotParseInteger))?
+                i32::try_from(*i).map_err(|_| Error::from(ClientError::CannotParseInteger))?
             }
             Value::Double(d) => double_to_int::<i32>(*d)?,
             Value::Null => 0,
             Value::BulkString(s) => str::from_utf8(s)?.parse::<i32>()?,
             Value::SimpleString(s) => s.parse::<i32>()?,
             Value::Array(a) => i32::try_from(single_integer(a)?)
-                .map_err(|_| Error::Client(ClientError::CannotParseInteger))?,
-            Value::Error(e) => return Err(Error::Redis(e.clone())),
+                .map_err(|_| Error::from(ClientError::CannotParseInteger))?,
+            Value::Error(e) => return Err(Error::from(ErrorKind::Redis(e.clone()))),
             _ => {
-                return Err(Error::Client(ClientError::CannotParseInteger));
+                return Err(Error::from(ClientError::CannotParseInteger));
             }
         };
 
@@ -162,9 +162,9 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::BulkString(s) => str::from_utf8(s)?.parse::<i128>()?,
             Value::SimpleString(s) => s.parse::<i128>()?,
             Value::Array(a) => i128::from(single_integer(a)?),
-            Value::Error(e) => return Err(Error::Redis(e.clone())),
+            Value::Error(e) => return Err(Error::from(ErrorKind::Redis(e.clone()))),
             _ => {
-                return Err(Error::Client(ClientError::CannotParseInteger));
+                return Err(Error::from(ClientError::CannotParseInteger));
             }
         };
 
@@ -177,17 +177,17 @@ impl<'de> Deserializer<'de> for &'de Value {
     {
         let result = match self {
             Value::Integer(i) => {
-                u128::try_from(*i).map_err(|_| Error::Client(ClientError::CannotParseInteger))?
+                u128::try_from(*i).map_err(|_| Error::from(ClientError::CannotParseInteger))?
             }
             Value::Double(d) => double_to_int::<u128>(*d)?,
             Value::Null => 0,
             Value::BulkString(s) => str::from_utf8(s)?.parse::<u128>()?,
             Value::SimpleString(s) => s.parse::<u128>()?,
             Value::Array(a) => u128::try_from(single_integer(a)?)
-                .map_err(|_| Error::Client(ClientError::CannotParseInteger))?,
-            Value::Error(e) => return Err(Error::Redis(e.clone())),
+                .map_err(|_| Error::from(ClientError::CannotParseInteger))?,
+            Value::Error(e) => return Err(Error::from(ErrorKind::Redis(e.clone()))),
             _ => {
-                return Err(Error::Client(ClientError::CannotParseInteger));
+                return Err(Error::from(ClientError::CannotParseInteger));
             }
         };
 
@@ -206,9 +206,9 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::BulkString(s) => str::from_utf8(s)?.parse::<i64>()?,
             Value::SimpleString(s) => s.parse::<i64>()?,
             Value::Array(a) => single_integer(a)?,
-            Value::Error(e) => return Err(Error::Redis(e.clone())),
+            Value::Error(e) => return Err(Error::from(ErrorKind::Redis(e.clone()))),
             _ => {
-                return Err(Error::Client(ClientError::CannotParseInteger));
+                return Err(Error::from(ClientError::CannotParseInteger));
             }
         };
 
@@ -221,17 +221,17 @@ impl<'de> Deserializer<'de> for &'de Value {
     {
         let result = match self {
             Value::Integer(i) => {
-                u8::try_from(*i).map_err(|_| Error::Client(ClientError::CannotParseInteger))?
+                u8::try_from(*i).map_err(|_| Error::from(ClientError::CannotParseInteger))?
             }
             Value::Double(d) => double_to_int::<u8>(*d)?,
             Value::Null => 0,
             Value::BulkString(s) => str::from_utf8(s)?.parse::<u8>()?,
             Value::SimpleString(s) => s.parse::<u8>()?,
             Value::Array(a) => u8::try_from(single_integer(a)?)
-                .map_err(|_| Error::Client(ClientError::CannotParseInteger))?,
-            Value::Error(e) => return Err(Error::Redis(e.clone())),
+                .map_err(|_| Error::from(ClientError::CannotParseInteger))?,
+            Value::Error(e) => return Err(Error::from(ErrorKind::Redis(e.clone()))),
             _ => {
-                return Err(Error::Client(ClientError::CannotParseInteger));
+                return Err(Error::from(ClientError::CannotParseInteger));
             }
         };
 
@@ -244,17 +244,17 @@ impl<'de> Deserializer<'de> for &'de Value {
     {
         let result = match self {
             Value::Integer(i) => {
-                u16::try_from(*i).map_err(|_| Error::Client(ClientError::CannotParseInteger))?
+                u16::try_from(*i).map_err(|_| Error::from(ClientError::CannotParseInteger))?
             }
             Value::Double(d) => double_to_int::<u16>(*d)?,
             Value::Null => 0,
             Value::BulkString(s) => str::from_utf8(s)?.parse::<u16>()?,
             Value::SimpleString(s) => s.parse::<u16>()?,
             Value::Array(a) => u16::try_from(single_integer(a)?)
-                .map_err(|_| Error::Client(ClientError::CannotParseInteger))?,
-            Value::Error(e) => return Err(Error::Redis(e.clone())),
+                .map_err(|_| Error::from(ClientError::CannotParseInteger))?,
+            Value::Error(e) => return Err(Error::from(ErrorKind::Redis(e.clone()))),
             _ => {
-                return Err(Error::Client(ClientError::CannotParseInteger));
+                return Err(Error::from(ClientError::CannotParseInteger));
             }
         };
 
@@ -267,17 +267,17 @@ impl<'de> Deserializer<'de> for &'de Value {
     {
         let result = match self {
             Value::Integer(i) => {
-                u32::try_from(*i).map_err(|_| Error::Client(ClientError::CannotParseInteger))?
+                u32::try_from(*i).map_err(|_| Error::from(ClientError::CannotParseInteger))?
             }
             Value::Double(d) => double_to_int::<u32>(*d)?,
             Value::Null => 0,
             Value::BulkString(s) => str::from_utf8(s)?.parse::<u32>()?,
             Value::SimpleString(s) => s.parse::<u32>()?,
             Value::Array(a) => u32::try_from(single_integer(a)?)
-                .map_err(|_| Error::Client(ClientError::CannotParseInteger))?,
-            Value::Error(e) => return Err(Error::Redis(e.clone())),
+                .map_err(|_| Error::from(ClientError::CannotParseInteger))?,
+            Value::Error(e) => return Err(Error::from(ErrorKind::Redis(e.clone()))),
             _ => {
-                return Err(Error::Client(ClientError::CannotParseInteger));
+                return Err(Error::from(ClientError::CannotParseInteger));
             }
         };
 
@@ -290,17 +290,17 @@ impl<'de> Deserializer<'de> for &'de Value {
     {
         let result = match self {
             Value::Integer(i) => {
-                u64::try_from(*i).map_err(|_| Error::Client(ClientError::CannotParseInteger))?
+                u64::try_from(*i).map_err(|_| Error::from(ClientError::CannotParseInteger))?
             }
             Value::Double(d) => double_to_int::<u64>(*d)?,
             Value::Null => 0,
             Value::BulkString(s) => str::from_utf8(s)?.parse::<u64>()?,
             Value::SimpleString(s) => s.parse::<u64>()?,
             Value::Array(a) => u64::try_from(single_integer(a)?)
-                .map_err(|_| Error::Client(ClientError::CannotParseInteger))?,
-            Value::Error(e) => return Err(Error::Redis(e.clone())),
+                .map_err(|_| Error::from(ClientError::CannotParseInteger))?,
+            Value::Error(e) => return Err(Error::from(ErrorKind::Redis(e.clone()))),
             _ => {
-                return Err(Error::Client(ClientError::CannotParseInteger));
+                return Err(Error::from(ClientError::CannotParseInteger));
             }
         };
 
@@ -329,9 +329,9 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::BulkString(bs) => str::from_utf8(bs)?.parse::<f32>()?,
             Value::Null => 0.,
             Value::SimpleString(s) => s.parse::<f32>()?,
-            Value::Error(e) => return Err(Error::Redis(e.clone())),
+            Value::Error(e) => return Err(Error::from(ErrorKind::Redis(e.clone()))),
             _ => {
-                return Err(Error::Client(ClientError::CannotParseDouble));
+                return Err(Error::from(ClientError::CannotParseDouble));
             }
         };
 
@@ -354,9 +354,9 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::BulkString(bs) => str::from_utf8(bs)?.parse::<f64>()?,
             Value::Null => 0.,
             Value::SimpleString(s) => s.parse::<f64>()?,
-            Value::Error(e) => return Err(Error::Redis(e.clone())),
+            Value::Error(e) => return Err(Error::from(ErrorKind::Redis(e.clone()))),
             _ => {
-                return Err(Error::Client(ClientError::CannotParseDouble));
+                return Err(Error::from(ClientError::CannotParseDouble));
             }
         };
 
@@ -371,8 +371,8 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::BulkString(bs) => single_char(str::from_utf8(bs)?)?,
             Value::SimpleString(str) => single_char(str)?,
             Value::Null => '\0',
-            Value::Error(e) => return Err(Error::Redis(e.clone())),
-            _ => return Err(Error::Client(ClientError::CannotParseChar)),
+            Value::Error(e) => return Err(Error::from(ErrorKind::Redis(e.clone()))),
+            _ => return Err(Error::from(ClientError::CannotParseChar)),
         };
 
         visitor.visit_char(result)
@@ -386,7 +386,7 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::BulkString(s) => str::from_utf8(s)?,
             Value::Null => "",
             Value::SimpleString(s) => s.as_str(),
-            Value::Error(e) => return Err(Error::Redis(e.clone())),
+            Value::Error(e) => return Err(Error::from(ErrorKind::Redis(e.clone()))),
             // Nothing to borrow: a number or a boolean holds no text of its own,
             // so it is rendered, and the rendering lives in `deserialize_string`
             // so the two entry points cannot disagree on which replies are
@@ -398,7 +398,7 @@ impl<'de> Deserializer<'de> for &'de Value {
                 return self.deserialize_string(visitor);
             }
             _ => {
-                return Err(Error::Client(ClientError::CannotParseStr));
+                return Err(Error::from(ClientError::CannotParseStr));
             }
         };
 
@@ -426,8 +426,8 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::Double(d) => visitor.visit_string(d.to_string()),
             Value::Boolean(b) => visitor.visit_str(if *b { "true" } else { "false" }),
             Value::Null => visitor.visit_borrowed_str(""),
-            Value::Error(e) => Err(Error::Redis(e.clone())),
-            _ => Err(Error::Client(ClientError::CannotParseString)),
+            Value::Error(e) => Err(Error::from(ErrorKind::Redis(e.clone()))),
+            _ => Err(Error::from(ClientError::CannotParseString)),
         }
     }
 
@@ -439,9 +439,9 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::BulkString(s) => s.as_slice(),
             Value::Null => &[],
             Value::SimpleString(s) => s.as_bytes(),
-            Value::Error(e) => return Err(Error::Redis(e.clone())),
+            Value::Error(e) => return Err(Error::from(ErrorKind::Redis(e.clone()))),
             _ => {
-                return Err(Error::Client(ClientError::CannotParseBytes));
+                return Err(Error::from(ClientError::CannotParseBytes));
             }
         };
 
@@ -456,9 +456,9 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::BulkString(s) => s.clone(),
             Value::Null => vec![],
             Value::SimpleString(s) => s.as_bytes().to_vec(),
-            Value::Error(e) => return Err(Error::Redis(e.clone())),
+            Value::Error(e) => return Err(Error::from(ErrorKind::Redis(e.clone()))),
             _ => {
-                return Err(Error::Client(ClientError::CannotParseBytes));
+                return Err(Error::from(ClientError::CannotParseBytes));
             }
         };
 
@@ -475,7 +475,7 @@ impl<'de> Deserializer<'de> for &'de Value {
         // `LRANGE` on an empty list reports.
         match self {
             Value::Null => visitor.visit_none(),
-            Value::Error(e) => Err(Error::Redis(e.clone())),
+            Value::Error(e) => Err(Error::from(ErrorKind::Redis(e.clone()))),
             _ => visitor.visit_some(self),
         }
     }
@@ -493,8 +493,8 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::Array(a) if a.is_empty() => visitor.visit_unit(),
             Value::Set(s) if s.is_empty() => visitor.visit_unit(),
             Value::Map(m) if m.is_empty() => visitor.visit_unit(),
-            Value::Error(e) => Err(Error::Redis(e.clone())),
-            _ => Err(Error::Client(ClientError::CannotParseNil)),
+            Value::Error(e) => Err(Error::from(ErrorKind::Redis(e.clone()))),
+            _ => Err(Error::from(ClientError::CannotParseNil)),
         }
     }
 
@@ -528,8 +528,8 @@ impl<'de> Deserializer<'de> for &'de Value {
                 visitor.visit_seq(SeqAccess::new(values))
             }
             Value::Map(values) => visitor.visit_seq(MapAccess::new(values)),
-            Value::Error(e) => Err(Error::Redis(e.clone())),
-            _ => Err(Error::Client(ClientError::CannotParseSequence)),
+            Value::Error(e) => Err(Error::from(ErrorKind::Redis(e.clone()))),
+            _ => Err(Error::from(ClientError::CannotParseSequence)),
         }
     }
 
@@ -561,8 +561,8 @@ impl<'de> Deserializer<'de> for &'de Value {
         match self {
             Value::Array(values) => visitor.visit_map(SeqAccess::new(values)),
             Value::Map(values) => visitor.visit_map(MapAccess::new(values)),
-            Value::Error(e) => Err(Error::Redis(e.clone())),
-            _ => Err(Error::Client(ClientError::CannotParseMap)),
+            Value::Error(e) => Err(Error::from(ErrorKind::Redis(e.clone()))),
+            _ => Err(Error::from(ClientError::CannotParseMap)),
         }
     }
 
@@ -595,8 +595,8 @@ impl<'de> Deserializer<'de> for &'de Value {
                 }
             }
             Value::Map(values) => visitor.visit_map(MapAccess::new(values)),
-            Value::Error(e) => Err(Error::Redis(e.clone())),
-            _ => Err(Error::Client(ClientError::CannotParseStruct)),
+            Value::Error(e) => Err(Error::from(ErrorKind::Redis(e.clone()))),
+            _ => Err(Error::from(ClientError::CannotParseStruct)),
         }
     }
 
@@ -624,8 +624,8 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::Array(a) => visitor.visit_enum(Enum::from_array(a)?),
             // Same, encoded as a map of 1 element
             Value::Map(m) => visitor.visit_enum(Enum::from_map(m)?),
-            Value::Error(e) => Err(Error::Redis(e.clone())),
-            _ => Err(Error::Client(ClientError::CannotParseEnum)),
+            Value::Error(e) => Err(Error::from(ErrorKind::Redis(e.clone()))),
+            _ => Err(Error::from(ClientError::CannotParseEnum)),
         }
     }
 
@@ -882,7 +882,7 @@ impl<'de> Enum<'de> {
                 variant_identifier,
                 variant_value,
             }),
-            _ => Err(Error::Client(ClientError::CannotParseEnum)),
+            _ => Err(Error::from(ClientError::CannotParseEnum)),
         }
     }
 
@@ -895,7 +895,7 @@ impl<'de> Enum<'de> {
                 variant_identifier,
                 variant_value,
             }),
-            _ => Err(Error::Client(ClientError::CannotParseEnum)),
+            _ => Err(Error::from(ClientError::CannotParseEnum)),
         }
     }
 }
@@ -919,7 +919,7 @@ impl<'de> VariantAccess<'de> for &'de Value {
     // If the `Visitor` expected this variant to be a unit variant, the input
     // should have been the plain string case handled in `deserialize_enum`.
     fn unit_variant(self) -> Result<()> {
-        Err(Error::Client(ClientError::Unexpected))
+        Err(Error::from(ClientError::Unexpected))
     }
 
     // Newtype variants are represented as map so

@@ -21,6 +21,7 @@ use crate::{
     },
     resp::{Command, CommandArgs, CommandArgsMut, RespResponse, Response, SubscriptionType, cmd},
 };
+use bytes::Bytes;
 use serde::{Serialize, de::DeserializeOwned};
 use std::{future::IntoFuture, sync::Arc, time::Duration};
 use tracing::{info, trace};
@@ -240,10 +241,10 @@ impl Client {
         #[cfg(test)]
         let probe_label = crate::tests::response_probe::label(&command);
 
-        let response = self.internal_send(command, retry_on_error).await?;
+        let (response, command_name) = self.internal_send(command, retry_on_error).await?;
 
         #[cfg(not(test))]
-        return response.to();
+        return Self::name_command(response.to(), command_name);
 
         // The outcome is recorded alongside the shape: a mismatch the decoder
         // refuses is a mismatch the caller was told about, where a mismatch it
@@ -257,16 +258,32 @@ impl Client {
                 &response,
                 result.is_ok(),
             );
-            result
+            Self::name_command(result, command_name)
         }
     }
 
+    /// Names `command_name` in the error of `result`, when there is one.
+    #[inline]
+    fn name_command<T>(result: Result<T>, command_name: Option<Bytes>) -> Result<T> {
+        match (result, command_name) {
+            (Err(e), Some(command)) => Err(e.with_command(command)),
+            (result, _) => result,
+        }
+    }
+
+    /// Sends one command and awaits its reply, returning the name of the command
+    /// alongside it.
+    ///
+    /// The name is handed back because the reply is not the end of the road: the
+    /// caller still deserializes it, and both a server error and a type mismatch
+    /// are born there, past the point where the network task could have named
+    /// them.
     #[inline]
     pub(crate) async fn internal_send(
         &self,
         command: impl Into<Command>,
         retry_on_error: Option<bool>,
-    ) -> Result<RespResponse> {
+    ) -> Result<(RespResponse, Option<Bytes>)> {
         let (result_sender, result_receiver): (ResultSender, ResultReceiver) =
             tokio::sync::oneshot::channel();
         let message = Message::single(
@@ -274,17 +291,27 @@ impl Client {
             result_sender,
             retry_on_error.unwrap_or(self.retry_on_error),
         );
-        self.send_message(message)?;
+        let command_name = self.send_message(message)?;
 
-        self.await_result(result_receiver).await
+        let response = self
+            .await_result(result_receiver, command_name.clone())
+            .await?;
+        Ok((response, command_name))
     }
 
     /// Await a single-response oneshot, applying the configured `command_timeout`
     /// so subscribe/monitor callers honour the same contract as regular sends.
     #[inline]
-    async fn await_result(&self, result_receiver: ResultReceiver) -> Result<RespResponse> {
+    async fn await_result(
+        &self,
+        result_receiver: ResultReceiver,
+        command_name: Option<Bytes>,
+    ) -> Result<RespResponse> {
         if self.command_timeout != Duration::ZERO {
-            timeout(self.command_timeout, result_receiver).await??
+            Self::name_command(
+                timeout(self.command_timeout, result_receiver).await,
+                command_name,
+            )??
         } else {
             result_receiver.await?
         }
@@ -326,36 +353,50 @@ impl Client {
     ///
     /// # Errors
     /// Any Redis driver [`Error`](crate::Error) that occurs during the send operation
+    ///
+    /// Each reply is paired with the name of the command that drew it. A batch
+    /// reply is deserialized per command, so an error born there belongs to one
+    /// command of the batch and not to the batch as a whole: naming it after the
+    /// first command would point at the wrong one.
     #[inline]
     pub(crate) async fn internal_send_batch(
         &self,
         commands: Vec<Command>,
         retry_on_error: Option<bool>,
-    ) -> Result<Vec<RespResponse>> {
+    ) -> Result<Vec<(RespResponse, Bytes)>> {
         let (results_sender, results_receiver): (ResultsSender, ResultsReceiver) =
             tokio::sync::oneshot::channel();
+        let command_names: Vec<Bytes> = commands.iter().map(Command::name_bytes).collect();
         let message = Message::batch(
             commands,
             results_sender,
             retry_on_error.unwrap_or(self.retry_on_error),
         );
-        self.send_message(message)?;
+        let command_name = self.send_message(message)?;
 
-        if self.command_timeout != Duration::ZERO {
-            timeout(self.command_timeout, results_receiver).await??
+        let results = if self.command_timeout != Duration::ZERO {
+            Self::name_command(
+                timeout(self.command_timeout, results_receiver).await,
+                command_name,
+            )??
         } else {
             results_receiver.await?
-        }
+        }?;
+
+        Ok(results.into_iter().zip(command_names).collect())
     }
 
     #[inline]
-    fn send_message(&self, mut message: Message) -> Result<()> {
+    /// Hands `message` to the network task, and returns the name of the command
+    /// it carries so the caller can name it in a timeout — the one failure the
+    /// network task never sees, and therefore never names itself.
+    fn send_message(&self, mut message: Message) -> Result<Option<Bytes>> {
         // Surface any serialization error deferred by the fluent builder (a
         // failing user `Serialize` impl) before the command reaches the network
         // layer, so the caller gets a clean error instead of a panic.
         for command in message.commands_mut() {
             if let Some(error) = command.take_serialization_error() {
-                return Err(error);
+                return Err(error.with_command(command.name_bytes()));
             }
         }
 
@@ -368,17 +409,27 @@ impl Client {
             }
         }
 
+        // Both failures below deny a specific command, so they name it: the
+        // message never reaches the network task, which is what would otherwise
+        // have attached it.
+        let command_name = message.command_name();
         if let Some(shared) = self.shared.as_ref() {
             trace!(
                 tag = %self.connection_tag,
                 "Will enqueue message: {message:?}"
             );
-            Ok(shared.msg_sender.send(message).map_err(|e| {
-                info!("{e}");
-                Error::Client(ClientError::DisconnectedFromServer)
-            })?)
+            match shared.msg_sender.send(message) {
+                Ok(()) => Ok(command_name),
+                Err(e) => {
+                    info!("{e}");
+                    Self::name_command(
+                        Err(Error::from(ClientError::DisconnectedFromServer)),
+                        command_name,
+                    )
+                }
+            }
         } else {
-            Err(Error::Client(ClientError::InvalidChannel))
+            Self::name_command(Err(Error::from(ClientError::InvalidChannel)), command_name)
         }
     }
 
@@ -447,9 +498,11 @@ impl Client {
             pub_sub_senders,
         );
 
-        self.send_message(message)?;
+        let command_name = self.send_message(message)?;
 
-        self.await_result(result_receiver).await?.to::<()>()
+        self.await_result(result_receiver, command_name)
+            .await?
+            .to::<()>()
     }
 
     pub(crate) async fn psubscribe_from_pub_sub_sender(
@@ -472,9 +525,11 @@ impl Client {
             pub_sub_senders,
         );
 
-        self.send_message(message)?;
+        let command_name = self.send_message(message)?;
 
-        self.await_result(result_receiver).await?.to::<()>()
+        self.await_result(result_receiver, command_name)
+            .await?
+            .to::<()>()
     }
 
     pub(crate) async fn ssubscribe_from_pub_sub_sender(
@@ -497,9 +552,11 @@ impl Client {
             pub_sub_senders,
         );
 
-        self.send_message(message)?;
+        let command_name = self.send_message(message)?;
 
-        self.await_result(result_receiver).await?.to::<()>()
+        self.await_result(result_receiver, command_name)
+            .await?
+            .to::<()>()
     }
 }
 
@@ -628,9 +685,9 @@ impl<'a> BlockingCommands<'a> for &'a Client {
 
         let message = Message::monitor(cmd("MONITOR").into(), result_sender, push_sender);
 
-        self.send_message(message)?;
+        let command_name = self.send_message(message)?;
 
-        let _bytes = self.await_result(result_receiver).await?;
+        let _bytes = self.await_result(result_receiver, command_name).await?;
         Ok(MonitorStream::new(push_receiver, self.clone()))
     }
 }

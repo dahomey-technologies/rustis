@@ -111,7 +111,7 @@ impl PubSubSplitSink {
 
         for channel in &channels {
             if self.channels.contains(&channel) {
-                return Err(Error::Client(ClientError::AlreadySubscribed));
+                return Err(Error::from(ClientError::AlreadySubscribed));
             }
         }
 
@@ -130,7 +130,7 @@ impl PubSubSplitSink {
 
         for pattern in &patterns {
             if self.patterns.contains(&pattern) {
-                return Err(Error::Client(ClientError::AlreadySubscribed));
+                return Err(Error::from(ClientError::AlreadySubscribed));
             }
         }
 
@@ -149,7 +149,7 @@ impl PubSubSplitSink {
 
         for shardchannel in &shardchannels {
             if self.shardchannels.contains(&shardchannel) {
-                return Err(Error::Client(ClientError::AlreadySubscribed));
+                return Err(Error::from(ClientError::AlreadySubscribed));
             }
         }
 

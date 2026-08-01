@@ -23,7 +23,7 @@
 //! narrowing and add with `checked_add`.
 
 use crate::{
-    ClientError, Error, Result,
+    ClientError, Error, ErrorKind, Result,
     resp::{
         BIG_NUMBER_TAG, BOOL_TAG, BULK_ERROR_TAG, BULK_STRING_TAG, DOUBLE_TAG, INTEGER_TAG,
         NULL_TAG, SIMPLE_ERROR_TAG, SIMPLE_STRING_TAG, VERBATIM_STRING_TAG,
@@ -77,7 +77,7 @@ struct ScalarLayout {
 #[inline]
 fn check_bulk_len(len: i64, max_bulk_length: usize) -> Result<()> {
     if len.cast_unsigned() > max_bulk_length as u64 {
-        return Err(Error::Client(ClientError::BulkLengthTooLarge));
+        return Err(Error::from(ClientError::BulkLengthTooLarge));
     }
     Ok(())
 }
@@ -112,15 +112,15 @@ fn bulk_payload(
     malformed: ClientError,
 ) -> Result<(Range<usize>, usize)> {
     check_bulk_len(len, max_bulk_length)?;
-    let len = usize::try_from(len).map_err(|_| Error::Client(malformed.clone()))?;
+    let len = usize::try_from(len).map_err(|_| Error::from(malformed.clone()))?;
     let payload_end = after
         .checked_add(len)
-        .ok_or_else(|| Error::Client(malformed.clone()))?;
+        .ok_or_else(|| Error::from(malformed.clone()))?;
     let end = payload_end
         .checked_add(2)
-        .ok_or_else(|| Error::Client(malformed.clone()))?;
+        .ok_or_else(|| Error::from(malformed.clone()))?;
     if slice(data, payload_end..end)? != b"\r\n" {
-        return Err(Error::Client(malformed));
+        return Err(malformed.into());
     }
     // The caller established `skip <= len`, so this lands at or before
     // `payload_end`, whose own addition just succeeded.
@@ -164,7 +164,7 @@ pub(crate) fn bulk_value_end(data: &[u8], pos: usize, max_bulk_length: usize) ->
         .checked_add(2)
 }
 
-/// Slices `data[range]`, answering [`Error::EOF`] instead of panicking when the
+/// Slices `data[range]`, answering [`ErrorKind::EOF`] instead of panicking when the
 /// buffer stops short.
 ///
 /// Every bound computed here is derived from a length the *server* sent, so
@@ -173,11 +173,11 @@ pub(crate) fn bulk_value_end(data: &[u8], pos: usize, max_bulk_length: usize) ->
 /// this helper is what lets the module deny `clippy::indexing_slicing` outright.
 #[inline(always)]
 fn slice(data: &[u8], range: Range<usize>) -> Result<&[u8]> {
-    data.get(range).ok_or_else(|| Error::EOF)
+    data.get(range).ok_or_else(|| Error::from(ErrorKind::EOF))
 }
 
 /// Finds the `\r` of the next `\r\n` at or after `from`, returning its index.
-/// Errors with [`Error::EOF`] when no complete terminator is present yet.
+/// Errors with [`ErrorKind::EOF`] when no complete terminator is present yet.
 #[inline]
 #[expect(
     clippy::arithmetic_side_effects,
@@ -186,10 +186,10 @@ fn slice(data: &[u8], range: Range<usize>) -> Result<&[u8]> {
               `isize::MAX`."
 )]
 fn find_crlf(data: &[u8], from: usize) -> Result<usize> {
-    let rem = data.get(from..).ok_or_else(|| Error::EOF)?;
-    let i = memchr(b'\r', rem).ok_or_else(|| Error::EOF)?;
+    let rem = data.get(from..).ok_or_else(|| ErrorKind::EOF)?;
+    let i = memchr(b'\r', rem).ok_or_else(|| ErrorKind::EOF)?;
     if rem.get(i + 1) != Some(&b'\n') {
-        return Err(Error::EOF);
+        return Err(Error::from(ErrorKind::EOF));
     }
     Ok(from + i)
 }
@@ -213,9 +213,9 @@ fn crlf_at<const FRAME: bool>(data: &[u8], from: usize) -> Result<usize> {
     if !FRAME {
         return find_crlf(data, from);
     }
-    let cr = data.len().checked_sub(2).ok_or_else(|| Error::EOF)?;
+    let cr = data.len().checked_sub(2).ok_or_else(|| ErrorKind::EOF)?;
     if cr < from {
-        return Err(Error::EOF);
+        return Err(Error::from(ErrorKind::EOF));
     }
     debug_assert_eq!(
         Some(cr),
@@ -240,7 +240,7 @@ fn crlf_at<const FRAME: bool>(data: &[u8], from: usize) -> Result<usize> {
               already `checked_mul` / `checked_sub`."
 )]
 pub(crate) fn parse_int_at(data: &[u8], from: usize) -> Result<(i64, usize)> {
-    let digits = data.get(from..).ok_or_else(|| Error::EOF)?;
+    let digits = data.get(from..).ok_or_else(|| ErrorKind::EOF)?;
     let mut i = 0;
 
     let negative = if let Some(&b'-') = digits.first() {
@@ -260,7 +260,7 @@ pub(crate) fn parse_int_at(data: &[u8], from: usize) -> Result<(i64, usize)> {
                 n = n
                     .checked_mul(10)
                     .and_then(|n| n.checked_sub(i64::from(digit - b'0')))
-                    .ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?;
+                    .ok_or_else(|| Error::from(ClientError::CannotParseInteger))?;
                 i += 1;
             }
             b'\r' => match digits.get(i + 1) {
@@ -269,17 +269,17 @@ pub(crate) fn parse_int_at(data: &[u8], from: usize) -> Result<(i64, usize)> {
                         n
                     } else {
                         n.checked_neg()
-                            .ok_or_else(|| Error::Client(ClientError::CannotParseInteger))?
+                            .ok_or_else(|| Error::from(ClientError::CannotParseInteger))?
                     };
                     return Ok((value, from + i + 2));
                 }
-                Some(_) => return Err(Error::Client(ClientError::CannotParseInteger)),
-                None => return Err(Error::EOF),
+                Some(_) => return Err(Error::from(ClientError::CannotParseInteger)),
+                None => return Err(Error::from(ErrorKind::EOF)),
             },
-            _ => return Err(Error::Client(ClientError::CannotParseInteger)),
+            _ => return Err(Error::from(ClientError::CannotParseInteger)),
         }
     }
-    Err(Error::EOF)
+    Err(Error::from(ErrorKind::EOF))
 }
 
 /// Reads the [`ScalarLayout`] of the scalar element whose tag byte is at `at` in
@@ -315,7 +315,7 @@ fn scalar_layout<const FRAME: bool>(
     at: usize,
     max_bulk_length: usize,
 ) -> Result<ScalarLayout> {
-    let tag = *data.get(at).ok_or_else(|| Error::EOF)?;
+    let tag = *data.get(at).ok_or_else(|| ErrorKind::EOF)?;
     let start = at + 1;
 
     match tag {
@@ -372,7 +372,7 @@ fn scalar_layout<const FRAME: bool>(
         BOOL_TAG => {
             match slice(data, start..start + 3)? {
                 [b't' | b'f', b'\r', b'\n'] => {}
-                _ => return Err(Error::Client(ClientError::CannotParseBoolean)),
+                _ => return Err(Error::from(ClientError::CannotParseBoolean)),
             }
             Ok(ScalarLayout {
                 kind: ScalarKind::Boolean,
@@ -390,7 +390,7 @@ fn scalar_layout<const FRAME: bool>(
                 });
             }
             if len < 0 {
-                return Err(Error::Client(ClientError::CannotParseBulkString));
+                return Err(Error::from(ClientError::CannotParseBulkString));
             }
             let (value, end) = bulk_payload(
                 data,
@@ -418,7 +418,7 @@ fn scalar_layout<const FRAME: bool>(
                 });
             }
             if len < 4 {
-                return Err(Error::Client(ClientError::VerbatimStringTooShort));
+                return Err(Error::from(ClientError::VerbatimStringTooShort));
             }
             let (value, end) = bulk_payload(
                 data,
@@ -437,7 +437,7 @@ fn scalar_layout<const FRAME: bool>(
         BULK_ERROR_TAG => {
             let (len, after) = parse_int_at(data, start)?;
             if len < 0 {
-                return Err(Error::Client(ClientError::CannotParseBulkError));
+                return Err(Error::from(ClientError::CannotParseBulkError));
             }
             let (value, end) = bulk_payload(
                 data,
@@ -453,7 +453,7 @@ fn scalar_layout<const FRAME: bool>(
                 end,
             })
         }
-        _ => Err(Error::Client(ClientError::UnknownRespTag(tag as char))),
+        _ => Err(Error::from(ClientError::UnknownRespTag(tag as char))),
     }
 }
 

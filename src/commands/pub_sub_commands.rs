@@ -33,9 +33,9 @@ pub trait PubSubCommands<'a>: Sized {
     ///     regular_client.publish("mychannel1", "mymessage").await?;
     ///
     ///     let message = pub_sub_stream.next().await.unwrap()?;
-    ///     assert_eq!(b"mychannel*".to_vec(), message.pattern);
-    ///     assert_eq!(b"mychannel1".to_vec(), message.channel);
-    ///     assert_eq!(b"mymessage".to_vec(), message.payload);
+    ///     assert_eq!(b"mychannel*", message.pattern());
+    ///     assert_eq!(b"mychannel1", message.channel());
+    ///     assert_eq!(b"mymessage", message.payload());
     ///
     ///     pub_sub_stream.close().await?;
     ///
@@ -213,8 +213,8 @@ pub trait PubSubCommands<'a>: Sized {
     ///     regular_client.publish("mychannel", "mymessage").await?;
     ///
     ///     let message = pub_sub_stream.next().await.unwrap()?;
-    ///     assert_eq!(b"mychannel".to_vec(), message.channel);
-    ///     assert_eq!(b"mymessage".to_vec(), message.payload);
+    ///     assert_eq!(b"mychannel", message.channel());
+    ///     assert_eq!(b"mymessage", message.payload());
     ///
     ///     pub_sub_stream.close().await?;
     ///

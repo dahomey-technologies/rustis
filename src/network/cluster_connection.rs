@@ -1,4 +1,4 @@
-use super::pub_sub_message::PubSubMessage;
+use super::pub_sub_push::PubSubPush;
 use crate::{
     ClientError, ConnectionState, Error, ErrorKind, RedisError, RedisErrorKind, Result,
     RetryReason, StandaloneConnection,
@@ -890,13 +890,13 @@ impl ClusterConnection {
     /// so the redirection path keeps working.
     fn retire_pub_sub_request(&mut self, node_id: &NodeId, response: &RespResponse) {
         if !matches!(
-            PubSubMessage::try_from(response),
-            Ok(PubSubMessage::Subscribe(_)
-                | PubSubMessage::PSubscribe(_)
-                | PubSubMessage::SSubscribe(_)
-                | PubSubMessage::Unsubscribe(_)
-                | PubSubMessage::PUnsubscribe(_)
-                | PubSubMessage::SUnsubscribe(_))
+            PubSubPush::try_from(response),
+            Ok(PubSubPush::Subscribe(_)
+                | PubSubPush::PSubscribe(_)
+                | PubSubPush::SSubscribe(_)
+                | PubSubPush::Unsubscribe(_)
+                | PubSubPush::PUnsubscribe(_)
+                | PubSubPush::SUnsubscribe(_))
         ) {
             return;
         }

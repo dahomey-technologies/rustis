@@ -36,6 +36,23 @@ Versions up to and including `0.19.3` are documented in the
 
 ### Changed
 
+- **A pub/sub message is one block, read through accessors.** `PubSubMessage` held
+  three public `Vec<u8>` fields, allocating two per delivered message (three for a
+  `pmessage`). Its segments now share one exactly-sized block read through
+  `pattern()`, `channel()` and `payload()`, built from the push frame without serde;
+  the fields and the `Deserialize` impl are gone. They stay owned rather than
+  borrowed: the read buffer is a 64 KiB block the network task recycles, which a
+  retained view would pin. `ClientError::UnexpectedPubSubMessage` replaces the serde
+  error for a push that is not a `message`, `smessage` or `pmessage`. **Migration**:
+  `message.channel` becomes `message.channel()`;
+  `String::from_utf8(message.payload)` becomes
+  `std::str::from_utf8(message.payload())`.
+
+  Worth less than it looks: `benches/pub_sub_decode` puts delivery at ~220–340 ns per
+  message, dominated by the parse, so this buys 2–5 % up to 512-byte payloads and
+  nothing measurable at 4 KiB. A 64-byte inline buffer removing *every* allocation
+  was measured at 8–12 % **slower** and rejected.
+
 - **An awaited command no longer allocates.** `client.get("key").await` — the form
   every example, the README and all built-in command methods use — went through
   `Box::pin(async move { … })`, so the documented path cost one heap allocation plus

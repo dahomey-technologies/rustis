@@ -1,7 +1,7 @@
 use crate::resp::{RespResponse, RespView};
 use std::fmt;
 
-pub(super) enum PubSubMessage<'a> {
+pub(crate) enum PubSubPush<'a> {
     Subscribe(&'a [u8]),
     PSubscribe(&'a [u8]),
     SSubscribe(&'a [u8]),
@@ -13,7 +13,7 @@ pub(super) enum PubSubMessage<'a> {
     SMessage(&'a [u8], &'a [u8]),
 }
 
-impl<'a> fmt::Debug for PubSubMessage<'a> {
+impl<'a> fmt::Debug for PubSubPush<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Subscribe(arg0) => f
@@ -60,7 +60,7 @@ impl<'a> fmt::Debug for PubSubMessage<'a> {
     }
 }
 
-impl<'a> TryFrom<&'a RespResponse> for PubSubMessage<'a> {
+impl<'a> TryFrom<&'a RespResponse> for PubSubPush<'a> {
     type Error = ();
 
     fn try_from(response: &'a RespResponse) -> Result<Self, Self::Error> {
@@ -80,18 +80,18 @@ impl<'a> TryFrom<&'a RespResponse> for PubSubMessage<'a> {
             };
 
             match kind {
-                b"subscribe" => Ok(PubSubMessage::Subscribe(channel_or_pattern)),
-                b"psubscribe" => Ok(PubSubMessage::PSubscribe(channel_or_pattern)),
-                b"ssubscribe" => Ok(PubSubMessage::SSubscribe(channel_or_pattern)),
-                b"unsubscribe" => Ok(PubSubMessage::Unsubscribe(channel_or_pattern)),
-                b"punsubscribe" => Ok(PubSubMessage::PUnsubscribe(channel_or_pattern)),
-                b"sunsubscribe" => Ok(PubSubMessage::SUnsubscribe(channel_or_pattern)),
+                b"subscribe" => Ok(PubSubPush::Subscribe(channel_or_pattern)),
+                b"psubscribe" => Ok(PubSubPush::PSubscribe(channel_or_pattern)),
+                b"ssubscribe" => Ok(PubSubPush::SSubscribe(channel_or_pattern)),
+                b"unsubscribe" => Ok(PubSubPush::Unsubscribe(channel_or_pattern)),
+                b"punsubscribe" => Ok(PubSubPush::PUnsubscribe(channel_or_pattern)),
+                b"sunsubscribe" => Ok(PubSubPush::SUnsubscribe(channel_or_pattern)),
                 b"message" => {
                     let Some(Ok(RespView::BulkString(payload))) = iterator.next() else {
                         return Err(());
                     };
 
-                    Ok(PubSubMessage::Message(channel_or_pattern, payload))
+                    Ok(PubSubPush::Message(channel_or_pattern, payload))
                 }
                 b"pmessage" => {
                     let Some(Ok(RespView::BulkString(channel))) = iterator.next() else {
@@ -102,17 +102,13 @@ impl<'a> TryFrom<&'a RespResponse> for PubSubMessage<'a> {
                         return Err(());
                     };
 
-                    Ok(PubSubMessage::PMessage(
-                        channel_or_pattern,
-                        channel,
-                        payload,
-                    ))
+                    Ok(PubSubPush::PMessage(channel_or_pattern, channel, payload))
                 }
                 b"smessage" => {
                     let Some(Ok(RespView::BulkString(payload))) = iterator.next() else {
                         return Err(());
                     };
-                    Ok(PubSubMessage::SMessage(channel_or_pattern, payload))
+                    Ok(PubSubPush::SMessage(channel_or_pattern, payload))
                 }
                 _ => Err(()),
             }

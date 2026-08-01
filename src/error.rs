@@ -116,6 +116,11 @@ pub enum ClientError {
     /// match the pending subscription request (out-of-order or spurious ack)
     #[error("unexpected subscription confirmation from server")]
     UnexpectedSubscriptionConfirmation,
+    /// Raised when a push frame routed to a pub/sub stream is not one of the
+    /// three message shapes a subscriber can be handed (`message`, `smessage`
+    /// or `pmessage`)
+    #[error("unexpected pub/sub message from server")]
+    UnexpectedPubSubMessage,
     /// Raised when serde serialization error occurs
     #[error("Serde deserialization error: {0}")]
     SerdeDeserialize(String),

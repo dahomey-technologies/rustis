@@ -168,6 +168,11 @@ name = "struct_decode"
 harness = false
 required-features = ["bench"]
 
+[[bench]]
+name = "pub_sub_decode"
+harness = false
+required-features = ["bench"]
+
 [[example]]
 name = "actix_crud"
 required-features = ["tokio-runtime", "web-examples"]

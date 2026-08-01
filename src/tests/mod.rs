@@ -48,6 +48,7 @@ mod pipeline;
 #[cfg(feature = "pool")]
 mod pooled_client_manager;
 mod pub_sub_commands;
+mod pub_sub_message;
 mod resp3;
 mod resp_deserializer;
 mod resp_frame_parser;

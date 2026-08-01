@@ -2,15 +2,12 @@ use crate::{
     ClientError, Error, PubSubReceiver, Result,
     client::{Client, ClientPreparedCommand},
     commands::InternalPubSubCommands,
-    network::PubSubSender,
-    resp::{ByteBufSeed, CommandArgs, CommandArgsMut},
+    network::{PubSubPush, PubSubSender},
+    resp::{CommandArgs, CommandArgsMut, RespResponse},
 };
 use bytes::Bytes;
 use futures_util::{Stream, StreamExt};
-use serde::{
-    Deserialize, Serialize,
-    de::{self, Visitor},
-};
+use serde::Serialize;
 use std::{
     collections::HashSet,
     fmt,
@@ -19,71 +16,85 @@ use std::{
 };
 
 /// Pub/Sub Message that can be streamed from [`PubSubStream`](PubSubStream)
-#[derive(Debug)]
-#[non_exhaustive]
+///
+/// The three segments — pattern, channel and payload — live end to end in one
+/// exactly-sized block, so a message costs a single allocation whatever its
+/// shape.
+///
+/// The bytes are copied out of the network read buffer as the message is
+/// delivered. That buffer is a block the network task recycles across replies; a
+/// message that borrowed from it would pin the whole block for as long as the
+/// subscriber held the message, which is why the segments are owned rather than
+/// shared.
 pub struct PubSubMessage {
-    pub pattern: Vec<u8>,
-    pub channel: Vec<u8>,
-    pub payload: Vec<u8>,
+    /// pattern ‖ channel ‖ payload, contiguous.
+    buf: Box<[u8]>,
+    channel_start: usize,
+    payload_start: usize,
 }
 
-impl<'de> Deserialize<'de> for PubSubMessage {
+impl PubSubMessage {
+    /// The pattern the message matched, empty unless it was delivered through
+    /// [`psubscribe`](crate::commands::PubSubCommands::psubscribe).
     #[inline]
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        struct PubSubMessageVisitor;
+    pub fn pattern(&self) -> &[u8] {
+        &self.buf[..self.channel_start]
+    }
 
-        impl<'de> Visitor<'de> for PubSubMessageVisitor {
-            type Value = PubSubMessage;
+    /// The channel the message was published to.
+    #[inline]
+    pub fn channel(&self) -> &[u8] {
+        &self.buf[self.channel_start..self.payload_start]
+    }
 
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("PubSubMessage")
-            }
+    /// The published payload.
+    #[inline]
+    pub fn payload(&self) -> &[u8] {
+        &self.buf[self.payload_start..]
+    }
 
-            fn visit_seq<A>(self, mut seq: A) -> std::result::Result<Self::Value, A::Error>
-            where
-                A: serde::de::SeqAccess<'de>,
-            {
-                let Some(kind) = seq.next_element::<&str>()? else {
-                    return Err(de::Error::invalid_length(0, &"more elements in sequence"));
-                };
+    #[inline]
+    fn from_segments(pattern: &[u8], channel: &[u8], payload: &[u8]) -> Self {
+        let channel_start = pattern.len();
+        let payload_start = channel_start.saturating_add(channel.len());
+        let mut buf = Vec::with_capacity(payload_start.saturating_add(payload.len()));
+        buf.extend_from_slice(pattern);
+        buf.extend_from_slice(channel);
+        buf.extend_from_slice(payload);
 
-                let Ok(Some(channel_or_pattern)) = seq.next_element_seed(ByteBufSeed) else {
-                    return Err(de::Error::invalid_length(1, &"more elements in sequence"));
-                };
-
-                let Ok(Some(channel_or_payload)) = seq.next_element_seed(ByteBufSeed) else {
-                    return Err(de::Error::invalid_length(2, &"more elements in sequence"));
-                };
-
-                match kind {
-                    "message" | "smessage" => Ok(PubSubMessage {
-                        pattern: vec![],
-                        channel: channel_or_pattern,
-                        payload: channel_or_payload,
-                    }),
-                    "pmessage" => {
-                        let Ok(Some(payload)) = seq.next_element_seed(ByteBufSeed) else {
-                            return Err(de::Error::invalid_length(3, &"more elements in sequence"));
-                        };
-
-                        Ok(PubSubMessage {
-                            pattern: channel_or_pattern,
-                            channel: channel_or_payload,
-                            payload,
-                        })
-                    }
-                    _ => Err(de::Error::invalid_value(
-                        de::Unexpected::Str(kind),
-                        &"message, smessage or pmessage",
-                    )),
-                }
-            }
+        Self {
+            // The capacity is exact, so this hands the block over as it is.
+            buf: buf.into_boxed_slice(),
+            channel_start,
+            payload_start,
         }
+    }
+}
 
-        deserializer.deserialize_seq(PubSubMessageVisitor)
+impl TryFrom<&RespResponse> for PubSubMessage {
+    type Error = Error;
+
+    #[inline]
+    fn try_from(response: &RespResponse) -> Result<Self> {
+        match PubSubPush::try_from(response) {
+            Ok(PubSubPush::Message(channel, payload) | PubSubPush::SMessage(channel, payload)) => {
+                Ok(Self::from_segments(&[], channel, payload))
+            }
+            Ok(PubSubPush::PMessage(pattern, channel, payload)) => {
+                Ok(Self::from_segments(pattern, channel, payload))
+            }
+            _ => Err(Error::from(ClientError::UnexpectedPubSubMessage)),
+        }
+    }
+}
+
+impl fmt::Debug for PubSubMessage {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("PubSubMessage")
+            .field("pattern", &String::from_utf8_lossy(self.pattern()))
+            .field("channel", &String::from_utf8_lossy(self.channel()))
+            .field("payload", &String::from_utf8_lossy(self.payload()))
+            .finish()
     }
 }
 
@@ -307,7 +318,11 @@ impl Stream for PubSubSplitStream {
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
         match self.get_mut().receiver.poll_next_unpin(cx) {
-            Poll::Ready(Some(Ok(message))) => Poll::Ready(Some(message.to())),
+            // The response is dropped as this returns, releasing the recycled
+            // network block the message's bytes were just copied out of.
+            Poll::Ready(Some(Ok(response))) => {
+                Poll::Ready(Some(PubSubMessage::try_from(&response)))
+            }
             Poll::Ready(None) => Poll::Ready(None),
             Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(e))),
             Poll::Pending => Poll::Pending,
@@ -340,8 +355,8 @@ impl Stream for PubSubSplitStream {
 ///     regular_client.publish("mychannel", "mymessage").await?;
 ///
 ///     let mut message = pub_sub_stream.next().await.unwrap()?;
-///     assert_eq!(b"mychannel".to_vec(), message.channel);
-///     assert_eq!(b"mymessage".to_vec(), message.payload);
+///     assert_eq!(b"mychannel", message.channel());
+///     assert_eq!(b"mymessage", message.payload());
 ///
 ///     pub_sub_stream.close().await?;
 ///

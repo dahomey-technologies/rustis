@@ -6,7 +6,7 @@ use crate::{
 use bytes::Bytes;
 use serde::{Deserialize, Deserializer};
 use smallvec::SmallVec;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 fn deserialize<T>(str: &str) -> Result<T>
 where
@@ -373,8 +373,21 @@ fn option() -> Result<()> {
     let result: Option<Vec<i32>> = deserialize("*1\r\n:12\r\n")?; // [12]
     assert_eq!(Some(vec![12]), result);
 
+    // An empty collection is a collection, not a nil: only `_` and `*-1` are `None`.
     let result: Option<Vec<i32>> = deserialize("*0\r\n")?; // []
+    assert_eq!(Some(vec![]), result);
+
+    let result: Option<Vec<i32>> = deserialize("*-1\r\n")?; // nil array
     assert_eq!(None, result);
+
+    let result: Option<Vec<i32>> = deserialize("_\r\n")?; // null
+    assert_eq!(None, result);
+
+    let result: Option<HashMap<String, i32>> = deserialize("%0\r\n")?; // {}
+    assert_eq!(Some(HashMap::new()), result);
+
+    let result: Option<HashSet<i32>> = deserialize("~0\r\n")?; // set()
+    assert_eq!(Some(HashSet::new()), result);
 
     Ok(())
 }

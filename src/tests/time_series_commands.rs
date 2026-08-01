@@ -184,7 +184,7 @@ async fn ts_get() -> Result<()> {
         .await?;
 
     let result = client.ts_get("temp:JLM", TsGetOptions::default()).await?;
-    assert_eq!(None, result);
+    assert_eq!(None, *result);
 
     client
         .ts_add(
@@ -220,7 +220,7 @@ async fn ts_get() -> Result<()> {
         .await?;
 
     let result = client.ts_get("temp:JLM", TsGetOptions::default()).await?;
-    assert_eq!(Some((1035, 40.)), result);
+    assert_eq!(Some((1035, 40.)), *result);
 
     Ok(())
 }
@@ -291,7 +291,7 @@ async fn ts_decrby() -> Result<()> {
     assert_eq!(1657811829000u64, timestamp);
 
     let sample = client.ts_get("a", TsGetOptions::default()).await?;
-    assert_eq!(Some((1657811829000, -264.)), sample);
+    assert_eq!(Some((1657811829000, -264.)), *sample);
 
     let timestamp = client
         .ts_decrby("b", 1., TsIncrByDecrByOptions::default())
@@ -1035,13 +1035,13 @@ async fn ts_latest() -> Result<()> {
         .ts_add("source", TsTimestamp::Value(2), 2., TsAddOptions::default())
         .await?;
 
-    let sample: Option<(u64, f64)> = client.ts_get("compacted", TsGetOptions::default()).await?;
-    assert_eq!(None, sample);
+    let sample = client.ts_get("compacted", TsGetOptions::default()).await?;
+    assert_eq!(None, *sample);
 
-    let sample: Option<(u64, f64)> = client
+    let sample = client
         .ts_get("compacted", TsGetOptions::default().latest())
         .await?;
-    assert_eq!(Some((0, 3.)), sample);
+    assert_eq!(Some((0, 3.)), *sample);
 
     let results: Vec<(u64, f64)> = client
         .ts_range("compacted", "-", "+", TsRangeOptions::default())

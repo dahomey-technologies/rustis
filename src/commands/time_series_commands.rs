@@ -239,7 +239,7 @@ pub trait TimeSeriesCommands<'a>: Sized {
     /// * `options` - See [`TsGetOptions`](TsGetOptions)
     ///
     /// # Return
-    /// An option tuple:
+    /// A [`TsGetResult`](TsGetResult) wrapping an option tuple:
     /// * The last sample timestamp, and last sample value, when the time series contains data.
     /// * None, when the time series is empty.
     ///
@@ -250,7 +250,7 @@ pub trait TimeSeriesCommands<'a>: Sized {
         self,
         key: impl Serialize,
         options: TsGetOptions,
-    ) -> PreparedCommand<'a, Self, Option<(u64, f64)>> {
+    ) -> PreparedCommand<'a, Self, TsGetResult> {
         prepare_command(self, cmd("TS.GET").key(key).arg(options).readonly())
     }
 
@@ -1176,6 +1176,77 @@ impl<'a> TsMGetOptions<'a> {
     pub fn selected_label(mut self, label: &'a str) -> Self {
         self.selected_labels.push(label);
         self
+    }
+}
+
+/// Result for the [`ts_get`](TimeSeriesCommands::ts_get) command: the last
+/// sample of a time series, or nothing when the series is empty.
+///
+/// The time series module reports the empty series as an empty array rather
+/// than a nil, so the absence of a sample is a shape of its own and cannot be
+/// read as a plain `Option`. Deref to the inner `Option` to match on it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TsGetResult(pub Option<(u64, f64)>);
+
+impl std::ops::Deref for TsGetResult {
+    type Target = Option<(u64, f64)>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl From<TsGetResult> for Option<(u64, f64)> {
+    fn from(result: TsGetResult) -> Self {
+        result.0
+    }
+}
+
+impl<'de> de::Deserialize<'de> for TsGetResult {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: de::Deserializer<'de>,
+    {
+        struct TsGetResultVisitor;
+
+        impl<'de> de::Visitor<'de> for TsGetResultVisitor {
+            type Value = TsGetResult;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("TsGetResult")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> std::result::Result<Self::Value, A::Error>
+            where
+                A: de::SeqAccess<'de>,
+            {
+                let Some(timestamp) = seq.next_element::<u64>()? else {
+                    return Ok(TsGetResult(None));
+                };
+
+                let Some(value) = seq.next_element::<f64>()? else {
+                    return Err(de::Error::invalid_length(1, &"a timestamp and a value"));
+                };
+
+                Ok(TsGetResult(Some((timestamp, value))))
+            }
+
+            fn visit_none<E>(self) -> std::result::Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(TsGetResult(None))
+            }
+
+            fn visit_unit<E>(self) -> std::result::Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(TsGetResult(None))
+            }
+        }
+
+        deserializer.deserialize_seq(TsGetResultVisitor)
     }
 }
 

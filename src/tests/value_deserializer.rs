@@ -227,8 +227,15 @@ fn option() -> Result<()> {
     let result = Option::<Vec<i32>>::deserialize(&Value::Array(vec![Value::Integer(12)]))?;
     assert_eq!(Some(vec![12]), result);
 
+    // An empty collection is a collection, not a nil: only `Value::Null` is `None`.
     let result = Option::<Vec<i32>>::deserialize(&Value::Array(vec![]))?;
-    assert_eq!(None, result);
+    assert_eq!(Some(vec![]), result);
+
+    let result = Option::<HashMap<String, i32>>::deserialize(&Value::Map(HashMap::new()))?;
+    assert_eq!(Some(HashMap::new()), result);
+
+    let result = Option::<Vec<i32>>::deserialize(&Value::Set(vec![]))?;
+    assert_eq!(Some(vec![]), result);
 
     Ok(())
 }

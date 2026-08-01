@@ -471,9 +471,11 @@ impl<'de> Deserializer<'de> for &'de Value {
     where
         V: Visitor<'de>,
     {
+        // Only a nil is `None`. An empty array, map or set is a collection that
+        // happens to be empty — a different fact from a missing key, and the one
+        // `LRANGE` on an empty list reports.
         match self {
             Value::Null => visitor.visit_none(),
-            Value::Array(values) if values.is_empty() => visitor.visit_none(),
             Value::Error(e) => Err(Error::Redis(e.clone())),
             _ => visitor.visit_some(self),
         }

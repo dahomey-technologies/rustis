@@ -36,6 +36,19 @@ Versions up to and including `0.19.3` are documented in the
 
 ### Changed
 
+- **An awaited command no longer allocates.** `client.get("key").await` — the form
+  every example, the README and all built-in command methods use — went through
+  `Box::pin(async move { … })`, so the documented path cost one heap allocation plus
+  one virtual call per command while the generic `client.send(…)` cost neither, in a
+  crate whose first philosophy point is low allocations. `IntoFuture for
+  PreparedCommand<'_, &Client, R>` now resolves to `client::CommandFuture`, a
+  hand-written state machine that lives in the caller's frame; building the future
+  and dropping it still sends nothing, and `command_timeout` still applies. Awaiting
+  is unchanged, but naming the old type is not: an `IntoFuture` associated type
+  spelled `rustis::Future<'_, T>` becomes `rustis::client::CommandFuture<'_, T>`.
+  Construction measures ~69 ns against ~80 ns boxed, with `client.send(…)` unmoved
+  at ~55 ns in the same rounds (`benches/into_future.rs`).
+
 - **Errors name the command they belong to.** `Error` is now a struct rather than an
   enum: its variants moved to `ErrorKind`, reachable through `Error::kind()` and
   `Error::into_kind()`, and it carries the command alongside them, reachable through
@@ -66,6 +79,11 @@ Versions up to and including `0.19.3` are documented in the
   converts it to the plain option.
 
 ### Fixed
+
+- **The `bench` feature compiles again.** `resp::bench_support` still built `Err`
+  from an `ErrorKind` rather than an `Error`, so `--features bench` failed with five
+  errors. No CI job compiles that feature, which is why the `Error` restructuring
+  missed it.
 
 - **A textual reply read as a `bool` follows one rule.** Asking for a `bool`
   directly — `client.send(cmd).await?` typed as `bool` — and asking for a `Value`

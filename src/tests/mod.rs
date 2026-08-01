@@ -21,6 +21,7 @@ mod client;
 mod cluster;
 mod cluster_commands;
 mod command_args;
+mod command_future;
 mod config;
 mod connection_commands;
 mod count_min_sktech_commands;

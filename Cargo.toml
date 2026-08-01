@@ -58,6 +58,9 @@ tokio-native-tls = { version = "0.3", optional = true }
 tracing = { version = "0.1", features = ["log"] }
 crc16 = "0.4"
 rand = "0.10"
+# Safe pin projection for the hand-written command future: the crate is
+# `forbid(unsafe_code)` and the timeout it holds is `!Unpin`.
+pin-project-lite = "0.2"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", optional = true }
 socket2 = "0.6"
@@ -102,6 +105,11 @@ required-features = ["bench"]
 
 [[bench]]
 name = "throughput"
+harness = false
+required-features = ["bench"]
+
+[[bench]]
+name = "into_future"
 harness = false
 required-features = ["bench"]
 

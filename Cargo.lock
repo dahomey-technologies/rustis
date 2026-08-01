@@ -2393,6 +2393,7 @@ dependencies = [
  "memchr",
  "moka",
  "native-tls",
+ "pin-project-lite",
  "pprof",
  "rand 0.10.2",
  "redis",

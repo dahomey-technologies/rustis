@@ -509,6 +509,7 @@ mod bounded_channel;
 #[allow(clippy::module_inception)]
 mod client;
 mod client_tracking_invalidation_stream;
+mod command_future;
 mod config;
 mod credentials_provider;
 mod message;
@@ -526,6 +527,7 @@ pub(crate) use bounded_channel::*;
 
 pub use client::*;
 pub use client_tracking_invalidation_stream::*;
+pub use command_future::*;
 pub use config::*;
 pub use credentials_provider::*;
 pub(crate) use message::*;

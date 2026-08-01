@@ -222,6 +222,22 @@ pub(crate) async fn sleep(duration: Duration) {
     tokio::time::sleep(duration).await;
 }
 
+/// The future [`timeout_future`] hands back, named so a caller can hold it in
+/// a struct field. `timeout` below is an `async fn`, whose future has no name
+/// and can therefore only be awaited or boxed.
+#[cfg(feature = "tokio-runtime")]
+pub(crate) type TimeoutFuture<F> = tokio::time::Timeout<F>;
+
+/// Wrap `future` in the runtime's timeout, without awaiting it.
+///
+/// Its output is `Err` on expiry, which the caller turns into
+/// [`ErrorKind::Timeout`] — the same contract as [`timeout`], split so the
+/// waiting can happen inside someone else's `poll`.
+pub(crate) fn timeout_future<F: Future>(duration: Duration, future: F) -> TimeoutFuture<F> {
+    #[cfg(feature = "tokio-runtime")]
+    tokio::time::timeout(duration, future)
+}
+
 /// Await on a future for a maximum amount of time before returning an error.
 #[allow(dead_code)]
 pub(crate) async fn timeout<F: Future>(timeout: Duration, future: F) -> Result<F::Output> {

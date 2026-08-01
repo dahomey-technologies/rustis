@@ -28,6 +28,21 @@ Versions up to and including `0.19.3` are documented in the
 
 ### Fixed
 
+- **A textual reply read as a `bool` follows one rule.** Asking for a `bool`
+  directly — `client.send(cmd).await?` typed as `bool` — and asking for a `Value`
+  and converting it afterwards — `value.into::<bool>()?` — gave different answers
+  for the same reply: a simple string other than `OK`, and a bulk string other than
+  `0`/`false`/`1`/`true`, were `false` the first way and a `CannotParseBoolean`
+  error the second. The reply's encoding mattered too, `+OK` being `true` where
+  `$2\r\nOK\r\n` was not, so a server switching between RESP2 and RESP3 could flip
+  the result. One rule now covers the reply's text whichever way it is read and
+  whichever encoding carries it: `OK`, `1` and `true` are `true`, `0` and `false`
+  are `false`, anything else is `CannotParseBoolean`. **Behaviour change**: text
+  outside that list used to be `false` when the `bool` was asked for directly and
+  is now an error — the server never said `false`, and the error names the problem
+  where the `false` hid it — and a bulk string `OK` is now `true`, as the simple
+  string `OK` already was. Integers, doubles, RESP booleans and nil are unchanged.
+
 - **`Value` equality is total on doubles.** `Value` asserts `Eq` and is hashed as a
   `Value::Map` key, yet doubles were compared with `==`, under which a NaN is not
   even equal to itself. `,nan` is a legal RESP double — T-Digest and TimeSeries

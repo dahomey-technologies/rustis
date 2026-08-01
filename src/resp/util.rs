@@ -308,6 +308,23 @@ where
     T::try_from(integral).map_err(|_| Error::Client(ClientError::CannotParseInteger))
 }
 
+/// Reads a boolean out of a textual reply — a simple string or a bulk string,
+/// by the same rule for both, so the RESP version a server answers in does not
+/// decide the result: `+OK` and `$2\r\nOK\r\n` are one reply in two encodings.
+/// Both deserializers call this, so neither can drift from the other.
+///
+/// Text outside the rule is `CannotParseBoolean` rather than `false`: the server
+/// did not say `false`, and a caller reading `PONG` as a boolean has a bug the
+/// error names and a plausible value would hide.
+#[inline]
+pub(crate) fn bool_from_text(bytes: &[u8]) -> Result<bool, Error> {
+    match bytes {
+        b"OK" | b"1" | b"true" => Ok(true),
+        b"0" | b"false" => Ok(false),
+        _ => Err(Error::Client(ClientError::CannotParseBoolean)),
+    }
+}
+
 /// Serialize field name only and skip the boolean value
 pub(crate) fn serialize_flag<S: serde::Serializer>(
     _: &bool,

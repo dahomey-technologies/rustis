@@ -2,7 +2,7 @@ use crate::{
     ClientError, Error, RedisError, Result,
     resp::{
         PUSH_FAKE_FIELD, RespCollectionIter, RespCollectionView, RespResponse, RespView,
-        util::{double_to_int, is_field_value_array},
+        util::{bool_from_text, double_to_int, is_field_value_array},
     },
 };
 use serde::{
@@ -56,10 +56,10 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
         V: Visitor<'de>,
     {
         let result = match self.view {
-            RespView::SimpleString(ss) => ss == b"OK",
+            RespView::SimpleString(ss) => bool_from_text(ss)?,
             RespView::Integer(i, _) => i != 0,
             RespView::Double(d, _) => d != 0.,
-            RespView::BulkString(bs) => matches!(bs, b"1" | b"true"),
+            RespView::BulkString(bs) => bool_from_text(bs)?,
             RespView::Boolean(b) => b,
             RespView::Error(e) => return Err(Error::Redis(RedisError::try_from(e)?)),
             RespView::Null => false,

@@ -2,7 +2,7 @@ use crate::{
     ClientError, Error, Result,
     resp::{
         Value,
-        util::{double_to_int, is_field_value_array},
+        util::{bool_from_text, double_to_int, is_field_value_array},
     },
 };
 use serde::{
@@ -69,10 +69,9 @@ impl<'de> Deserializer<'de> for &'de Value {
         let result = match self {
             Value::Integer(i) => *i != 0,
             Value::Double(d) => *d != 0.,
-            Value::SimpleString(s) if s == "OK" => true,
             Value::Null => false,
-            Value::BulkString(s) if s == b"0" || s == b"false" => false,
-            Value::BulkString(s) if s == b"1" || s == b"true" => true,
+            Value::SimpleString(s) => bool_from_text(s.as_bytes())?,
+            Value::BulkString(s) => bool_from_text(s)?,
             Value::Boolean(b) => *b,
             Value::Error(e) => return Err(Error::Redis(e.clone())),
             _ => {

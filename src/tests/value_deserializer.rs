@@ -46,6 +46,36 @@ fn bool() -> Result<()> {
     let result = bool::deserialize(&Value::Null)?;
     assert!(!result);
 
+    // A simple string and a bulk string carrying the same text read the same
+    // way, exactly as they do on the wire path.
+    let result = bool::deserialize(&Value::BulkString(b"OK".to_vec()))?;
+    assert!(result);
+
+    let result = bool::deserialize(&Value::SimpleString("1".to_owned()))?;
+    assert!(result);
+
+    let result = bool::deserialize(&Value::SimpleString("true".to_owned()))?;
+    assert!(result);
+
+    let result = bool::deserialize(&Value::SimpleString("0".to_owned()))?;
+    assert!(!result);
+
+    let result = bool::deserialize(&Value::SimpleString("false".to_owned()))?;
+    assert!(!result);
+
+    // Text the rule does not recognize is an error on both paths.
+    for unreadable in [
+        Value::SimpleString("KO".to_owned()),
+        Value::BulkString(b"hello".to_vec()),
+        Value::BulkString(Vec::new()),
+    ] {
+        let result = bool::deserialize(&unreadable);
+        assert!(
+            matches!(result, Err(Error::Client(ClientError::CannotParseBoolean))),
+            "{unreadable:?} read as a bool"
+        );
+    }
+
     Ok(())
 }
 

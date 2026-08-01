@@ -1,6 +1,6 @@
 use crate::{
     ClientError, Error, RedisError, RedisErrorKind, Result,
-    resp::{RespBuf, RespDeserializer, RespFrameParser, RespResponse, RespTapeMut},
+    resp::{RespBuf, RespDeserializer, RespFrameParser, RespResponse, RespTapeMut, Value},
     tests::log_try_init,
 };
 use bytes::Bytes;
@@ -67,11 +67,75 @@ fn bool() -> Result<()> {
     let result: bool = deserialize("+OK\r\n")?; // "OK"
     assert!(result);
 
-    let result: bool = deserialize("+KO\r\n")?; // "KO"
-    assert!(!result);
-
     let result: bool = deserialize("_\r\n")?; // nil
     assert!(!result);
+
+    // A simple string and a bulk string carrying the same text read the same
+    // way, so the RESP version a server answers in cannot flip the result.
+    let result: bool = deserialize("$2\r\nOK\r\n")?;
+    assert!(result);
+
+    let result: bool = deserialize("+1\r\n")?;
+    assert!(result);
+
+    let result: bool = deserialize("+true\r\n")?;
+    assert!(result);
+
+    let result: bool = deserialize("+0\r\n")?;
+    assert!(!result);
+
+    let result: bool = deserialize("+false\r\n")?;
+    assert!(!result);
+
+    // Text the rule does not recognize is an error: the server did not say
+    // `false`, and answering `false` would be inventing a value.
+    for unreadable in ["+KO\r\n", "$5\r\nhello\r\n", "$0\r\n\r\n"] {
+        let result: Result<bool> = deserialize(unreadable);
+        assert!(
+            matches!(result, Err(Error::Client(ClientError::CannotParseBoolean))),
+            "{unreadable:?} read as a bool"
+        );
+    }
+
+    Ok(())
+}
+
+#[test]
+fn a_boolean_reads_the_same_off_the_wire_and_off_a_value() -> Result<()> {
+    log_try_init();
+
+    // The two deserializers share one rule, so the path the caller took cannot
+    // decide whether a reply is `true`, `false` or an error.
+    for reply in [
+        "+OK\r\n",
+        "+KO\r\n",
+        "+1\r\n",
+        "+false\r\n",
+        "$2\r\nOK\r\n",
+        "$4\r\ntrue\r\n",
+        "$5\r\nhello\r\n",
+        "$0\r\n\r\n",
+        ":0\r\n",
+        ":12\r\n",
+        "#t\r\n",
+        ",0\r\n",
+        "_\r\n",
+        "*1\r\n:1\r\n",
+    ] {
+        let from_wire: Result<bool> = deserialize(reply);
+        let value: Value = deserialize(reply)?;
+        let from_value = bool::deserialize(&value);
+
+        match (from_wire, from_value) {
+            (Ok(wire), Ok(value)) => assert_eq!(wire, value, "{reply:?}"),
+            (Err(wire), Err(value)) => {
+                assert_eq!(wire.to_string(), value.to_string(), "{reply:?}");
+            }
+            (wire, value) => {
+                panic!("{reply:?} reads as {wire:?} off the wire and {value:?} off a value")
+            }
+        }
+    }
 
     Ok(())
 }

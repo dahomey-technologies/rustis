@@ -194,10 +194,6 @@ name = "cbor"
 required-features = ["tokio-runtime"]
 
 [[example]]
-name = "loop"
-required-features = ["tokio-runtime"]
-
-[[example]]
 name = "pprof_pipeline"
 required-features = ["tokio-runtime", "bench"]
 

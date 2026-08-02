@@ -12,8 +12,8 @@ use crate::{
     resp::Value,
     spawn,
     tests::{
-        TestClient, get_default_config, get_sentinel_test_client, get_test_client,
-        get_test_client_with_config,
+        TestClient, get_default_config, get_exclusive_test_client,
+        get_exclusive_test_client_with_config, get_sentinel_test_client, get_test_client,
     },
 };
 use futures_util::StreamExt;
@@ -1044,7 +1044,7 @@ fn module_loadex_args() {
 #[tokio::test]
 #[serial]
 async fn monitor() -> Result<()> {
-    let client = get_test_client().await?;
+    let client = get_exclusive_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     let client2 = get_test_client().await?;
@@ -1098,7 +1098,7 @@ async fn monitor() -> Result<()> {
 async fn auto_remonitor() -> Result<()> {
     let mut config = get_default_config()?;
     config.reconnection = ReconnectionConfig::new_constant(0, 100);
-    let client = get_test_client_with_config(config).await?;
+    let client = get_exclusive_test_client_with_config(config).await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     let client2 = get_test_client().await?;

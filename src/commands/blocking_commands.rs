@@ -68,11 +68,10 @@ where
 ///
 /// # ⚠ These commands require a dedicated connection
 ///
-/// A blocking command occupies its connection until it returns. On a
-/// multiplexed [`Client`](crate::client::Client) — one instance cloned across
-/// threads — that connection is shared, so every other caller queued behind it
-/// waits for the block to end, however unrelated their commands are. A `BLPOP`
-/// with a 30-second timeout stalls the whole client for 30 seconds.
+/// A blocking command occupies its connection until it returns. On a shared
+/// connection every other caller queued behind it waits for the block to end,
+/// however unrelated their commands are: a `BLPOP` with a 30-second timeout
+/// stalls everyone for 30 seconds.
 ///
 /// [`command_timeout`](crate::client::Config::command_timeout) does not rescue
 /// this. It bounds how long *the caller* waits for a reply, and then returns
@@ -80,23 +79,25 @@ where
 /// connection until the command's own `timeout` argument expires, so the
 /// commands queued behind it are still stuck.
 ///
-/// Give these commands a connection of their own:
+/// This is why the trait is implemented for
+/// [`ExclusiveClient`](crate::client::ExclusiveClient) alone, and not for the
+/// clonable [`Client`](crate::client::Client): the dedicated connection is a
+/// requirement the type carries, so calling one of these commands on a
+/// multiplexed client does not compile.
 ///
 /// ```
-/// use rustis::{client::Client, commands::BlockingCommands, Result};
+/// use rustis::{client::ExclusiveClient, commands::BlockingCommands, Result};
 ///
 /// # async fn example() -> Result<()> {
-/// // A separate `connect` is a separate connection — not a clone of an
-/// // existing client, which would share one.
-/// let blocking_client = Client::connect("127.0.0.1:6379").await?;
+/// let blocking_client = ExclusiveClient::connect("127.0.0.1:6379").await?;
 /// let result: Option<(String, String)> = blocking_client.blpop("key", 30.).await?;
 /// # Ok(())
 /// # }
 /// ```
 ///
-/// A [`PooledClientManager`](crate::client::PooledClientManager) works too: the
-/// borrowed client is returned to the pool only once the command completes, so
-/// the block stays confined to one pooled connection.
+/// A [`PooledClientManager`](crate::client::PooledClientManager) hands out an
+/// exclusive client too: the borrowed connection returns to the pool only once
+/// the command completes, so the block stays confined to it.
 pub trait BlockingCommands<'a>: Sized {
     /// This command is the blocking variant of [`lmove`](crate::commands::ListCommands::lmove).
     ///

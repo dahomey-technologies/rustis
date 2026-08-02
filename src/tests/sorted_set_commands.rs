@@ -6,7 +6,7 @@ use crate::{
         ZRangeSortBy, ZScanOptions, ZScanResult, ZWhere,
     },
     sleep, spawn,
-    tests::{TestClient, get_test_client},
+    tests::{TestClient, get_exclusive_test_client, get_test_client},
 };
 use serial_test::serial;
 use std::time::Duration;
@@ -14,7 +14,7 @@ use std::time::Duration;
 #[tokio::test]
 #[serial]
 async fn bzmpop() -> Result<()> {
-    let client = get_test_client().await?;
+    let client = get_exclusive_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     let result: Option<(String, Vec<(String, f64)>)> =
@@ -100,7 +100,7 @@ async fn bzmpop() -> Result<()> {
 
     spawn(async move {
         async fn calls() -> Result<()> {
-            let client = get_test_client().await?;
+            let client = get_exclusive_test_client().await?;
 
             let result: Option<(String, Vec<(String, f64)>)> =
                 client.bzmpop(0.0, "key", ZWhere::Min, 1).await?;
@@ -131,7 +131,7 @@ async fn bzmpop() -> Result<()> {
 #[tokio::test]
 #[serial]
 async fn bzpopmax() -> Result<()> {
-    let client = get_test_client().await?;
+    let client = get_exclusive_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     client
@@ -154,7 +154,7 @@ async fn bzpopmax() -> Result<()> {
 
     spawn(async move {
         async fn calls() -> Result<()> {
-            let client = get_test_client().await?;
+            let client = get_exclusive_test_client().await?;
 
             let result: BZpopMinMaxResult<String, String> =
                 client.bzpopmax(["key", "unknown"], 0.0).await?;
@@ -185,7 +185,7 @@ async fn bzpopmax() -> Result<()> {
 #[tokio::test]
 #[serial]
 async fn bzpopmin() -> Result<()> {
-    let client = get_test_client().await?;
+    let client = get_exclusive_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     client
@@ -208,7 +208,7 @@ async fn bzpopmin() -> Result<()> {
 
     spawn(async move {
         async fn calls() -> Result<()> {
-            let client = get_test_client().await?;
+            let client = get_exclusive_test_client().await?;
 
             let result: BZpopMinMaxResult<String, String> =
                 client.bzpopmin(["key", "unknown"], 0.0).await?;

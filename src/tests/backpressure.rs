@@ -365,7 +365,7 @@ async fn a_paused_monitor_is_bounded_by_its_memory_budget() -> Result<()> {
     let mut config = get_default_config()?;
     config.queue_metrics_test_hook = Some(metrics.clone());
     config.backpressure.max_push_bytes = BUDGET;
-    let monitored = Client::connect(config).await?;
+    let monitored = Client::connect(config).await?.into_exclusive()?;
     let writer = get_test_client().await?;
 
     // Held and never polled: the bound must come from the channel, not from a

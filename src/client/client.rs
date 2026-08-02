@@ -1,20 +1,11 @@
-#[cfg(test)]
-use crate::commands::DebugCommands;
 use crate::{
     ClientError, Error, Result,
     client::{
-        ClientTrackingInvalidationStream, CommandFuture, IntoConfig, Message, MonitorStream,
-        Pipeline, PreparedCommand, ProbeLabel, PubSubStream, ServerConfig, State, Transaction,
-        bounded_channel, record_probe,
+        ClientTrackingInvalidationStream, CommandFuture, ExclusiveClient, IntoConfig, Message,
+        MonitorStream, Pipeline, PreparedCommand, ProbeLabel, PubSubStream, ServerConfig, State,
+        Transaction, bounded_channel, command_traits::*, record_probe,
     },
-    commands::{
-        ArrayCommands, BitmapCommands, BlockingCommands, BloomCommands, ClusterCommands,
-        ConnectionCommands, CountMinSketchCommands, CuckooCommands, GenericCommands, GeoCommands,
-        HashCommands, HyperLogLogCommands, InternalPubSubCommands, JsonCommands, ListCommands,
-        PubSubCommands, ScriptingCommands, SearchCommands, SentinelCommands, ServerCommands,
-        SetCommands, SortedSetCommands, StreamCommands, StringCommands, TDigestCommands,
-        TimeSeriesCommands, TopKCommands, TransactionCommands, VectorSetCommands,
-    },
+    commands::PubSubCommands,
     network::{
         JoinHandle, MsgSender, NetworkHandler, PubSubReceiver, PubSubSender, PushReceiver,
         PushSender, ReconnectReceiver, ReconnectSender, ResultReceiver, ResultSender,
@@ -146,6 +137,46 @@ impl Client {
         }
 
         Ok(())
+    }
+
+    /// Turns this handle into an [`ExclusiveClient`], the client that owns its
+    /// connection and may therefore run
+    /// [`BlockingCommands`](crate::commands::BlockingCommands) and
+    /// [`watch`](crate::commands::TransactionCommands::watch).
+    ///
+    /// The conversion succeeds only when this is the **sole** handle on the
+    /// connection. A surviving clone would keep sending commands over a
+    /// connection the exclusive client believes is its own, which is the very
+    /// situation the two client types exist to prevent — so the check is what
+    /// gives [`ExclusiveClient`] its meaning, not a formality. Streams already
+    /// opened from this client ([`create_pub_sub`](Self::create_pub_sub), a
+    /// [`Transaction`], a [`MonitorStream`]) hold a handle too and count here.
+    ///
+    /// The client is consumed either way: on failure other handles exist by
+    /// definition, so nothing is lost with it. Two clones converting
+    /// concurrently both observe the other and both fail, which is the safe
+    /// direction.
+    ///
+    /// # Errors
+    /// [`ClientError::NotExclusive`] when another handle on the same connection
+    /// is alive.
+    ///
+    /// # Example
+    /// ```
+    /// use rustis::{client::Client, commands::BlockingCommands, Result};
+    ///
+    /// # async fn example() -> Result<()> {
+    /// let client = Client::connect("127.0.0.1:6379").await?.into_exclusive()?;
+    /// let result: Option<(String, String)> = client.blpop("key", 30.).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn into_exclusive(self) -> Result<ExclusiveClient> {
+        if Arc::strong_count(&self.shared) != 1 {
+            return Err(Error::from(ClientError::NotExclusive));
+        }
+
+        Ok(ExclusiveClient::from_client(self))
     }
 
     /// Used to receive notifications when the client reconnects to the Redis server.
@@ -531,6 +562,26 @@ impl Client {
         Ok(ClientTrackingInvalidationStream::new(push_receiver))
     }
 
+    /// Puts the connection in monitoring mode and streams what the server
+    /// echoes back.
+    ///
+    /// `MONITOR` never returns, so it holds the connection for good: only
+    /// [`ExclusiveClient`] exposes it, through
+    /// [`BlockingCommands::monitor`](crate::commands::BlockingCommands::monitor).
+    pub(crate) async fn monitor_stream(&self) -> Result<MonitorStream> {
+        let (result_sender, result_receiver): (ResultSender, ResultReceiver) =
+            tokio::sync::oneshot::channel();
+        let (push_sender, push_receiver): (PushSender, PushReceiver) =
+            bounded_channel(self.max_push_bytes);
+
+        let message = Message::monitor(cmd("MONITOR").into(), result_sender, push_sender);
+
+        let command_name = self.send_message(message)?;
+
+        let _bytes = self.await_result(result_receiver, command_name).await?;
+        Ok(MonitorStream::new(push_receiver, self.clone()))
+    }
+
     pub(crate) async fn subscribe_from_pub_sub_sender(
         &self,
         channels: &CommandArgs,
@@ -644,35 +695,7 @@ impl<'a, R: Response + DeserializeOwned + 'a> IntoFuture for PreparedCommand<'a,
     }
 }
 
-impl<'a> ArrayCommands<'a> for &'a Client {}
-impl<'a> BitmapCommands<'a> for &'a Client {}
-impl<'a> BloomCommands<'a> for &'a Client {}
-impl<'a> ClusterCommands<'a> for &'a Client {}
-impl<'a> CountMinSketchCommands<'a> for &'a Client {}
-impl<'a> CuckooCommands<'a> for &'a Client {}
-impl<'a> ConnectionCommands<'a> for &'a Client {}
-#[cfg(test)]
-impl<'a> DebugCommands<'a> for &'a Client {}
-impl<'a> GenericCommands<'a> for &'a Client {}
-impl<'a> GeoCommands<'a> for &'a Client {}
-impl<'a> HashCommands<'a> for &'a Client {}
-impl<'a> HyperLogLogCommands<'a> for &'a Client {}
-impl<'a> InternalPubSubCommands<'a> for &'a Client {}
-impl<'a> JsonCommands<'a> for &'a Client {}
-impl<'a> ListCommands<'a> for &'a Client {}
-impl<'a> ScriptingCommands<'a> for &'a Client {}
-impl<'a> SearchCommands<'a> for &'a Client {}
-impl<'a> SentinelCommands<'a> for &'a Client {}
-impl<'a> ServerCommands<'a> for &'a Client {}
-impl<'a> SetCommands<'a> for &'a Client {}
-impl<'a> SortedSetCommands<'a> for &'a Client {}
-impl<'a> StreamCommands<'a> for &'a Client {}
-impl<'a> StringCommands<'a> for &'a Client {}
-impl<'a> TDigestCommands<'a> for &'a Client {}
-impl<'a> TimeSeriesCommands<'a> for &'a Client {}
-impl<'a> TransactionCommands<'a> for &'a Client {}
-impl<'a> TopKCommands<'a> for &'a Client {}
-impl<'a> VectorSetCommands<'a> for &'a Client {}
+impl_shared_command_traits!(Client);
 
 impl<'a> PubSubCommands<'a> for &'a Client {
     #[inline]
@@ -727,21 +750,5 @@ impl<'a> PubSubCommands<'a> for &'a Client {
             pub_sub_receiver,
             self.clone(),
         ))
-    }
-}
-
-impl<'a> BlockingCommands<'a> for &'a Client {
-    async fn monitor(self) -> Result<MonitorStream> {
-        let (result_sender, result_receiver): (ResultSender, ResultReceiver) =
-            tokio::sync::oneshot::channel();
-        let (push_sender, push_receiver): (PushSender, PushReceiver) =
-            bounded_channel(self.max_push_bytes);
-
-        let message = Message::monitor(cmd("MONITOR").into(), result_sender, push_sender);
-
-        let command_name = self.send_message(message)?;
-
-        let _bytes = self.await_result(result_receiver, command_name).await?;
-        Ok(MonitorStream::new(push_receiver, self.clone()))
     }
 }

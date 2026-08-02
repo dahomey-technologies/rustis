@@ -28,6 +28,7 @@ mod count_min_sktech_commands;
 mod cuckoo_commands;
 mod debug_commands;
 mod error;
+mod exclusive_client;
 #[cfg(feature = "tokio-runtime")]
 mod fake_server;
 #[cfg(feature = "tokio-runtime")]

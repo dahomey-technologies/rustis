@@ -109,6 +109,12 @@ pub enum ClientError {
     /// Raised when an invalid channel to send messages to the network handler is used
     #[error("invalid channel to send messages to the network handler")]
     InvalidChannel,
+    /// Raised when [`Client::into_exclusive`](crate::client::Client::into_exclusive)
+    /// is called while another handle on the same connection is still alive, so
+    /// the connection an [`ExclusiveClient`](crate::client::ExclusiveClient)
+    /// would claim as its own is in fact shared
+    #[error("client is not the sole handle on its connection")]
+    NotExclusive,
     /// Raised when client is already subscribed to the given channel/pattern
     #[error("client is already subscribed to the given channel/pattern")]
     AlreadySubscribed,

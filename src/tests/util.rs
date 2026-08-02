@@ -1,6 +1,6 @@
 use crate::{
     Result,
-    client::{Client, Config, IntoConfig},
+    client::{Client, Config, ExclusiveClient, IntoConfig},
     commands::{
         ArrayCommands, ClusterCommands, ClusterResetType, GenericCommands, JsonCommands,
         SearchCommands, SentinelCommands, ServerCommands, SortedSetCommands, StreamCommands,
@@ -79,6 +79,17 @@ pub(crate) async fn get_test_client_with_config(config: impl IntoConfig) -> Resu
 
 pub(crate) async fn get_test_client() -> Result<Client> {
     get_test_client_with_config(get_default_config()?).await
+}
+
+pub(crate) async fn get_exclusive_test_client_with_config(
+    config: impl IntoConfig,
+) -> Result<ExclusiveClient> {
+    log_try_init();
+    ExclusiveClient::connect(config).await
+}
+
+pub(crate) async fn get_exclusive_test_client() -> Result<ExclusiveClient> {
+    get_exclusive_test_client_with_config(get_default_config()?).await
 }
 
 #[cfg(any(feature = "native-tls", feature = "rustls"))]

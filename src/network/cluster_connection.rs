@@ -8,7 +8,9 @@ use crate::{
         LegacyClusterShardResult, RequestPolicy, ResponsePolicy,
     },
     network::{Version, sleep},
-    resp::{ClientReplyMode, Command, CommandBuilder, CommandKind, RespResponse, RespView},
+    resp::{
+        ClientReplyMode, Command, CommandBuilder, CommandKind, RespResponse, RespView, hash_slot,
+    },
 };
 use bytes::Bytes;
 use futures_util::{FutureExt, future};
@@ -210,6 +212,19 @@ fn is_pub_sub_command(command: &Command) -> bool {
             | b"UNSUBSCRIBE"
             | b"PUNSUBSCRIBE"
             | b"SUNSUBSCRIBE"
+    )
+}
+
+/// Whether the command subscribes to, or unsubscribes from, a plain channel or
+/// a pattern. Those name no key, so nothing in the command itself says which
+/// node must serve them: [`ClusterConnection::request_policy_pub_sub`] hashes
+/// each channel name to pick one. Their shard counterparts — `SSUBSCRIBE` and
+/// `SUNSUBSCRIBE` — name the shard channel as a key and route on its slot like
+/// any other command.
+fn is_broadcast_pub_sub_command(command: &Command) -> bool {
+    matches!(
+        command.name(),
+        b"SUBSCRIBE" | b"PSUBSCRIBE" | b"UNSUBSCRIBE" | b"PUNSUBSCRIBE"
     )
 }
 
@@ -552,6 +567,15 @@ impl ClusterConnection {
         ask_reasons: &[(u16, (String, u16))],
     ) -> Result<()> {
         trace!("Analyzing command {command:?}");
+
+        // A channel-less UNSUBSCRIBE (or PUNSUBSCRIBE) names nothing to hash and
+        // cancels every subscription the *connection* holds — which in a cluster
+        // is spread over several nodes. It falls through to the ordinary routing
+        // below, which serves it on a single node.
+        if is_broadcast_pub_sub_command(command) && command.num_args() > 0 {
+            return self.request_policy_pub_sub(command).await;
+        }
+
         let request_policy = command.request_policy();
 
         if let Some(request_policy) = request_policy {
@@ -769,6 +793,72 @@ impl ClusterConnection {
         };
 
         trace!("{request_info:?}");
+
+        self.file_request(request_info);
+
+        Ok(())
+    }
+
+    /// Routes a channel or pattern subscription command, which carries no key.
+    ///
+    /// A plain channel is not owned by any shard — the cluster broadcasts what
+    /// is published on it — so any node may serve the subscription. What matters
+    /// is that the *same* node serves the matching unsubscription: picked at
+    /// random, the two land on different nodes as soon as the cluster has more
+    /// than one, the node holding the subscription never hears about the
+    /// cancellation and keeps the channel forever. Hashing the channel name like
+    /// a key makes the choice deterministic, and spreads subscriptions over the
+    /// shards instead of piling them on one node.
+    ///
+    /// The channels of a single command need not hash to the same node, so the
+    /// command is split per node the way a multi-shard one is.
+    async fn request_policy_pub_sub(&mut self, command: &Command) -> Result<()> {
+        let mut node_channels: SmallVec<[(usize, SmallVec<[Bytes; 10]>); 10]> = smallvec![];
+
+        for channel in command.args() {
+            let (node_index, _should_ask) = self
+                .get_node_index_by_slot(hash_slot(&channel), &[], false)
+                .ok_or_else(|| Error::from(ClientError::ClusterConfig))?;
+
+            match node_channels.iter_mut().find(|(i, _)| *i == node_index) {
+                Some((_, channels)) => channels.push(channel),
+                None => node_channels.push((node_index, smallvec![channel])),
+            }
+        }
+
+        // Each node receives the skip before its own slice of the command, so
+        // each suppresses exactly one reply — its own.
+        let reply_skip = self.pending_reply_skip.clone();
+        let mut sub_requests = SmallVec::<[SubRequest; 10]>::new();
+
+        for (node_index, channels) in node_channels {
+            let mut builder = CommandBuilder::new(command.name());
+            for channel in channels {
+                builder = builder.arg(channel);
+            }
+            let node_command: Command = builder.into();
+
+            let node = self
+                .nodes
+                .get_mut(node_index)
+                .ok_or_else(|| Error::from(ClientError::InconsistentRoutingState))?;
+            node.feed(&node_command, reply_skip.as_ref()).await?;
+            sub_requests.push(SubRequest {
+                node_id: node.id.clone(),
+                keys: smallvec![],
+                result: None,
+            });
+        }
+
+        let request_info = RequestInfo {
+            response_policy: command.response_policy(),
+            sub_requests,
+            keys: smallvec![],
+            command: None,
+            is_pub_sub: true,
+            #[cfg(test)]
+            command_seq: command.command_seq,
+        };
 
         self.file_request(request_info);
 

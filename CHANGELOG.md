@@ -97,6 +97,16 @@ Versions up to and including `0.19.3` are documented in the
 
 ### Fixed
 
+- **A cluster subscription is cancellable.** `SUBSCRIBE`, `PSUBSCRIBE`,
+  `UNSUBSCRIBE` and `PUNSUBSCRIBE` name no key, so the cluster connection served
+  each of them on a node drawn at random: the unsubscription almost never reached
+  the node holding the subscription, which kept publishing on the channel for the
+  life of the connection — including through `PubSubStream::close()`. Each channel
+  or pattern is now hashed like a key to pick its node, so a subscription and its
+  cancellation always meet, and a command naming channels of different shards is
+  split per node. A channel-less `UNSUBSCRIBE` still goes to a single node, since
+  it names nothing to hash.
+
 - **A subscription whose subscriber is gone is cleaned up.** When a pub/sub message
   could not be handed to its subscriber because the receiving half had been dropped,
   the client logged a warning and kept the subscription: the server went on

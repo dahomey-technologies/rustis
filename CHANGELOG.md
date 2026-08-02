@@ -36,6 +36,28 @@ Versions up to and including `0.19.3` are documented in the
 
 ### Changed
 
+- **The connection-holding commands live on their own client type.** A `Client` is
+  clonable, and every clone multiplexes over one connection; blocking commands and
+  `WATCH` are incompatible with that — the first holds the connection until it
+  returns, the second attaches state to the connection rather than to the handle
+  that asked for it. Both were nonetheless implemented on every `Client`, so cloning
+  is what turned a legal program illegal, and the failure was a stalled shared
+  connection at run time. `BlockingCommands` and `TransactionCommands` are now
+  implemented for `ExclusiveClient` alone — a client that is **not** `Clone` — so the
+  mistake is a compile error. `ExclusiveClient::connect` opens a connection of its
+  own, `Client::into_exclusive` converts an existing handle and returns
+  `ClientError::NotExclusive` when another handle on the connection is alive (streams
+  and transactions opened from the client hold one too), and
+  `ExclusiveClient::into_multiplexed` goes back. It carries every other command
+  family, and `PooledClientManager::Connection` is an `ExclusiveClient`: a borrowed
+  connection is exclusive until it is given back, so the two families are legitimate
+  there. **Migration**: `Client::connect(cfg).await?` becomes
+  `ExclusiveClient::connect(cfg).await?`, or
+  `Client::connect(cfg).await?.into_exclusive()?`, wherever a blocking command or
+  `watch`/`unwatch` is called. Nothing else moves — `MULTI`/`EXEC` through
+  `Client::create_transaction`, pub/sub, and the ~600 other commands are unchanged on
+  a multiplexed client.
+
 - **A pub/sub message is one block, read through accessors.** `PubSubMessage` held
   three public `Vec<u8>` fields, allocating two per delivered message (three for a
   `pmessage`). Its segments now share one exactly-sized block read through

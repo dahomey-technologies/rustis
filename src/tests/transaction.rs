@@ -6,7 +6,7 @@ use crate::{
         VAddOptions, VectorSetCommands,
     },
     resp::cmd,
-    tests::{get_cluster_test_client, get_test_client},
+    tests::{get_cluster_test_client, get_exclusive_test_client, get_test_client},
 };
 use serial_test::serial;
 
@@ -78,7 +78,7 @@ async fn transaction_error() -> Result<()> {
 #[tokio::test]
 #[serial]
 async fn watch() -> Result<()> {
-    let client = get_test_client().await?;
+    let client = get_exclusive_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     client.set("key", 1).await?;
@@ -115,7 +115,7 @@ async fn watch() -> Result<()> {
 #[tokio::test]
 #[serial]
 async fn unwatch() -> Result<()> {
-    let client = get_test_client().await?;
+    let client = get_exclusive_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     client.set("key", 1).await?;

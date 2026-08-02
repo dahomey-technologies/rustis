@@ -6,7 +6,7 @@ use crate::{
     },
     resp::Value,
     sleep, spawn,
-    tests::get_test_client,
+    tests::{get_exclusive_test_client, get_test_client},
 };
 use serial_test::serial;
 use std::time::Duration;
@@ -14,7 +14,7 @@ use std::time::Duration;
 #[tokio::test]
 #[serial]
 async fn blmove() -> Result<()> {
-    let client = get_test_client().await?;
+    let client = get_exclusive_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     client
@@ -47,7 +47,7 @@ async fn blmove() -> Result<()> {
 
     spawn(async move {
         async fn calls() -> Result<()> {
-            let client = get_test_client().await?;
+            let client = get_exclusive_test_client().await?;
 
             let element: String = client
                 .blmove("mylist", "myotherlist", Right, Left, 0.0)
@@ -70,7 +70,7 @@ async fn blmove() -> Result<()> {
 #[tokio::test]
 #[serial]
 async fn blmpop() -> Result<()> {
-    let client = get_test_client().await?;
+    let client = get_exclusive_test_client().await?;
 
     // cleanup
     client.del("mylist").await?;
@@ -97,7 +97,7 @@ async fn blmpop() -> Result<()> {
 
     spawn(async move {
         async fn calls() -> Result<()> {
-            let client = get_test_client().await?;
+            let client = get_exclusive_test_client().await?;
 
             let (key, elements): (String, Vec<String>) =
                 client.blmpop(0.0, "mylist", Left, 1).await?.unwrap();
@@ -121,7 +121,7 @@ async fn blmpop() -> Result<()> {
 #[tokio::test]
 #[serial]
 async fn blpop() -> Result<()> {
-    let client = get_test_client().await?;
+    let client = get_exclusive_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     let result: Option<(String, String)> = client.blpop(["list", "other"], 0.01).await?;
@@ -133,7 +133,7 @@ async fn blpop() -> Result<()> {
 
     spawn(async move {
         async fn calls() -> Result<()> {
-            let client = get_test_client().await?;
+            let client = get_exclusive_test_client().await?;
 
             let result: Option<(String, String)> = client.blpop("list", 0.0).await?;
             assert_eq!(Some(("list".to_owned(), "element2".to_owned())), result);
@@ -154,7 +154,7 @@ async fn blpop() -> Result<()> {
 #[tokio::test]
 #[serial]
 async fn brpop() -> Result<()> {
-    let client = get_test_client().await?;
+    let client = get_exclusive_test_client().await?;
     client.flushdb(FlushingMode::Sync).await?;
 
     let result: Option<(String, String)> = client.brpop(["list", "other"], 0.01).await?;
@@ -166,7 +166,7 @@ async fn brpop() -> Result<()> {
 
     spawn(async move {
         async fn calls() -> Result<()> {
-            let client = get_test_client().await?;
+            let client = get_exclusive_test_client().await?;
 
             let result: Option<(String, String)> = client.brpop("list", 0.0).await?;
             assert_eq!(Some(("list".to_owned(), "element2".to_owned())), result);

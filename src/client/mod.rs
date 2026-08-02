@@ -1,6 +1,7 @@
 /*!
 Defines types related to the clients structs and their dependencies:
-[`Client`], [`PooledClientManager`], [`Pipeline`], [`Transaction`] and how to configure them
+[`Client`], [`ExclusiveClient`], [`PooledClientManager`], [`Pipeline`], [`Transaction`]
+and how to configure them
 
 # Clients
 
@@ -9,10 +10,14 @@ The central object in **rustis** is the [`Client`].
 It will allow you to connect to the Redis server, to send command requests
 and to receive command responses and push messages.
 
-The [`Client`] struct can be used in 3 different modes
+There are 3 ways to use a connection
 * As a single client
-* As a mutiplexer
+* As a multiplexer
 * In a pool of clients
+
+Two of them share the connection, and a shared connection cannot run the
+commands that hold it: those live on [`ExclusiveClient`], the client that owns
+its connection — see [Exclusive commands](#exclusive-commands).
 
 ## The single client
 The single [`Client`] maintains a unique connection to a Redis Server or cluster.
@@ -55,13 +60,9 @@ Pub/Sub messages and regular command responses are cleanly distinguished at the 
 allowing both to coexist safely on the same shared connection.
 
 ### Limitations
-Becaware that using a [`Client`] in a multiplexer mode, by cloning an instance across multiple threads,
-is not suitable when using [blocking commands](crate::commands::BlockingCommands).
-Blocking commands monopolize the entire connection, preventing it from being shared.
-
-In addition, the [`watch`](crate::commands::TransactionCommands::watch) command is not compatible
-with multiplexer mode either. This is because the watched state applies to the shared connection itself, not just
-to the particular [`Client`] instance that issued the [`watch`](crate::commands::TransactionCommands::watch) command.
+Blocking commands and [`watch`](crate::commands::TransactionCommands::watch) hold or
+attach state to the connection, so they are not available on a multiplexed [`Client`] —
+see [Exclusive commands](#exclusive-commands).
 
 ## The pooled client manager
 The pooled client manager holds a pool of [`Client`]s, based on [bb8](https://docs.rs/bb8/latest/bb8/).
@@ -104,6 +105,52 @@ async fn main() -> Result<()> {
     Ok(())
 }
 ```
+
+# Exclusive commands
+
+Two families of commands are incompatible with a shared connection:
+
+* [blocking commands](crate::commands::BlockingCommands), which monopolize the
+  connection until they return — every other caller queued behind a `BLPOP` with
+  a 30-second timeout waits 30 seconds;
+* [`watch`](crate::commands::TransactionCommands::watch), whose watched state
+  applies to the connection itself, not to the handle that issued it, so any
+  clone can invalidate or discard it.
+
+They are therefore not implemented for [`Client`], which is clonable, but for
+[`ExclusiveClient`], which is not. Reaching for one of them on a multiplexed
+client is a compile error rather than a stalled connection at run time.
+
+```
+use rustis::{
+    client::{Client, ExclusiveClient},
+    commands::{BlockingCommands, TransactionCommands},
+    Result,
+};
+
+async fn example() -> Result<()> {
+    // A connection of its own …
+    let client = ExclusiveClient::connect("127.0.0.1:6379").await?;
+
+    // … or an existing client, which the conversion refuses while another
+    // handle on the connection is alive.
+    let client = Client::connect("127.0.0.1:6379").await?.into_exclusive()?;
+
+    let result: Option<(String, String)> = client.blpop("key", 30.).await?;
+    client.watch("key").await?;
+
+    Ok(())
+}
+```
+
+A [`PooledClientManager`] hands out an [`ExclusiveClient`] for the same reason:
+a borrowed connection returns to the pool only once the command completes, so
+the block stays confined to it.
+
+Everything else is unaffected. Pub/sub is fine on a multiplexed connection —
+RESP3 keeps messages and command replies apart — and so are `MULTI`/`EXEC`
+transactions, which [`Client::create_transaction`] still opens: only `WATCH`
+attaches state to the connection.
 
 # Configuration
 
@@ -510,8 +557,10 @@ mod bounded_channel;
 mod client;
 mod client_tracking_invalidation_stream;
 mod command_future;
+mod command_traits;
 mod config;
 mod credentials_provider;
+mod exclusive_client;
 mod message;
 mod monitor_stream;
 mod pipeline;
@@ -530,6 +579,7 @@ pub use client_tracking_invalidation_stream::*;
 pub use command_future::*;
 pub use config::*;
 pub use credentials_provider::*;
+pub use exclusive_client::*;
 pub(crate) use message::*;
 pub use monitor_stream::*;
 pub use pipeline::*;

@@ -13,7 +13,8 @@ These is the list of existing command traits:
 * [`ArrayCommands`] — [Arrays](https://redis.io/docs/latest/commands/?group=array), the sparse index-addressed type introduced in Redis 8.8
 * [`BitmapCommands`] — [Bitmaps](https://redis.io/docs/data-types/bitmaps/) & [Bitfields](https://redis.io/docs/data-types/bitfields/)
 * [`BlockingCommands`] — commands that block the connection until the Redis server
-  has a new element to send. This trait is implemented only by the [`Client`](crate::client::Client) struct.
+  has a new element to send. Implemented only by [`ExclusiveClient`](crate::client::ExclusiveClient),
+  which owns its connection.
 * [`ClusterCommands`] — [Redis cluster](https://redis.io/docs/reference/cluster-spec/)
 * [`ConnectionCommands`] — connection management like authentication or RESP version management
 * [`GenericCommands`] — generic commands like deleting, renaming or expiring keys
@@ -31,7 +32,11 @@ These is the list of existing command traits:
 * [`StreamCommands`] — [Streams](https://redis.io/docs/data-types/streams/)
 * [`StringCommands`] — [Strings](https://redis.io/docs/data-types/strings/)
 * [`VectorSetCommands`] — [Vector sets](https://redis.io/docs/data-types/vector-sets/)
-* [`TransactionCommands`] — [Transactions](https://redis.io/docs/manual/transactions/)
+* [`TransactionCommands`] — `WATCH`/`UNWATCH`, the optimistic locking half of
+  [Transactions](https://redis.io/docs/manual/transactions/). Implemented only by
+  [`ExclusiveClient`](crate::client::ExclusiveClient), the watched state being a property
+  of the connection; `MULTI`/`EXEC` are reached through
+  [`Client::create_transaction`](crate::client::Client::create_transaction).
 * [`BloomCommands`] — [Bloom filters](https://redis.io/docs/stack/bloom/)
 * [`CuckooCommands`] — [Cuckoo filters](https://redis.io/docs/stack/bloom/)
 * [`CountMinSketchCommands`] — [Count min-sketch](https://redis.io/docs/stack/bloom/)

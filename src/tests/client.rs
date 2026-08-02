@@ -165,7 +165,7 @@ async fn command_timeout() -> Result<()> {
     let mut config = get_default_addr().into_config()?;
     config.command_timeout = Duration::from_millis(10);
 
-    let client = Client::connect(config).await?;
+    let client = Client::connect(config).await?.into_exclusive()?;
 
     // block for 5 seconds
     // since the timeout is configured to 10ms, we should have a timeout error

@@ -599,6 +599,64 @@ async fn sunsubscribe() -> Result<()> {
     Ok(())
 }
 
+/// SUBSCRIBE and UNSUBSCRIBE name no key, so nothing in the command itself says
+/// which node must serve them. Routing them at random sends the unsubscription
+/// to another node than the subscription in a cluster of more than one shard,
+/// and the channel stays subscribed forever on the node that holds it.
+#[tokio::test]
+#[serial]
+async fn unsubscribe_reaches_the_subscribed_node() -> Result<()> {
+    let pub_sub_client = get_cluster_test_client().await?;
+    pub_sub_client.flushall(FlushingMode::Sync).await?;
+
+    let shard_results: Vec<ClusterShardResult> = pub_sub_client.cluster_shards().await?;
+    let mut master_clients = Vec::new();
+    for shard in &shard_results {
+        let master_node = shard.nodes.iter().find(|n| n.role == "master").unwrap();
+        master_clients.push(
+            Client::connect((master_node.ip.clone(), master_node.port.unwrap()).into_config()?)
+                .await?,
+        );
+    }
+
+    // Two channels whose names hash to two different shards, so a single command
+    // spans several nodes.
+    let mut pub_sub_stream = pub_sub_client.subscribe(["{1}chan", "{2}chan"]).await?;
+
+    let mut subscribed = HashSet::<String>::new();
+    for master_client in &master_clients {
+        let channels: HashSet<String> = master_client.pub_sub_channels(()).await?;
+        subscribed.extend(channels);
+    }
+    assert_eq!(2, subscribed.len());
+
+    // Unsubscribing from one channel leaves the other one subscribed.
+    pub_sub_stream.unsubscribe("{1}chan").await?;
+
+    let mut subscribed = HashSet::<String>::new();
+    for master_client in &master_clients {
+        let channels: HashSet<String> = master_client.pub_sub_channels(()).await?;
+        subscribed.extend(channels);
+    }
+    assert_eq!(
+        HashSet::from(["{2}chan".to_owned()]),
+        subscribed,
+        "the unsubscription did not reach the node holding the subscription"
+    );
+
+    pub_sub_stream.close().await?;
+
+    for master_client in &master_clients {
+        let channels: HashSet<String> = master_client.pub_sub_channels(()).await?;
+        assert!(
+            channels.is_empty(),
+            "channel still subscribed: {channels:?}"
+        );
+    }
+
+    Ok(())
+}
+
 #[tokio::test]
 #[serial]
 async fn pub_sub_shardnumsub() -> Result<()> {

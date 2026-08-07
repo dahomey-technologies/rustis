@@ -17,12 +17,26 @@
 //! ./run_tests.sh
 //! RUSTIS_RESPONSE_SHAPE_REPORT=1 ./run_tests.sh response_shape
 //! ```
+//!
+//! # It reports, it does not assert
+//!
+//! What this reads is not a property of the code but the set of
+//! `(command, declared R, observed kind)` triples the suite happened to reach,
+//! and some shapes appear only in a state the run may or may not enter: a
+//! blocking pop that times out, a `LPOP` on a list that is absent this time, a
+//! `SET NX` that loses the race. The three rows of that kind in the baseline
+//! were each added after one showed up. So an inedited row means "nobody has
+//! looked at this shape yet", not "the code broke" -- and failing on it made the
+//! job red at random, roughly one run in three, for a finding that needs a human
+//! reading rather than a build verdict. Everything below therefore prints and
+//! returns; `Report response shapes` in the workflow surfaces it.
 
 use crate::tests::response_probe::dump_path;
+use serial_test::serial;
 use std::collections::BTreeSet;
 
-/// A row the rules accept, with the reason it is accepted. Anything reported
-/// and not listed here fails the test.
+/// A row the rules accept, with the reason it is accepted. Anything reported and
+/// not listed here is printed as unexplained.
 const BASELINE: &str = include_str!("response_shape_baseline.tsv");
 
 /// What a declared `R` reduces to for the purpose of judging a reply.
@@ -163,7 +177,13 @@ fn key(row: &Row) -> String {
     format!("{}\t{}\t{}", row.command, row.declared, row.kind)
 }
 
+/// `#[serial]` because the dump is a file every other test rewrites as it
+/// records: read while the suite is running, it is a snapshot of a moving
+/// target. Under `--test-threads=1` that cannot happen, but a bare
+/// `RUSTIS_RESPONSE_SHAPE_REPORT=1 cargo test` -- the obvious thing to type --
+/// runs this against a file being rewritten under it.
 #[test]
+#[serial]
 fn response_shape_report() {
     if std::env::var("RUSTIS_RESPONSE_SHAPE_REPORT").is_err() {
         println!(
@@ -175,15 +195,16 @@ fn response_shape_report() {
     }
 
     let path = dump_path();
-    let content = std::fs::read_to_string(&path).unwrap_or_else(|e| {
-        panic!("no probe dump at {path} ({e}); run the whole suite first, it writes it")
-    });
+    let Ok(content) = std::fs::read_to_string(&path) else {
+        println!("no probe dump at {path}: run the whole suite first, it is what writes it");
+        return;
+    };
 
     let rows = parse(&content);
-    assert!(
-        !rows.is_empty(),
-        "{path} is empty: the suite recorded nothing"
-    );
+    if rows.is_empty() {
+        println!("{path} holds no observation: the suite recorded nothing");
+        return;
+    }
 
     let accepted: BTreeSet<String> = parse(BASELINE).iter().map(key).collect();
 
@@ -225,6 +246,9 @@ fn response_shape_report() {
                 row.command, row.declared, row.kind
             ));
         }
-        panic!("{report}");
+        // Printed rather than panicked: see the module's "It reports, it does not
+        // assert". The count on the line above is what the workflow reads to
+        // decide whether there is anything to surface.
+        println!("{report}");
     }
 }

@@ -6,7 +6,43 @@ All notable changes to this project are documented here. The format is based on
 Versions up to and including `0.19.3` are documented in the
 [GitHub releases](https://github.com/dahomey-technologies/rustis/releases).
 
-## [Unreleased]
+## [0.23.0] - 2026-08-07
+
+### BREAKING CHANGES
+
+The upgrade checklist. Each item is stated fully, with the reason it moved, in the
+section it belongs to below.
+
+- **Blocking commands and `WATCH` are implemented for `ExclusiveClient` alone.**
+  `Client::connect(cfg).await?` becomes `ExclusiveClient::connect(cfg).await?`, or
+  `Client::connect(cfg).await?.into_exclusive()?`, wherever a blocking command or
+  `watch`/`unwatch` is called. Nothing else moves.
+
+- **`Error` is a struct rather than an enum.** Its variants live in `ErrorKind`, so
+  a `match` on `Error::Timeout` becomes one on `e.kind()` -- or on `e.into_kind()`
+  to match by value -- against `ErrorKind::Timeout`.
+
+- **`PubSubMessage` is read through accessors.** `message.channel` becomes
+  `message.channel()` and `String::from_utf8(message.payload)` becomes
+  `std::str::from_utf8(message.payload())`. The public fields and the `Deserialize`
+  impl are gone.
+
+- **`rustis::Future<'_, T>` is now `rustis::client::CommandFuture<'_, T>`.** Only
+  code naming the type is affected; awaiting a command is unchanged.
+
+- **An empty collection reply decodes as `Some` of an empty collection.** Code using
+  `Option<Vec<T>>` over an `LRANGE`, `SMEMBERS` or `ZRANGE` as an emptiness test must
+  switch to `Vec<T>` and `.is_empty()`. Only a nil is `None` now.
+
+- **`ts_get` returns `TsGetResult` instead of `Option<(u64, f64)>`.** It derefs to
+  that option, so `*sample` keeps the existing patterns compiling; `.into()` converts
+  it.
+
+- **A textual reply read as a `bool` is an error outside `OK`/`1`/`true`/`0`/`false`**
+  where it used to be `false`, and a bulk string `OK` is now `true`.
+
+- **A one-element array read as an integer from a `resp::Value` now requires that
+  element to be an integer**, as reading it off the wire already did.
 
 ### Added
 
@@ -1148,6 +1184,7 @@ contains breaking changes; read that section before upgrading.
   name or an enum variant name — instead of the target type deciding whether the
   command succeeds.
 
+[0.23.0]: https://github.com/dahomey-technologies/rustis/compare/0.22.0...0.23.0
 [0.22.0]: https://github.com/dahomey-technologies/rustis/compare/0.21.0...0.22.0
 [0.21.0]: https://github.com/dahomey-technologies/rustis/compare/0.20.0...0.21.0
 [0.20.0]: https://github.com/dahomey-technologies/rustis/compare/0.19.3...0.20.0

@@ -17,6 +17,9 @@ jobs:
     steps:
     - name: Checkout sources
       uses: actions/checkout@v5
+      with:
+        # Every tag is needed: the semver baseline below is the previous release.
+        fetch-depth: 0
     # `Cargo.toml` is the version's source of truth: the bump is a reviewable
     # commit, and the tag only confirms it.
     #
@@ -38,5 +41,34 @@ jobs:
           echo "::error::tag $TAG does not match Cargo.toml version $MANIFEST — bump the manifest and re-tag"
           exit 1
         fi
+    - name: Install cargo-semver-checks
+      if: github.ref_type == 'tag'
+      uses: taiki-e/install-action@v2
+      with:
+        tool: cargo-semver-checks
+    # Whether the bump covers what changed in the public API. This is the release
+    # question -- the version is raised here, not on a branch -- so it is asked
+    # here rather than on every pull request, where it could only compare against
+    # a version nobody had raised yet and failed for reasons no author could act
+    # on. `compile_and_test.yml` reports the per-branch breaks; this decides
+    # whether the number is allowed to carry them.
+    #
+    # In 0.x cargo reads the minor field as the major one, so a break requires
+    # 0.(x+1).0 and a compatible change 0.x.(y+1). The feature set matches the
+    # report's, which is the one docs.rs builds.
+    - name: Verify the version bump covers the API changes
+      if: github.ref_type == 'tag'
+      run: |
+        set -o pipefail
+        BASELINE=$(git tag --list '[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname \
+          | grep -vFx "${{github.ref_name}}" | head -n 1)
+        if [ -z "$BASELINE" ]; then
+          echo "no previous release tag to compare against, nothing to verify"
+          exit 0
+        fi
+        echo "baseline: $BASELINE"
+        cargo semver-checks --baseline-rev "$BASELINE" \
+          --only-explicit-features \
+          --features tokio-runtime,tokio-rustls,pool,json,client-cache
     - name: Publish crate
       run: cargo publish --token ${{secrets.CRATES_IO_API_TOKEN}}

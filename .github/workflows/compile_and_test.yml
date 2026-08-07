@@ -101,13 +101,24 @@ jobs:
         run: cargo clippy --all-targets --no-default-features --features tokio-runtime,tokio-rustls,pool,json,client-cache -- -D warnings
 
   # Check that the version bump in `Cargo.toml` matches what actually changed in
-  # the public API. In 0.x, cargo treats the minor field as the major one, so a
-  # breaking change requires 0.(x+1).0 and a compatible one 0.x.(y+1) — this job
-  # fails when the bump is smaller than the changes justify.
+  # Report the public-API breaks a pull request introduces, so each one is a
+  # deliberate entry in `CHANGELOG.md` rather than a discovery made after
+  # publishing.
   #
-  # It compares against the previous tag rather than crates.io: no dependency on
-  # the registry, and it works on a branch. Pull requests only, because it builds
-  # the crate twice (baseline and current).
+  # It reports and never fails, which is a deliberate reversal. The job used to
+  # compare against the previous tag and fail when the version in `Cargo.toml`
+  # did not cover the difference -- but the version is raised at release time, so
+  # from the first break after a tag until the next release every pull request
+  # was red, including ones touching nothing but a workflow file. A check that is
+  # red for reasons the author cannot act on is a check people learn to ignore,
+  # and it took the whole run down with it. Verifying that the bump covers the
+  # changes is the right question at publish time, not on a branch: `publish.yml`
+  # asks it there, before the crate leaves the machine.
+  #
+  # The baseline is the pull request's own base commit, not the previous tag, so
+  # what the report describes is what *this* branch changes. Against the tag it
+  # re-listed every break already merged, which is the noise that made the
+  # signal unusable.
   #
   # Its blind spot is worth stating: it reads the *shape* of the public API from
   # rustdoc, so it cannot see a behavior change. A function that keeps its
@@ -115,14 +126,8 @@ jobs:
   # belong in `CHANGELOG.md`, written by hand. It also misses some shape changes
   # — the 0.20.0 run did not flag `Command::name()` switching its return type
   # from `Bytes` to `&[u8]`.
-  #
-  # One-time caveat: tags up to 0.19.3 carry the placeholder `version = "0.1.0"`
-  # in their manifest, so against those the tool reads a 0.1.0 -> 0.20.0 jump,
-  # calls it a major release and skips every lint. Until 0.20.0 is tagged this
-  # job passes vacuously; a real check needs `--release-type minor` locally. From
-  # 0.20.0 onwards the baseline manifest is correct and inference works.
   semver:
-    name: Semver compatibility
+    name: Semver report
     runs-on: ubuntu-latest
     timeout-minutes: 30
     if: github.event_name == 'pull_request'
@@ -132,7 +137,7 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v5
         with:
-          # Tags are needed to resolve the baseline revision.
+          # The base commit has to be in the clone to serve as the baseline.
           fetch-depth: 0
       - name: Install cargo-semver-checks
         uses: taiki-e/install-action@v2
@@ -145,12 +150,36 @@ jobs:
       # zremrangebyscore`, `TlsConfig`, `resp::JsonRef`) were invisible to this
       # job and were caught by hand.
       - name: cargo semver-checks
+        env:
+          BASELINE: ${{ github.event.pull_request.base.sha }}
         run: |
-          BASELINE=$(git describe --tags --abbrev=0 --match '[0-9]*.[0-9]*.[0-9]*')
+          # Never fails the job: `set -e` is off for the run, and the exit status
+          # is turned into a summary instead of a failure.
+          set +e
           echo "baseline: $BASELINE"
-          cargo semver-checks --baseline-rev "$BASELINE" \
+          output=$(cargo semver-checks --baseline-rev "$BASELINE" \
             --only-explicit-features \
-            --features tokio-runtime,tokio-rustls,pool,json,client-cache
+            --features tokio-runtime,tokio-rustls,pool,json,client-cache 2>&1)
+          status=$?
+          echo "$output"
+          {
+            if [ $status -eq 0 ]; then
+              echo "### Semver report: no public-API break against the base"
+            else
+              echo "### Semver report: public-API breaks against the base"
+              echo
+              echo "Each one belongs in \`CHANGELOG.md\` under \`[Unreleased]\`."
+              echo "\`publish.yml\` is what enforces that the version bump covers them."
+              echo
+              echo '```'
+              echo "$output"
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ $status -ne 0 ]; then
+            echo "::notice title=Semver::public-API breaks reported, see the job summary"
+          fi
+          exit 0
 
   # Compile a curated set of feature combinations (compile-only, no server
   # needed). `--no-default-features` is used so each entry compiles exactly the

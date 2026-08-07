@@ -3,7 +3,7 @@ use crate::{
     client::{Client, ClientPreparedCommand},
     commands::InternalPubSubCommands,
     network::{PubSubPush, PubSubSender},
-    resp::{CommandArgs, CommandArgsMut, RespResponse},
+    resp::{CommandArgs, CommandArgsMut, RefBulkString, RespResponse},
 };
 use bytes::Bytes;
 use futures_util::{Stream, StreamExt};
@@ -14,6 +14,7 @@ use std::{
     pin::Pin,
     task::{Context, Poll},
 };
+use tracing::warn;
 
 /// Pub/Sub Message that can be streamed from [`PubSubStream`](PubSubStream)
 ///
@@ -266,30 +267,41 @@ impl Drop for PubSubSplitSink {
             return;
         }
 
+        // Each name is wrapped in `RefBulkString`: a bare `&[u8]` serializes as a sequence of
+        // integers, so `UNSUBSCRIBE` was sent the decimal byte values of the channel name -- `49 49`
+        // for the channel `11` -- which unsubscribes from channels nobody subscribed to and leaves
+        // the real one registered for the life of the connection. `close` never had the bug because
+        // it passes the `Bytes` itself.
         if !self.channels.is_empty() {
             let mut args = CommandArgsMut::default();
             for channel in &self.channels {
-                args = args.arg(channel.as_ref());
+                args = args.arg(RefBulkString::new(channel.as_ref()));
             }
-            let _result = self.client.unsubscribe(args).forget();
+            if let Err(e) = self.client.unsubscribe(args).forget() {
+                warn!("Error while unsubscribing from the dropped channels: {e}");
+            }
             self.channels.clear();
         }
 
         if !self.patterns.is_empty() {
             let mut args = CommandArgsMut::default();
             for pattern in &self.patterns {
-                args = args.arg(pattern.as_ref());
+                args = args.arg(RefBulkString::new(pattern.as_ref()));
             }
-            let _result = self.client.punsubscribe(args).forget();
+            if let Err(e) = self.client.punsubscribe(args).forget() {
+                warn!("Error while unsubscribing from the dropped patterns: {e}");
+            }
             self.patterns.clear();
         }
 
         if !self.shardchannels.is_empty() {
             let mut args = CommandArgsMut::default();
             for shardchannel in &self.shardchannels {
-                args = args.arg(shardchannel.as_ref());
+                args = args.arg(RefBulkString::new(shardchannel.as_ref()));
             }
-            let _result = self.client.sunsubscribe(args).forget();
+            if let Err(e) = self.client.sunsubscribe(args).forget() {
+                warn!("Error while unsubscribing from the dropped shard channels: {e}");
+            }
             self.shardchannels.clear();
         }
 

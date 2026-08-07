@@ -313,8 +313,28 @@ jobs:
         env:
           RUSTIS_RESPONSE_SHAPE_REPORT: "1"
         run: |
-          cargo test --release --features pool,tokio-rustls,json,client-cache \
-            response_shape -- --test-threads=1
+          # `--nocapture` because the report is printed by a test that passes, and
+          # the harness swallows the stdout of a passing test. The step cannot
+          # fail on an unexplained row -- see the module documentation -- so what
+          # it does instead is put the rows in the job summary.
+          output=$(cargo test --release --features pool,tokio-rustls,json,client-cache \
+            response_shape -- --test-threads=1 --nocapture 2>&1)
+          echo "$output"
+          count=$(echo "$output" | sed -n 's/.*, \([0-9][0-9]*\) unexplained.*/\1/p' | tail -1)
+          if [ -n "$count" ] && [ "$count" != "0" ]; then
+            {
+              echo "### Response shape report: $count unexplained observation(s)"
+              echo
+              echo "A declared response type the server's reply contradicts, or a shape"
+              echo "nobody has triaged yet. Fix the type, or add the row to"
+              echo "\`src/tests/response_shape_baseline.tsv\` with its reason."
+              echo
+              echo '```'
+              echo "$output" | grep 'answered'
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::notice title=Response shapes::$count unexplained observation(s), see the job summary"
+          fi
 
   # `rustls` and `native-tls` are mutually exclusive — `src/lib.rs` rejects the
   # pair with a `compile_error!`, and `src/tests/tls.rs` defines one `tls()` per
@@ -380,6 +400,24 @@ jobs:
         env:
           RUSTIS_RESPONSE_SHAPE_REPORT: "1"
         run: |
-          cargo test --release --no-default-features \
+          # See the same step in `test`: `--nocapture` for a passing test's output,
+          # and an unexplained row goes to the job summary instead of failing.
+          output=$(cargo test --release --no-default-features \
             --features tokio-runtime,tokio-native-tls,pool,json,client-cache \
-            response_shape -- --test-threads=1
+            response_shape -- --test-threads=1 --nocapture 2>&1)
+          echo "$output"
+          count=$(echo "$output" | sed -n 's/.*, \([0-9][0-9]*\) unexplained.*/\1/p' | tail -1)
+          if [ -n "$count" ] && [ "$count" != "0" ]; then
+            {
+              echo "### Response shape report (native-tls): $count unexplained observation(s)"
+              echo
+              echo "A declared response type the server's reply contradicts, or a shape"
+              echo "nobody has triaged yet. Fix the type, or add the row to"
+              echo "\`src/tests/response_shape_baseline.tsv\` with its reason."
+              echo
+              echo '```'
+              echo "$output" | grep 'answered'
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::notice title=Response shapes (native-tls)::$count unexplained observation(s), see the job summary"
+          fi

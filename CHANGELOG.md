@@ -119,6 +119,22 @@ Versions up to and including `0.19.3` are documented in the
 
 ### Fixed
 
+- **Dropping a `PubSubStream` releases its subscriptions.** `Drop` named the
+  channels it was cancelling as a bare `&[u8]`, which serde renders as a sequence
+  of integers rather than as one bulk string: the client asked the server to
+  unsubscribe from `49 49` -- the ASCII codes of the channel `11` -- so it left the
+  real channel subscribed, and the wrong command being legal in itself, the server
+  answered it without complaining. The fire-and-forget failure was assigned to
+  `_result` and never logged, so nothing surfaced either. `close()` was unaffected,
+  passing the `Bytes` itself, which is why the documented equivalence between the
+  two -- "`drop` will achieve the same process but silently in background" -- did
+  not hold. Every later `subscribe` on that channel was then refused with
+  `AlreadySubscribed` for the life of the connection, which a long-polling handler
+  reaches on every cancelled HTTP request: its stream is dropped, never closed. The
+  names now go through `RefBulkString`, the error is logged, and
+  `dropping_a_stream_releases_its_subscriptions` covers the drop-then-resubscribe
+  cycle the existing `AlreadySubscribed` test did not.
+
 - **A cluster subscription is cancellable.** `SUBSCRIBE`, `PSUBSCRIBE`,
   `UNSUBSCRIBE` and `PUNSUBSCRIBE` name no key, so the cluster connection served
   each of them on a node drawn at random: the unsubscription almost never reached

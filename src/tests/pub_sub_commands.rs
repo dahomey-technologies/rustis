@@ -1207,6 +1207,46 @@ async fn a_shard_subscription_whose_receiver_is_gone_is_unsubscribed_in_cluster(
     Ok(())
 }
 
+/// Dropping a `PubSubStream` must release its subscriptions, exactly as `close` does.
+///
+/// `Drop` named its channels as a bare `&[u8]`, which serde renders as a sequence of integers: the
+/// client asked the server to unsubscribe from `49 49` -- the ASCII codes of `11` -- rather than
+/// from `11`. Nothing surfaced, the fire-and-forget error being discarded, so the subscription
+/// stayed on the connection for the rest of its life and every later `subscribe` on that channel was
+/// refused with `AlreadySubscribed`. A long-polling handler whose HTTP request is cancelled drops
+/// its stream on precisely this path, and never gets the channel back.
+#[tokio::test]
+#[serial]
+async fn dropping_a_stream_releases_its_subscriptions() -> Result<()> {
+    log_try_init();
+
+    let subscriber = get_test_client().await?;
+    let observer = get_test_client().await?;
+
+    // An all-digits name is what makes the bug observable: the wrong UNSUBSCRIBE is itself a legal
+    // command -- `49` is a channel name like any other -- so the server answered it without
+    // complaining, and only the real channel was left behind.
+    const CHANNEL: &str = "1122334455";
+
+    let stream = subscriber.subscribe(CHANNEL).await?;
+    let channels: HashSet<String> = observer.pub_sub_channels(CHANNEL).await?;
+    assert!(channels.contains(CHANNEL));
+
+    drop(stream);
+
+    wait_for(Duration::from_secs(5), || async {
+        let channels: HashSet<String> = observer.pub_sub_channels(CHANNEL).await?;
+        Ok(!channels.contains(CHANNEL))
+    })
+    .await?;
+
+    // The client has to forget it too: it refuses a second subscription for as long as it believes
+    // the first one is still live.
+    subscriber.subscribe(CHANNEL).await?.close().await?;
+
+    Ok(())
+}
+
 /// Polls `condition` until it holds, failing the test if it still does not
 /// within `deadline`. The cleanup is asynchronous — the UNSUBSCRIBE is queued by
 /// the network task and confirmed by the server — so there is nothing to await

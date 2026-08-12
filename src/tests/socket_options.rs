@@ -25,6 +25,11 @@ async fn keep_alive_and_no_delay_are_applied() -> Result<()> {
 
     let socket = socket2::SockRef::from(&stream);
     assert!(socket.keepalive()?);
+    // Windows accepts the keep-alive time -- `apply_socket_options` sets it
+    // there like everywhere else -- but offers no way to read it back, so
+    // socket2 compiles the getter on the platforms that have one. Reading it
+    // unconditionally does not fail on Windows, it fails to build.
+    #[cfg(not(windows))]
     assert_eq!(Duration::from_secs(42), socket.tcp_keepalive_time()?);
     assert!(stream.nodelay()?);
 

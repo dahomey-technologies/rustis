@@ -8,6 +8,17 @@ Versions up to and including `0.19.3` are documented in the
 
 ## [Unreleased]
 
+### Fixed
+
+- **The test suite builds on Windows.** `keep_alive_and_no_delay_are_applied`
+  read the keep-alive time back with `socket2::SockRef::tcp_keepalive_time`,
+  which Windows has no equivalent for and socket2 therefore compiles only on the
+  platforms that expose a getter. The whole `lib test` target failed to build
+  with `E0599`, so no test ran at all -- `cargo test` on Windows was unusable,
+  and every job in CI runs on `ubuntu-latest`, which is why nothing reported it.
+  The assertion is now guarded by `#[cfg(not(windows))]`; the value is still set
+  on Windows, and still asserted everywhere it can be read.
+
 ### Added
 
 - **A `struct` maps onto a hash, and the tests say so.** `hset` takes any

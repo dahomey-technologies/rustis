@@ -4,13 +4,14 @@ use std::{
 };
 
 use crate::{
-    Result,
+    ErrorKind, RedisError, RedisErrorKind, Result,
     commands::{
         ExpireOption, FlushingMode, GenericCommands, GetExOptions, HScanOptions, HScanResult,
         HSetExCondition, HashCommands, ServerCommands, SetExpiration,
     },
     tests::get_test_client,
 };
+use serde::{Deserialize, Serialize};
 use serial_test::serial;
 
 #[tokio::test]
@@ -779,6 +780,429 @@ async fn hvals() -> Result<()> {
     assert_eq!(2, values.len());
     assert_eq!("Hello", values[0]);
     assert_eq!("World", values[1]);
+
+    Ok(())
+}
+
+/// A `struct` goes into a hash and comes back out of it in one call: `HSET`
+/// serializes it as flat field/value pairs, taking the field names from the
+/// struct's own, and `HGETALL` deserializes the reply back into it.
+#[tokio::test]
+#[serial]
+async fn hset_hgetall_struct() -> Result<()> {
+    #[derive(Debug, PartialEq, Serialize, Deserialize)]
+    struct Person {
+        id: u32,
+        name: String,
+        height: f64,
+        active: bool,
+    }
+
+    let client = get_test_client().await?;
+
+    // cleanup
+    client.del("person").await?;
+
+    let person = Person {
+        id: 12,
+        name: "Foo".to_owned(),
+        height: 1.75,
+        active: true,
+    };
+
+    // sends HSET person id 12 name Foo height 1.75 active 1
+    let len = client.hset("person", &person).await?;
+    assert_eq!(4, len);
+
+    // the hash really holds one Redis field per struct field
+    let mut fields: Vec<String> = client.hkeys("person").await?;
+    fields.sort();
+    assert_eq!(["active", "height", "id", "name"], fields.as_slice());
+
+    let name: String = client.hget("person", "name").await?;
+    assert_eq!("Foo", name);
+
+    let read: Person = client.hgetall("person").await?;
+    assert_eq!(person, read);
+
+    Ok(())
+}
+
+/// A hash holds every value as a bulk string, whatever its type, so a struct of
+/// primitives makes the round trip through that single wire form: the argument
+/// serializer writes each value as text, and the deserializer parses it back
+/// into the target type.
+#[tokio::test]
+#[serial]
+async fn hset_hgetall_struct_of_primitives() -> Result<()> {
+    #[derive(Debug, PartialEq, Serialize, Deserialize)]
+    struct Primitives {
+        small_signed: i8,
+        signed: i64,
+        small_unsigned: u8,
+        unsigned: u64,
+        single: f32,
+        double: f64,
+        flag: bool,
+        letter: char,
+        text: String,
+    }
+
+    let client = get_test_client().await?;
+
+    // cleanup
+    client.del("primitives").await?;
+
+    let primitives = Primitives {
+        small_signed: -8,
+        signed: i64::MIN,
+        small_unsigned: 255,
+        unsigned: u64::MAX,
+        single: 1.75,
+        double: -12.5e-3,
+        flag: true,
+        letter: 'm',
+        text: "hello".to_owned(),
+    };
+
+    let len = client.hset("primitives", &primitives).await?;
+    assert_eq!(9, len);
+
+    // the text actually stored, which is what another client would read
+    let stored: HashMap<String, String> = client.hgetall("primitives").await?;
+    assert_eq!(Some(&"-8".to_owned()), stored.get("small_signed"));
+    assert_eq!(Some(&"255".to_owned()), stored.get("small_unsigned"));
+    assert_eq!(
+        Some(&"18446744073709551615".to_owned()),
+        stored.get("unsigned")
+    );
+    assert_eq!(Some(&"1.75".to_owned()), stored.get("single"));
+    // a `bool` goes out as 1/0, and reads back from either that or true/false
+    assert_eq!(Some(&"1".to_owned()), stored.get("flag"));
+    assert_eq!(Some(&"m".to_owned()), stored.get("letter"));
+
+    let read: Primitives = client.hgetall("primitives").await?;
+    assert_eq!(primitives, read);
+
+    // field by field, through the same deserializer
+    let signed: i64 = client.hget("primitives", "signed").await?;
+    assert_eq!(i64::MIN, signed);
+    let double: f64 = client.hget("primitives", "double").await?;
+    assert_eq!(-12.5e-3, double);
+    let flag: bool = client.hget("primitives", "flag").await?;
+    assert!(flag);
+
+    Ok(())
+}
+
+/// Reading a missing field gives a nil, which is `None` - and, for a non-`Option`
+/// target, the type's zero rather than an error.
+#[tokio::test]
+#[serial]
+async fn hget_missing_field() -> Result<()> {
+    let client = get_test_client().await?;
+
+    // cleanup
+    client.del("key").await?;
+
+    client.hset("key", ("field", "value")).await?;
+
+    let missing: Option<String> = client.hget("key", "unknown").await?;
+    assert_eq!(None, missing);
+
+    let missing: Option<u32> = client.hget("key", "unknown").await?;
+    assert_eq!(None, missing);
+
+    let missing: u32 = client.hget("key", "unknown").await?;
+    assert_eq!(0, missing);
+
+    Ok(())
+}
+
+/// 128-bit integers deserialize from a hash field, but the argument serializer
+/// has no `i128`/`u128` arm, so the write fails instead of storing a narrowed
+/// value. A value that wide has to be stored as a string by the caller.
+#[tokio::test]
+#[serial]
+async fn hset_struct_with_128_bit_integer_is_rejected() -> Result<()> {
+    #[derive(Debug, Serialize)]
+    struct Wide {
+        id: u128,
+    }
+
+    let client = get_test_client().await?;
+
+    // cleanup
+    client.del("wide").await?;
+
+    let result = client.hset("wide", &Wide { id: 12 }).await;
+    assert!(result.is_err(), "u128 was serialized as a command argument");
+
+    // reading one back does work: the field is text on the wire
+    client.hset("wide", ("id", u128::MAX.to_string())).await?;
+    let id: u128 = client.hget("wide", "id").await?;
+    assert_eq!(u128::MAX, id);
+
+    Ok(())
+}
+
+/// The field names on the wire are the serialized ones, so `rename`/`rename_all`
+/// decide the hash layout and are honored in both directions.
+#[tokio::test]
+#[serial]
+async fn hset_hgetall_struct_with_renamed_fields() -> Result<()> {
+    #[derive(Debug, PartialEq, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct Person {
+        first_name: String,
+        #[serde(rename = "yob")]
+        year_of_birth: u16,
+    }
+
+    let client = get_test_client().await?;
+
+    // cleanup
+    client.del("person").await?;
+
+    let person = Person {
+        first_name: "Foo".to_owned(),
+        year_of_birth: 1976,
+    };
+
+    client.hset("person", &person).await?;
+
+    let mut fields: Vec<String> = client.hkeys("person").await?;
+    fields.sort();
+    assert_eq!(["firstName", "yob"], fields.as_slice());
+
+    let read: Person = client.hgetall("person").await?;
+    assert_eq!(person, read);
+
+    Ok(())
+}
+
+/// Reading a struct out of a hash tolerates fields the struct does not know:
+/// serde skips them. A hash written by a newer version of the application, or
+/// shared by several of them, still deserializes.
+#[tokio::test]
+#[serial]
+async fn hgetall_struct_ignores_unknown_fields() -> Result<()> {
+    #[derive(Debug, PartialEq, Deserialize)]
+    struct Person {
+        id: u32,
+        name: String,
+    }
+
+    let client = get_test_client().await?;
+
+    // cleanup
+    client.del("person").await?;
+
+    client
+        .hset(
+            "person",
+            [("id", "12"), ("name", "Foo"), ("added_later", "ignored")],
+        )
+        .await?;
+
+    let read: Person = client.hgetall("person").await?;
+    assert_eq!(
+        Person {
+            id: 12,
+            name: "Foo".to_owned()
+        },
+        read
+    );
+
+    Ok(())
+}
+
+/// `None` serializes to no argument at all, which would leave its field name
+/// paired with the next field's. An optional field must therefore be skipped
+/// whole with `skip_serializing_if`; on the way back, the missing field
+/// deserializes to `None`.
+#[tokio::test]
+#[serial]
+async fn hset_hgetall_struct_with_optional_field() -> Result<()> {
+    #[derive(Debug, PartialEq, Serialize, Deserialize)]
+    struct Person {
+        id: u32,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        nickname: Option<String>,
+    }
+
+    let client = get_test_client().await?;
+
+    // cleanup
+    client.del("person").await?;
+
+    let with_nickname = Person {
+        id: 12,
+        nickname: Some("Foo".to_owned()),
+    };
+    client.hset("person", &with_nickname).await?;
+    let read: Person = client.hgetall("person").await?;
+    assert_eq!(with_nickname, read);
+
+    // cleanup
+    client.del("person").await?;
+
+    let without_nickname = Person {
+        id: 12,
+        nickname: None,
+    };
+    client.hset("person", &without_nickname).await?;
+    let fields: Vec<String> = client.hkeys("person").await?;
+    assert_eq!(["id"], fields.as_slice());
+    let read: Person = client.hgetall("person").await?;
+    assert_eq!(without_nickname, read);
+
+    Ok(())
+}
+
+/// The counterpart of the test above: an `Option` field left unskipped writes
+/// its name with no value, and the server rejects the odd argument count. The
+/// error is the good case here - a struct with two `None` fields would produce
+/// an even count and silently store a field name as another field's value.
+#[tokio::test]
+#[serial]
+async fn hset_struct_with_unskipped_none_is_rejected() -> Result<()> {
+    #[derive(Debug, Serialize)]
+    struct Person {
+        id: u32,
+        nickname: Option<String>,
+    }
+
+    let client = get_test_client().await?;
+
+    // cleanup
+    client.del("person").await?;
+
+    // sends HSET person id 12 nickname
+    let result = client
+        .hset(
+            "person",
+            &Person {
+                id: 12,
+                nickname: None,
+            },
+        )
+        .await;
+
+    assert!(matches!(
+        result.unwrap_err().kind(),
+        ErrorKind::Redis(RedisError {
+            kind: RedisErrorKind::Err,
+            description
+        }) if description.contains("wrong number of arguments")
+    ));
+
+    Ok(())
+}
+
+/// `HMGET` returns values only, in the order the fields were asked for, so it
+/// deserializes into a tuple - or into a struct read positionally, as long as
+/// the fields are requested in declaration order.
+#[tokio::test]
+#[serial]
+async fn hmget_struct() -> Result<()> {
+    #[derive(Debug, PartialEq, Serialize, Deserialize)]
+    struct Person {
+        id: u32,
+        name: String,
+    }
+
+    let client = get_test_client().await?;
+
+    // cleanup
+    client.del("person").await?;
+
+    let person = Person {
+        id: 12,
+        name: "Foo".to_owned(),
+    };
+    client.hset("person", &person).await?;
+
+    let (id, name): (u32, String) = client.hmget("person", ["id", "name"]).await?;
+    assert_eq!(12, id);
+    assert_eq!("Foo", name);
+
+    let read: Person = client.hmget("person", ["id", "name"]).await?;
+    assert_eq!(person, read);
+
+    Ok(())
+}
+
+/// A hash is flat, so a nested struct cannot map onto it: the inner fields
+/// would flatten into the outer pairs and shift them. `#[serde(flatten)]` is
+/// the supported way to spread an inner struct over the same hash, and a nested
+/// value that must stay nested belongs in a single field, serialized on its own.
+#[cfg(feature = "json")]
+#[tokio::test]
+#[serial]
+async fn hset_hgetall_nested_struct() -> Result<()> {
+    #[derive(Debug, PartialEq, Serialize, Deserialize)]
+    struct Address {
+        street: String,
+        city: String,
+    }
+
+    #[derive(Debug, PartialEq, Serialize, Deserialize)]
+    struct Flattened {
+        id: u32,
+        #[serde(flatten)]
+        address: Address,
+    }
+
+    #[derive(Debug, PartialEq, Serialize, Deserialize)]
+    struct Nested {
+        id: u32,
+        /// Held as a JSON string in a single hash field.
+        address: String,
+    }
+
+    let client = get_test_client().await?;
+
+    // cleanup
+    client.del("person").await?;
+
+    let address = Address {
+        street: "1 Foo street".to_owned(),
+        city: "Bar".to_owned(),
+    };
+
+    // flattened: one hash field per leaf
+    let flattened = Flattened {
+        id: 12,
+        address: Address {
+            street: address.street.clone(),
+            city: address.city.clone(),
+        },
+    };
+    let len = client.hset("person", &flattened).await?;
+    assert_eq!(3, len);
+    let mut fields: Vec<String> = client.hkeys("person").await?;
+    fields.sort();
+    assert_eq!(["city", "id", "street"], fields.as_slice());
+
+    let read: Flattened = client.hgetall("person").await?;
+    assert_eq!(flattened, read);
+
+    // cleanup
+    client.del("person").await?;
+
+    // nested: the sub-struct is serialized by the caller into one field
+    let nested = Nested {
+        id: 12,
+        address: serde_json::to_string(&address).unwrap(),
+    };
+    let len = client.hset("person", &nested).await?;
+    assert_eq!(2, len);
+
+    let read: Nested = client.hgetall("person").await?;
+    assert_eq!(nested, read);
+    let read_address: Address = serde_json::from_str(&read.address).unwrap();
+    assert_eq!(address, read_address);
 
     Ok(())
 }

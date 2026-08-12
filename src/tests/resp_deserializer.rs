@@ -277,6 +277,104 @@ fn string() -> Result<()> {
     Ok(())
 }
 
+/// A `HASH` field, and any other `GET`-like reply, comes back as a bulk string
+/// whatever it holds, so that single wire form has to reach every primitive
+/// target. The cases below are the ones a hash written by another application
+/// produces, and they are read strictly enough to be worth pinning: an
+/// out-of-range or empty value is an error rather than a plausible number.
+#[test]
+fn a_bulk_string_reads_into_every_primitive() {
+    log_try_init();
+
+    fn bulk<T>(payload: &str) -> Result<T>
+    where
+        T: serde::de::DeserializeOwned,
+    {
+        deserialize(&format!("${}\r\n{}\r\n", payload.len(), payload))
+    }
+
+    // signed and unsigned, at every width
+    assert_eq!(-8i8, bulk::<i8>("-8").unwrap());
+    assert_eq!(-16i16, bulk::<i16>("-16").unwrap());
+    assert_eq!(-32i32, bulk::<i32>("-32").unwrap());
+    assert_eq!(-64i64, bulk::<i64>("-64").unwrap());
+    assert_eq!(-128i128, bulk::<i128>("-128").unwrap());
+    assert_eq!(8u8, bulk::<u8>("8").unwrap());
+    assert_eq!(16u16, bulk::<u16>("16").unwrap());
+    assert_eq!(32u32, bulk::<u32>("32").unwrap());
+    assert_eq!(64u64, bulk::<u64>("64").unwrap());
+    assert_eq!(128u128, bulk::<u128>("128").unwrap());
+    assert_eq!(u64::MAX, bulk::<u64>("18446744073709551615").unwrap());
+
+    // floats, including the notations Redis itself emits for a score
+    assert_eq!(1.75f32, bulk::<f32>("1.75").unwrap());
+    assert_eq!(1.75f64, bulk::<f64>("1.75").unwrap());
+    assert_eq!(1750f64, bulk::<f64>("1.75e3").unwrap());
+    assert_eq!(f64::INFINITY, bulk::<f64>("inf").unwrap());
+    assert!(bulk::<f64>("nan").unwrap().is_nan());
+
+    // the booleans rustis writes, plus the two spellings a human would
+    assert!(bulk::<bool>("1").unwrap());
+    assert!(!bulk::<bool>("0").unwrap());
+    assert!(bulk::<bool>("true").unwrap());
+    assert!(!bulk::<bool>("false").unwrap());
+
+    assert_eq!('m', bulk::<char>("m").unwrap());
+    assert_eq!("hello", bulk::<String>("hello").unwrap());
+
+    // a nil is the only `None`: an empty bulk string is a value, and an empty one
+    assert_eq!(Some(String::new()), bulk::<Option<String>>("").unwrap());
+    assert_eq!(None, deserialize::<Option<String>>("_\r\n").unwrap());
+
+    macro_rules! assert_rejected {
+        ($ty:ty, $payload:expr, $err:pat) => {
+            let error = bulk::<$ty>($payload).unwrap_err();
+            assert!(
+                matches!(error.kind(), ErrorKind::Client($err)),
+                "{} accepted {:?}: {error:?}",
+                stringify!($ty),
+                $payload
+            );
+        };
+    }
+
+    // out of the target's range, rather than wrapped or saturated
+    assert_rejected!(u8, "300", ClientError::CannotParseInteger);
+    assert_rejected!(i64, "9223372036854775808", ClientError::CannotParseInteger);
+    assert_rejected!(u32, "-1", ClientError::CannotParseInteger);
+    // nothing to parse: an empty field is not a zero
+    assert_rejected!(u32, "", ClientError::CannotParseInteger);
+    assert_rejected!(f64, "", ClientError::CannotParseDouble);
+    assert_rejected!(bool, "", ClientError::CannotParseBoolean);
+    assert_rejected!(char, "", ClientError::CannotParseChar);
+    // not that value at all
+    assert_rejected!(f64, "1.75abc", ClientError::CannotParseDouble);
+    assert_rejected!(bool, "2", ClientError::CannotParseBoolean);
+    assert_rejected!(bool, "TRUE", ClientError::CannotParseBoolean);
+    assert_rejected!(char, "ab", ClientError::CannotParseChar);
+}
+
+/// Integers are read by `atoi`, which stops at the first byte that is not a
+/// digit instead of rejecting the value, so a field holding anything but an
+/// integer is read as its numeric prefix. This pins the current behavior; it is
+/// not a guarantee worth keeping, since every case below is a value the caller
+/// would rather see rejected.
+#[test]
+fn a_bulk_string_read_as_an_integer_stops_at_the_first_non_digit() {
+    log_try_init();
+
+    let result: u32 = deserialize("$5\r\n12abc\r\n").unwrap();
+    assert_eq!(12, result);
+
+    // a float read into an integer target truncates, silently
+    let result: u32 = deserialize("$4\r\n1.75\r\n").unwrap();
+    assert_eq!(1, result);
+
+    // "0x10" is the leading zero, not 16
+    let result: i32 = deserialize("$4\r\n0x10\r\n").unwrap();
+    assert_eq!(0, result);
+}
+
 /// A numeric reply read as a `String` gives back the bytes the server sent,
 /// verbatim. Decoding the number and re-rendering it would not round-trip: the
 /// text Redis chose carries precision and notation that an `f64` does not keep.

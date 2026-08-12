@@ -6,6 +6,29 @@ All notable changes to this project are documented here. The format is based on
 Versions up to and including `0.19.3` are documented in the
 [GitHub releases](https://github.com/dahomey-technologies/rustis/releases).
 
+## [Unreleased]
+
+### Added
+
+- **A `struct` maps onto a hash, and the tests say so.** `hset` takes any
+  `Serialize` and `hgetall` returns any `Deserialize`, so a struct round-trips
+  through a hash in two calls -- the argument serializer flattens it into
+  field/value pairs, taking the field names from the struct's own, and the
+  deserializer reads the reply back as a map. Nothing in the suite covered that
+  path, which is the reason to write a hash from a struct at all, and nothing
+  covered the details a caller trips on either: `rename`/`rename_all` decide the
+  field names on the wire, an unknown field in the hash is skipped rather than
+  fatal, a nested struct needs `#[serde(flatten)]` or a field of its own, and an
+  `Option` field must carry `skip_serializing_if` -- a `None` serializes to no
+  argument at all, leaving its field name paired with the next field's value.
+  `hset_hgetall_struct_of_primitives` pins the wire text a hash actually holds
+  (`1` for a `bool`, `1.75` for an `f32`), since another client reads that text,
+  and `a_bulk_string_reads_into_every_primitive` pins the other direction: every
+  integer width, `f32`/`f64` including `inf` and exponent notation, `bool`,
+  `char`, `String`, `Option`, plus the eleven values that are rejected -- out of
+  range, empty, or not that type -- because a hash field is a bulk string
+  whatever it holds, and that single wire form has to reach every target.
+
 ## [0.23.0] - 2026-08-07
 
 ### BREAKING CHANGES

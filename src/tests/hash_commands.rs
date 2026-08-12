@@ -919,15 +919,16 @@ async fn hget_missing_field() -> Result<()> {
     Ok(())
 }
 
-/// 128-bit integers deserialize from a hash field, but the argument serializer
-/// has no `i128`/`u128` arm, so the write fails instead of storing a narrowed
-/// value. A value that wide has to be stored as a string by the caller.
+/// 128-bit integers make the round trip like any other width. Both directions
+/// matter: the deserializer has always read them, so a serializer that could not
+/// write them made a type readable but not writable.
 #[tokio::test]
 #[serial]
-async fn hset_struct_with_128_bit_integer_is_rejected() -> Result<()> {
-    #[derive(Debug, Serialize)]
+async fn hset_hgetall_struct_with_128_bit_integers() -> Result<()> {
+    #[derive(Debug, PartialEq, Serialize, Deserialize)]
     struct Wide {
-        id: u128,
+        signed: i128,
+        unsigned: u128,
     }
 
     let client = get_test_client().await?;
@@ -935,13 +936,17 @@ async fn hset_struct_with_128_bit_integer_is_rejected() -> Result<()> {
     // cleanup
     client.del("wide").await?;
 
-    let result = client.hset("wide", &Wide { id: 12 }).await;
-    assert!(result.is_err(), "u128 was serialized as a command argument");
+    let wide = Wide {
+        signed: i128::MIN,
+        unsigned: u128::MAX,
+    };
+    client.hset("wide", &wide).await?;
 
-    // reading one back does work: the field is text on the wire
-    client.hset("wide", ("id", u128::MAX.to_string())).await?;
-    let id: u128 = client.hget("wide", "id").await?;
-    assert_eq!(u128::MAX, id);
+    let stored: String = client.hget("wide", "unsigned").await?;
+    assert_eq!(u128::MAX.to_string(), stored);
+
+    let read: Wide = client.hgetall("wide").await?;
+    assert_eq!(wide, read);
 
     Ok(())
 }

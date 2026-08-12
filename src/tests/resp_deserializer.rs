@@ -354,25 +354,52 @@ fn a_bulk_string_reads_into_every_primitive() {
     assert_rejected!(char, "ab", ClientError::CannotParseChar);
 }
 
-/// Integers are read by `atoi`, which stops at the first byte that is not a
-/// digit instead of rejecting the value, so a field holding anything but an
-/// integer is read as its numeric prefix. This pins the current behavior; it is
-/// not a guarantee worth keeping, since every case below is a value the caller
-/// would rather see rejected.
+/// A text reply that is not entirely an integer is rejected, rather than read as
+/// however much of it parses. `atoi` alone stops at the first byte that is not a
+/// digit, which turns `1.75` into `1` and `0x10` into `0`: a value the server
+/// never sent, indistinguishable from one it did.
 #[test]
-fn a_bulk_string_read_as_an_integer_stops_at_the_first_non_digit() {
+fn a_text_reply_read_as_an_integer_is_all_or_nothing() {
     log_try_init();
 
-    let result: u32 = deserialize("$5\r\n12abc\r\n").unwrap();
-    assert_eq!(12, result);
+    macro_rules! assert_rejected {
+        ($ty:ty, $reply:expr) => {
+            let error = deserialize::<$ty>($reply).unwrap_err();
+            assert!(
+                matches!(
+                    error.kind(),
+                    ErrorKind::Client(ClientError::CannotParseInteger)
+                ),
+                "{} accepted {:?}: {error:?}",
+                stringify!($ty),
+                $reply
+            );
+        };
+    }
 
-    // a float read into an integer target truncates, silently
-    let result: u32 = deserialize("$4\r\n1.75\r\n").unwrap();
-    assert_eq!(1, result);
+    // a trailing remainder, whatever it is
+    assert_rejected!(u32, "$5\r\n12abc\r\n");
+    assert_rejected!(u32, "$4\r\n1.75\r\n");
+    assert_rejected!(i32, "$4\r\n0x10\r\n");
+    assert_rejected!(i32, "$3\r\n1 2\r\n");
+    // a leading one, which `atoi` reports as nothing read
+    assert_rejected!(u32, "$3\r\n 12\r\n");
+    // a sign and no digits, which it reports as one byte read for a 0
+    assert_rejected!(i32, "$1\r\n-\r\n");
+    assert_rejected!(i32, "$1\r\n+\r\n");
+    // the same rule on a simple string, and on the digits behind a `:`
+    assert_rejected!(u32, "+12abc\r\n");
+    assert_rejected!(u32, ":12abc\r\n");
 
-    // "0x10" is the leading zero, not 16
-    let result: i32 = deserialize("$4\r\n0x10\r\n").unwrap();
-    assert_eq!(0, result);
+    // what stays accepted: a plain integer, either sign, at any width
+    assert_eq!(12u32, deserialize::<u32>("$2\r\n12\r\n").unwrap());
+    assert_eq!(-12i32, deserialize::<i32>("$3\r\n-12\r\n").unwrap());
+    // RESP3 allows an explicit `+` on an integer reply
+    assert_eq!(12u32, deserialize::<u32>("$3\r\n+12\r\n").unwrap());
+    assert_eq!(
+        i64::MIN,
+        deserialize::<i64>("$20\r\n-9223372036854775808\r\n").unwrap()
+    );
 }
 
 /// A numeric reply read as a `String` gives back the bytes the server sent,

@@ -3,7 +3,7 @@ use crate::{
     resp::{
         ARRAY_TAG, BULK_ERROR_TAG, MAP_TAG, NULL_TAG, PUSH_TAG, ParsedFrame, RespBuf,
         RespDeserializer, RespTape, SET_TAG, SIMPLE_ERROR_TAG, SIMPLE_STRING_TAG, ScalarKind,
-        TapeNode, frame_scalar_value, scalar_span, scalar_value,
+        TapeNode, frame_scalar_value, scalar_span, scalar_value, util::int_from_text,
     },
 };
 use bytes::Bytes;
@@ -395,10 +395,7 @@ fn decode_value(kind: ScalarKind, data: &[u8], value: Range<usize>) -> Result<Re
     Ok(match kind {
         ScalarKind::SimpleString => RespView::SimpleString(value),
         ScalarKind::Error => RespView::Error(value),
-        ScalarKind::Integer => RespView::Integer(
-            atoi::atoi(value).ok_or_else(|| Error::from(ClientError::CannotParseInteger))?,
-            value,
-        ),
+        ScalarKind::Integer => RespView::Integer(int_from_text(value)?, value),
         ScalarKind::Double => RespView::Double(
             fast_float2::parse(value).map_err(|_| Error::from(ClientError::CannotParseDouble))?,
             value,

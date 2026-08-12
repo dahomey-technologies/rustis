@@ -305,6 +305,11 @@ impl<'a> Serializer for &'a mut FastPathRespSerializer<'a> {
     }
 
     #[inline(always)]
+    fn serialize_i128(self, v: i128) -> Result<Self::Ok, Self::Error> {
+        Ok(self.serialize_integer(v))
+    }
+
+    #[inline(always)]
     fn serialize_u8(self, v: u8) -> Result<Self::Ok, Self::Error> {
         Ok(self.serialize_integer(v))
     }
@@ -321,6 +326,11 @@ impl<'a> Serializer for &'a mut FastPathRespSerializer<'a> {
 
     #[inline(always)]
     fn serialize_u64(self, v: u64) -> Result<Self::Ok, Self::Error> {
+        Ok(self.serialize_integer(v))
+    }
+
+    #[inline(always)]
+    fn serialize_u128(self, v: u128) -> Result<Self::Ok, Self::Error> {
         Ok(self.serialize_integer(v))
     }
 

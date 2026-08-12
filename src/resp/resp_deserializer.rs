@@ -2,7 +2,7 @@ use crate::{
     ClientError, Error, ErrorKind, RedisError, Result,
     resp::{
         PUSH_FAKE_FIELD, RespCollectionIter, RespCollectionView, RespResponse, RespView,
-        util::{bool_from_text, double_to_int, is_field_value_array},
+        util::{bool_from_text, double_to_int, int_from_text, is_field_value_array},
     },
 };
 use serde::{
@@ -77,14 +77,10 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
         V: Visitor<'de>,
     {
         let result = match self.view {
-            RespView::SimpleString(ss) => {
-                atoi::atoi(ss).ok_or_else(|| Error::from(ClientError::CannotParseInteger))?
-            }
+            RespView::SimpleString(ss) => int_from_text(ss)?,
             RespView::Integer(i, _) => i128::from(i),
             RespView::Double(d, _) => double_to_int::<i128>(d)?,
-            RespView::BulkString(bs) => {
-                atoi::atoi(bs).ok_or_else(|| Error::from(ClientError::CannotParseInteger))?
-            }
+            RespView::BulkString(bs) => int_from_text(bs)?,
             // Only a one-element array unwraps to its element: a longer one
             // would have to discard the rest silently.
             RespView::Array(a) if a.len() == 1 => match a.into_iter().next() {
@@ -106,16 +102,12 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
         V: Visitor<'de>,
     {
         let result = match self.view {
-            RespView::SimpleString(ss) => {
-                atoi::atoi(ss).ok_or_else(|| Error::from(ClientError::CannotParseInteger))?
-            }
+            RespView::SimpleString(ss) => int_from_text(ss)?,
             RespView::Integer(i, _) => {
                 u128::try_from(i).map_err(|_| Error::from(ClientError::CannotParseInteger))?
             }
             RespView::Double(d, _) => double_to_int::<u128>(d)?,
-            RespView::BulkString(bs) => {
-                atoi::atoi(bs).ok_or_else(|| Error::from(ClientError::CannotParseInteger))?
-            }
+            RespView::BulkString(bs) => int_from_text(bs)?,
             // Only a one-element array unwraps to its element: a longer one
             // would have to discard the rest silently.
             RespView::Array(a) if a.len() == 1 => match a.into_iter().next() {
@@ -139,14 +131,10 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
         V: Visitor<'de>,
     {
         let result = match self.view {
-            RespView::SimpleString(ss) => {
-                atoi::atoi(ss).ok_or_else(|| Error::from(ClientError::CannotParseInteger))?
-            }
+            RespView::SimpleString(ss) => int_from_text(ss)?,
             RespView::Integer(i, _) => i,
             RespView::Double(d, _) => double_to_int::<i64>(d)?,
-            RespView::BulkString(bs) => {
-                atoi::atoi(bs).ok_or_else(|| Error::from(ClientError::CannotParseInteger))?
-            }
+            RespView::BulkString(bs) => int_from_text(bs)?,
             // Only a one-element array unwraps to its element: a longer one
             // would have to discard the rest silently.
             RespView::Array(a) if a.len() == 1 => match a.into_iter().next() {
@@ -168,16 +156,12 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
         V: Visitor<'de>,
     {
         let result = match self.view {
-            RespView::SimpleString(ss) => {
-                atoi::atoi(ss).ok_or_else(|| Error::from(ClientError::CannotParseInteger))?
-            }
+            RespView::SimpleString(ss) => int_from_text(ss)?,
             RespView::Integer(i, _) => {
                 u64::try_from(i).map_err(|_| Error::from(ClientError::CannotParseInteger))?
             }
             RespView::Double(d, _) => double_to_int::<u64>(d)?,
-            RespView::BulkString(bs) => {
-                atoi::atoi(bs).ok_or_else(|| Error::from(ClientError::CannotParseInteger))?
-            }
+            RespView::BulkString(bs) => int_from_text(bs)?,
             // Only a one-element array unwraps to its element: a longer one
             // would have to discard the rest silently.
             RespView::Array(a) if a.len() == 1 => match a.into_iter().next() {
@@ -201,16 +185,12 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
         V: Visitor<'de>,
     {
         let result = match self.view {
-            RespView::SimpleString(ss) => {
-                atoi::atoi(ss).ok_or_else(|| Error::from(ClientError::CannotParseInteger))?
-            }
+            RespView::SimpleString(ss) => int_from_text(ss)?,
             RespView::Integer(i, _) => {
                 i32::try_from(i).map_err(|_| Error::from(ClientError::CannotParseInteger))?
             }
             RespView::Double(d, _) => double_to_int::<i32>(d)?,
-            RespView::BulkString(bs) => {
-                atoi::atoi(bs).ok_or_else(|| Error::from(ClientError::CannotParseInteger))?
-            }
+            RespView::BulkString(bs) => int_from_text(bs)?,
             // Only a one-element array unwraps to its element: a longer one
             // would have to discard the rest silently.
             RespView::Array(a) if a.len() == 1 => match a.into_iter().next() {
@@ -234,16 +214,12 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
         V: Visitor<'de>,
     {
         let result = match self.view {
-            RespView::SimpleString(ss) => {
-                atoi::atoi(ss).ok_or_else(|| Error::from(ClientError::CannotParseInteger))?
-            }
+            RespView::SimpleString(ss) => int_from_text(ss)?,
             RespView::Integer(i, _) => {
                 u32::try_from(i).map_err(|_| Error::from(ClientError::CannotParseInteger))?
             }
             RespView::Double(d, _) => double_to_int::<u32>(d)?,
-            RespView::BulkString(bs) => {
-                atoi::atoi(bs).ok_or_else(|| Error::from(ClientError::CannotParseInteger))?
-            }
+            RespView::BulkString(bs) => int_from_text(bs)?,
             // Only a one-element array unwraps to its element: a longer one
             // would have to discard the rest silently.
             RespView::Array(a) if a.len() == 1 => match a.into_iter().next() {
@@ -267,16 +243,12 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
         V: Visitor<'de>,
     {
         let result = match self.view {
-            RespView::SimpleString(ss) => {
-                atoi::atoi(ss).ok_or_else(|| Error::from(ClientError::CannotParseInteger))?
-            }
+            RespView::SimpleString(ss) => int_from_text(ss)?,
             RespView::Integer(i, _) => {
                 i16::try_from(i).map_err(|_| Error::from(ClientError::CannotParseInteger))?
             }
             RespView::Double(d, _) => double_to_int::<i16>(d)?,
-            RespView::BulkString(bs) => {
-                atoi::atoi(bs).ok_or_else(|| Error::from(ClientError::CannotParseInteger))?
-            }
+            RespView::BulkString(bs) => int_from_text(bs)?,
             // Only a one-element array unwraps to its element: a longer one
             // would have to discard the rest silently.
             RespView::Array(a) if a.len() == 1 => match a.into_iter().next() {
@@ -300,16 +272,12 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
         V: Visitor<'de>,
     {
         let result = match self.view {
-            RespView::SimpleString(ss) => {
-                atoi::atoi(ss).ok_or_else(|| Error::from(ClientError::CannotParseInteger))?
-            }
+            RespView::SimpleString(ss) => int_from_text(ss)?,
             RespView::Integer(i, _) => {
                 u16::try_from(i).map_err(|_| Error::from(ClientError::CannotParseInteger))?
             }
             RespView::Double(d, _) => double_to_int::<u16>(d)?,
-            RespView::BulkString(bs) => {
-                atoi::atoi(bs).ok_or_else(|| Error::from(ClientError::CannotParseInteger))?
-            }
+            RespView::BulkString(bs) => int_from_text(bs)?,
             // Only a one-element array unwraps to its element: a longer one
             // would have to discard the rest silently.
             RespView::Array(a) if a.len() == 1 => match a.into_iter().next() {
@@ -333,16 +301,12 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
         V: Visitor<'de>,
     {
         let result = match self.view {
-            RespView::SimpleString(ss) => {
-                atoi::atoi(ss).ok_or_else(|| Error::from(ClientError::CannotParseInteger))?
-            }
+            RespView::SimpleString(ss) => int_from_text(ss)?,
             RespView::Integer(i, _) => {
                 i8::try_from(i).map_err(|_| Error::from(ClientError::CannotParseInteger))?
             }
             RespView::Double(d, _) => double_to_int::<i8>(d)?,
-            RespView::BulkString(bs) => {
-                atoi::atoi(bs).ok_or_else(|| Error::from(ClientError::CannotParseInteger))?
-            }
+            RespView::BulkString(bs) => int_from_text(bs)?,
             // Only a one-element array unwraps to its element: a longer one
             // would have to discard the rest silently.
             RespView::Array(a) if a.len() == 1 => match a.into_iter().next() {
@@ -366,16 +330,12 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
         V: Visitor<'de>,
     {
         let result = match self.view {
-            RespView::SimpleString(ss) => {
-                atoi::atoi(ss).ok_or_else(|| Error::from(ClientError::CannotParseInteger))?
-            }
+            RespView::SimpleString(ss) => int_from_text(ss)?,
             RespView::Integer(i, _) => {
                 u8::try_from(i).map_err(|_| Error::from(ClientError::CannotParseInteger))?
             }
             RespView::Double(d, _) => double_to_int::<u8>(d)?,
-            RespView::BulkString(bs) => {
-                atoi::atoi(bs).ok_or_else(|| Error::from(ClientError::CannotParseInteger))?
-            }
+            RespView::BulkString(bs) => int_from_text(bs)?,
             // Only a one-element array unwraps to its element: a longer one
             // would have to discard the rest silently.
             RespView::Array(a) if a.len() == 1 => match a.into_iter().next() {

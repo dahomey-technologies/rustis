@@ -261,6 +261,41 @@ pub(crate) fn is_field_value_array(
         && first_key.is_some_and(|key| fields.iter().any(|field| field.as_bytes() == key))
 }
 
+/// Reads an integer from the text of a reply -- a bulk string, a simple string,
+/// or the digits behind a `:` -- accepting the whole of it or nothing.
+///
+/// `atoi::atoi` alone stops at the first byte that is not a digit and returns
+/// what it read, so `12abc` is `12`, `1.75` is `1`, and `0x10` is `0`: a value
+/// the server never sent, handed over as if it had. That is the failure mode
+/// [`double_to_int`] exists to avoid on the RESP3 double path, and the
+/// `ValueDeserializer` already avoids by parsing through `str::parse`. This is
+/// the wire path's version of the same rule, so all three agree.
+///
+/// Two conditions make it total. Every byte must be consumed, which rejects a
+/// trailing remainder as well as a leading one -- `atoi` reads nothing from
+/// ` 12` and reports zero bytes used. And the last byte must be a digit, which
+/// rejects the inputs where a sign is all there is: `atoi` consumes the `-` of
+/// `-` and reports one byte used for a value of `0`. A sign followed by digits
+/// passes, `+12` included, as RESP3 allows for an integer reply.
+///
+/// Overflow needs no condition here: `atoi` is the checked variant and reports
+/// no value at all, so an out-of-range magnitude is rejected rather than
+/// wrapped.
+#[inline]
+pub(crate) fn int_from_text<T>(text: &[u8]) -> Result<T, Error>
+where
+    T: atoi::FromRadix10SignedChecked,
+{
+    match T::from_radix_10_signed_checked(text) {
+        (Some(value), used)
+            if used == text.len() && text.last().is_some_and(u8::is_ascii_digit) =>
+        {
+            Ok(value)
+        }
+        _ => Err(Error::from(ClientError::CannotParseInteger)),
+    }
+}
+
 /// Converts a RESP double into an integer, only when the conversion is exact:
 /// the double must be finite, have no fractional part, and land in the target's
 /// range. Anything else is `CannotParseInteger`, the same error an out-of-range

@@ -59,6 +59,11 @@ impl Serializer for &mut ArgCounter {
         Ok(())
     }
 
+    fn serialize_i128(self, _v: i128) -> Result<Self::Ok, Self::Error> {
+        self.bump();
+        Ok(())
+    }
+
     fn serialize_u8(self, _v: u8) -> Result<Self::Ok, Self::Error> {
         self.bump();
         Ok(())
@@ -75,6 +80,11 @@ impl Serializer for &mut ArgCounter {
     }
 
     fn serialize_u64(self, _v: u64) -> Result<Self::Ok, Self::Error> {
+        self.bump();
+        Ok(())
+    }
+
+    fn serialize_u128(self, _v: u128) -> Result<Self::Ok, Self::Error> {
         self.bump();
         Ok(())
     }

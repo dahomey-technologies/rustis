@@ -8,7 +8,43 @@ Versions up to and including `0.19.3` are documented in the
 
 ## [Unreleased]
 
+### BREAKING CHANGES
+
+The upgrade checklist. Each item is stated fully, with the reason it moved, in the
+section it belongs to below.
+
+- **A text reply that is not entirely an integer is now an error.** Code reading a
+  field into an integer target got the numeric prefix of whatever the field held
+  -- `1.75` as `1`, `12abc` as `12` -- and now gets `CannotParseInteger`. Nothing
+  changes for a value that is an integer; what changes is that a value that is not
+  one stops being silently narrowed into one.
+
+### Added
+
+- **`i128` and `u128` serialize as command arguments.** A struct field of either
+  type could be read out of a reply but not written into a command: the argument
+  serializer had no 128-bit arm, so serde fell back to its default, which fails.
+  `hset` on a struct holding a `u128` returned an error naming a type the
+  deserializer accepts, and the round trip a caller expects to be symmetric was
+  not. All three writers -- the serializer, the argument counter, and the
+  fast-path builder -- now format them through `itoa` like every other width.
+
 ### Fixed
+
+- **A text reply read as an integer is read whole or rejected.** The wire
+  deserializer parsed integers with `atoi::atoi`, which stops at the first byte
+  that is not a digit and returns what it read: `HGET` on a field holding `1.75`
+  answered `1` for a `u32` target, `12abc` answered `12`, and `0x10` answered `0`
+  -- a value the server never sent, indistinguishable from one it did. The crate
+  rejects exactly this elsewhere, deliberately: `double_to_int` refuses to
+  truncate a RESP3 double, and the `ValueDeserializer` parses through
+  `str::parse`, so the two deserializers disagreed on every such reply and the
+  path a caller took decided the answer. Integers now come from `int_from_text`,
+  which requires every byte to be consumed and the last one to be a digit, so a
+  leading remainder (` 12`), a trailing one (`12abc`) and a lone sign (`-`) are
+  all `CannotParseInteger`. An explicit `+` stays accepted, as RESP3 allows on an
+  integer reply, and overflow was already rejected. The same rule now covers the
+  digits behind a `:`, where a malformed integer frame was read as its prefix too.
 
 - **The test suite builds on Windows.** `keep_alive_and_no_delay_are_applied`
   read the keep-alive time back with `socket2::SockRef::tcp_keepalive_time`,

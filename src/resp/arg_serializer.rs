@@ -126,6 +126,12 @@ impl<'a> Serializer for &mut ArgSerializer<'a> {
     }
 
     #[inline]
+    fn serialize_i128(self, v: i128) -> Result<Self::Ok, Self::Error> {
+        self.serialize_integer(v);
+        Ok(())
+    }
+
+    #[inline]
     fn serialize_u8(self, v: u8) -> Result<Self::Ok, Self::Error> {
         self.serialize_integer(v);
         Ok(())
@@ -145,6 +151,12 @@ impl<'a> Serializer for &mut ArgSerializer<'a> {
 
     #[inline]
     fn serialize_u64(self, v: u64) -> Result<Self::Ok, Self::Error> {
+        self.serialize_integer(v);
+        Ok(())
+    }
+
+    #[inline]
+    fn serialize_u128(self, v: u128) -> Result<Self::Ok, Self::Error> {
         self.serialize_integer(v);
         Ok(())
     }

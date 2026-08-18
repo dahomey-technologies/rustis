@@ -236,6 +236,43 @@ the `{my}` hash tag guarantees in the example above.
 This does not apply to the strongly typed command API ([`commands`]): those functions already
 mark their keys.
 
+## Adding a command family of your own
+The generic API sends anything, but it costs the fluent shape: `client.myget("key").await`
+becomes `client.send(cmd("MYGET").key("key"), None).await`. A command rustis does not implement
+can be added on the same footing as the built-in ones, in ten lines, with
+[`prepare_command`](crate::client::prepare_command):
+
+```
+use rustis::{
+    client::{Client, PreparedCommand, prepare_command},
+    resp::cmd,
+};
+use serde::Serialize;
+
+trait MyCommands<'a> {
+    #[must_use]
+    fn myget(self, key: impl Serialize) -> PreparedCommand<'a, Self, String>
+    where
+        Self: Sized,
+    {
+        prepare_command(self, cmd("MYGET").key(key))
+    }
+}
+
+impl<'a> MyCommands<'a> for &'a Client {}
+```
+
+This is how every trait in [`commands`] is written. Implementing it for
+[`Pipeline`](crate::client::Pipeline) and [`Transaction`](crate::client::Transaction) as well
+makes the command queueable into a batch.
+
+# Warning: raw bytes need an adapter type
+`client.set("key", b"val")` compiles and fails **at runtime**. serde has no specialization, so
+`&[u8]` and `Vec<u8>` cannot be told apart from any other slice and are serialized as sequences
+of integers rather than as one bulk string. Wrap them in
+[`RefBulkString`](crate::resp::RefBulkString) or [`BulkString`](crate::resp::BulkString), which
+allocate nothing; see the [`resp`] module page for the full explanation.
+
 # Errors
 Every fallible call returns [`Result<T>`](crate::Result), whose error is [`Error`].
 An `Error` is what went wrong, [`kind()`](Error::kind), plus the command it belongs

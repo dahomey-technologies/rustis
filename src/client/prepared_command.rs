@@ -48,7 +48,39 @@ where
 }
 
 /// Shortcut function to creating a [`PreparedCommand`](PreparedCommand).
-pub(crate) fn prepare_command<'a, E, R: Response>(
+///
+/// This is the crate's own extension point, and it is public because a
+/// downstream crate needs it for the same reason every built-in command trait
+/// does: to add a command rustis does not implement while keeping the fluent
+/// `client.mycommand("key").await` shape.
+///
+/// ```
+/// use rustis::{
+///     client::{Client, PreparedCommand, prepare_command},
+///     resp::cmd,
+/// };
+/// use serde::Serialize;
+///
+/// trait MyCommands<'a> {
+///     #[must_use]
+///     fn myget(self, key: impl Serialize) -> PreparedCommand<'a, Self, String>
+///     where
+///         Self: Sized,
+///     {
+///         prepare_command(self, cmd("MYGET").key(key))
+///     }
+/// }
+///
+/// // Implement it for the executors the command should be usable on. `&Client`
+/// // sends it directly; `&mut Pipeline` and `&mut Transaction` would let it be
+/// // queued into a batch.
+/// impl<'a> MyCommands<'a> for &'a Client {}
+/// ```
+///
+/// Use [`CommandBuilder::key`](crate::resp::CommandBuilder::key) for arguments
+/// that are Redis keys and `arg` for the rest: cluster routing reads the keys,
+/// so a key passed as a plain argument is a command sent to the wrong node.
+pub fn prepare_command<'a, E, R: Response>(
     executor: E,
     command: impl Into<Command>,
 ) -> PreparedCommand<'a, E, R> {

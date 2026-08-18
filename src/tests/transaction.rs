@@ -45,7 +45,7 @@ async fn transaction_error() -> Result<()> {
     let mut transaction = client.create_transaction();
 
     transaction.set("key1", "abc").forget();
-    transaction.queue(cmd("UNKNOWN"));
+    transaction.queue_command(cmd("UNKNOWN"));
     let result: Result<String> = transaction.execute().await;
 
     let error = result.unwrap_err();

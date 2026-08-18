@@ -36,14 +36,25 @@ impl Transaction {
         self.retry_on_error = Some(retry_on_error);
     }
 
-    /// Queue a command into the transaction.
-    pub fn queue(&mut self, command: impl Into<Command>) {
+    /// Queue a command built with the generic API into the transaction.
+    ///
+    /// The built-in command traits are queued with
+    /// [`BatchPreparedCommand::queue`](crate::client::BatchPreparedCommand::queue)
+    /// instead: `transaction.get::<()>("k").queue()`. The two carry different
+    /// names because they read the same and are not the same call — this one
+    /// takes the command, that one takes nothing and consumes the prepared
+    /// command it is called on.
+    pub fn queue_command(&mut self, command: impl Into<Command>) {
         self.commands.push(command.into());
         self.forget_flags.push(false);
     }
 
-    /// Queue a command into the transaction and forget its response.
-    pub fn forget(&mut self, command: impl Into<Command>) {
+    /// Queue a command built with the generic API into the transaction and
+    /// forget its response.
+    ///
+    /// See [`Self::queue_command`] for why the name differs from
+    /// [`BatchPreparedCommand::forget`](crate::client::BatchPreparedCommand::forget).
+    pub fn forget_command(&mut self, command: impl Into<Command>) {
         self.commands.push(command.into());
         self.forget_flags.push(true);
     }
@@ -74,7 +85,7 @@ impl Transaction {
     ///
     ///     transaction.set("key1", "value1").forget();
     ///     transaction.set("key2", "value2").forget();
-    ///     transaction.get::<String>("key1").queue();
+    ///     transaction.get::<()>("key1").queue();
     ///     let value: String = transaction.execute().await?;
     ///
     ///     assert_eq!("value1", value);
@@ -317,12 +328,12 @@ where
 impl<'a, R: Response> BatchPreparedCommand for PreparedCommand<'a, &'a mut Transaction, R> {
     /// Queue a command into the transaction.
     fn queue(self) {
-        self.executor.queue(self.command)
+        self.executor.queue_command(self.command)
     }
 
     /// Queue a command into the transaction and forget its response.
     fn forget(self) {
-        self.executor.forget(self.command)
+        self.executor.forget_command(self.command)
     }
 }
 

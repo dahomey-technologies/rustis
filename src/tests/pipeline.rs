@@ -66,7 +66,7 @@ async fn error() -> Result<()> {
     let mut pipeline = client.create_pipeline();
     pipeline.set("key1", "value1").forget();
     pipeline.set("key2", "value2").forget();
-    pipeline.queue(cmd("UNKNOWN"));
+    pipeline.queue_command(cmd("UNKNOWN"));
     pipeline.get::<()>("key1").queue();
     pipeline.get::<()>("key2").queue();
 

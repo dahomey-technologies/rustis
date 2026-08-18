@@ -34,7 +34,7 @@ async fn pipeline_queues_every_family(client: &Client) -> Result<()> {
     let mut pipeline: Pipeline<'_> = client.create_pipeline();
 
     pipeline.set("key", "value").queue();
-    pipeline.get::<String>("key").queue();
+    pipeline.get::<()>("key").queue();
     pipeline.del("key").forget();
     pipeline.hset("hash", ("field", "value")).queue();
     pipeline.lpush("list", "value").queue();
@@ -56,7 +56,7 @@ async fn transaction_queues_every_family(client: &Client) -> Result<()> {
     let mut transaction: Transaction = client.create_transaction();
 
     transaction.set("key", "value").forget();
-    transaction.get::<String>("key").queue();
+    transaction.get::<()>("key").queue();
     transaction.hset("hash", ("field", "value")).queue();
     transaction.lpush("list", "value").queue();
     transaction
@@ -136,4 +136,58 @@ fn a_config_round_trips_through_its_uri() {
         error.to_string().contains("not_a_parameter"),
         "the error must name the offending parameter, got: {error}"
     );
+}
+
+/// A downstream crate can add its own commands in the crate's own idiom.
+///
+/// This is the answer to "rustis does not implement command X": rather than
+/// dropping to `client.send(cmd("X")…)` and losing the fluent shape, a user
+/// declares a trait and gets `client.myget("k").await` on the same footing as
+/// the built-in families. It works only if the two pieces the built-in traits
+/// use are public — [`prepare_command`] and [`PreparedCommand`] — which is what
+/// this compiles.
+mod user_defined_commands {
+    use rustis::{
+        client::{Client, PreparedCommand, prepare_command},
+        resp::cmd,
+    };
+    use serde::Serialize;
+
+    trait MyCommands<'a> {
+        /// A command rustis does not know about, exposed the fluent way.
+        #[must_use]
+        fn myget(self, key: impl Serialize) -> PreparedCommand<'a, Self, String>
+        where
+            Self: Sized,
+        {
+            prepare_command(self, cmd("MYGET").key(key))
+        }
+    }
+
+    impl<'a> MyCommands<'a> for &'a Client {}
+
+    async fn the_new_command_is_used_like_a_built_in(client: &Client) -> rustis::Result<()> {
+        let _: String = client.myget("key").await?;
+        Ok(())
+    }
+}
+
+/// The two ways to put a command into a batch must not share a name.
+///
+/// `pipeline.get::<()>("k").queue()` and `pipeline.queue(cmd("GET").key("k"))`
+/// read almost identically while having different receivers and different
+/// argument counts. The generic form is named `queue_command`, so the two are
+/// told apart on sight and the trait method keeps the name a reader expects.
+async fn a_generic_command_is_queued_by_its_own_name(client: &Client) -> Result<()> {
+    let mut pipeline = client.create_pipeline();
+    pipeline.queue_command(cmd("SET").key("key").arg("value"));
+    pipeline.forget_command(cmd("SET").key("key2").arg("value"));
+    let _: (String,) = pipeline.execute().await?;
+
+    let mut transaction = client.create_transaction();
+    transaction.queue_command(cmd("SET").key("key").arg("value"));
+    transaction.forget_command(cmd("SET").key("key2").arg("value"));
+    let _: (String,) = transaction.execute().await?;
+
+    Ok(())
 }

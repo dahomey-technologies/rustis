@@ -189,6 +189,8 @@ impl SendBatchTestHook {
 pub(crate) struct QueueMetricsTestHook {
     messages_to_send_high_water: Arc<std::sync::atomic::AtomicUsize>,
     messages_to_receive_high_water: Arc<std::sync::atomic::AtomicUsize>,
+    queued_commands: Arc<std::sync::atomic::AtomicUsize>,
+    queued_commands_high_water: Arc<std::sync::atomic::AtomicUsize>,
     pub_sub_delivered: Arc<std::sync::atomic::AtomicUsize>,
     pub_sub_delivery_failed: Arc<std::sync::atomic::AtomicUsize>,
     pub_sub_delivered_bytes: Arc<std::sync::atomic::AtomicUsize>,
@@ -214,6 +216,23 @@ impl QueueMetricsTestHook {
     /// Deepest `messages_to_receive` ever observed, in messages.
     pub(crate) fn messages_to_receive_high_water(&self) -> usize {
         self.messages_to_receive_high_water
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Commands waiting in the send queue at the last sample, in commands.
+    ///
+    /// A message can carry a whole pipeline, so this is not
+    /// [`Self::messages_to_send_high_water`] in another unit. Unlike the
+    /// high-water marks it is the live value and falls as the queue drains,
+    /// which is what makes "the queue emptied" assertable.
+    pub(crate) fn queued_commands(&self) -> usize {
+        self.queued_commands
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Most commands the send queue ever held at a sample point.
+    pub(crate) fn queued_commands_high_water(&self) -> usize {
+        self.queued_commands_high_water
             .load(std::sync::atomic::Ordering::Relaxed)
     }
 
@@ -282,11 +301,15 @@ impl QueueMetricsTestHook {
             .fetch_max(handled, std::sync::atomic::Ordering::Relaxed);
     }
 
-    fn record_queue_depths(&self, to_send: usize, to_receive: usize) {
+    fn record_queue_depths(&self, to_send: usize, to_receive: usize, queued_commands: usize) {
         self.messages_to_send_high_water
             .fetch_max(to_send, std::sync::atomic::Ordering::Relaxed);
         self.messages_to_receive_high_water
             .fetch_max(to_receive, std::sync::atomic::Ordering::Relaxed);
+        self.queued_commands
+            .store(queued_commands, std::sync::atomic::Ordering::Relaxed);
+        self.queued_commands_high_water
+            .fetch_max(queued_commands, std::sync::atomic::Ordering::Relaxed);
     }
 
     fn record_pub_sub_delivered(&self, bytes: usize) {
@@ -436,6 +459,15 @@ pub(crate) struct NetworkHandler {
     /// the queue is walked often enough that summing it per message would be
     /// quadratic in the queue depth.
     queued_bytes: usize,
+    /// Running total of `Message::num_commands` over the send queue only.
+    ///
+    /// Kept incrementally for the same reason as `queued_bytes`: the send loop
+    /// needs the figure on every wave, and folding the queue to get it is an
+    /// O(queue-depth) walk paid in shipped builds whether or not anything reads
+    /// the line it decides. Unlike `queued_bytes` the charge is released when
+    /// the message is written, not when its reply arrives — what this counts is
+    /// what is still waiting to go out.
+    queued_commands: usize,
     /// Number of incoming results belonging to a message that has already been
     /// resolved, and which must therefore be dropped instead of matched.
     results_to_discard: usize,
@@ -500,6 +532,7 @@ impl NetworkHandler {
             max_messages_per_wave,
             max_queued_bytes,
             queued_bytes: 0,
+            queued_commands: 0,
             results_to_discard: 0,
             #[cfg(test)]
             send_batch_test_hook,
@@ -616,11 +649,16 @@ impl NetworkHandler {
     /// Test-only: samples the current queue depths into the metrics hook.
     ///
     /// Called wherever a depth can be at its peak — right after the pushes, and
-    /// right before a drain or a purge rebuilds the queue.
+    /// right before a drain or a purge rebuilds the queue — and once after a
+    /// drain, so `queued_commands` is a live value rather than only a peak.
     #[cfg(test)]
     fn record_queue_depths(&self) {
         if let Some(hook) = &self.queue_metrics_test_hook {
-            hook.record_queue_depths(self.messages_to_send.len(), self.messages_to_receive.len());
+            hook.record_queue_depths(
+                self.messages_to_send.len(),
+                self.messages_to_receive.len(),
+                self.queued_commands,
+            );
         }
     }
 
@@ -653,6 +691,7 @@ impl NetworkHandler {
     )]
     fn queue_message(&mut self, msg: Message) {
         self.queued_bytes += msg.queued_bytes();
+        self.queued_commands += msg.num_commands();
         self.messages_to_send.push_back(MessageToSend::new(msg));
     }
 
@@ -802,21 +841,13 @@ impl NetworkHandler {
         self.record_queue_depths();
 
         // The line is only worth emitting for an actual batch, and deciding that
-        // needs the count, so the count is taken here rather than inside the
+        // needs the count, so the count is read here rather than inside the
         // macro argument. Guarding it with `enabled!` instead would silence the
         // line for every `log`-only consumer, which the bridge exists to serve.
-        //
-        // The walk is bounded by `max_messages_per_wave` and each step is a
-        // discriminant read; the loop below iterates the same queue and encodes
-        // every command in it.
-        if !self.messages_to_send.is_empty() {
-            let num_commands = self
-                .messages_to_send
-                .iter()
-                .fold(0, |sum, msg| sum + msg.message.num_commands());
-            if num_commands > 1 {
-                debug!("sending batch of {num_commands} commands");
-            }
+        // Reading a maintained total costs the same whether or not anything is
+        // listening, which is why the total is maintained.
+        if self.queued_commands > 1 {
+            debug!("sending batch of {} commands", self.queued_commands);
         }
 
         // Test-only: force retry reasons onto the first message of this drain so
@@ -838,6 +869,10 @@ impl NetworkHandler {
             // it holds, only receiving its reply does. A message that awaits no
             // reply is released here, having nowhere else to be released.
             let cost = msg.queued_bytes();
+            // The command count is released unconditionally: the message is out
+            // of the send queue whatever happens to it below, and this counts
+            // only what is still waiting to be written.
+            self.queued_commands = self.queued_commands.saturating_sub(msg.num_commands());
 
             // Scope the retry reasons to the current message: they must not
             // leak onto the other messages sharing this send batch.
@@ -967,6 +1002,11 @@ impl NetworkHandler {
                 }
             }
         }
+
+        // Sampled after the drain too: the command total is a live figure, and a
+        // queue that emptied is only observable from the low side.
+        #[cfg(test)]
+        self.record_queue_depths();
     }
 
     #[expect(
@@ -1648,6 +1688,10 @@ impl NetworkHandler {
             .iter()
             .map(|message_to_receive| message_to_receive.queued_bytes)
             .sum();
+        // The send queue is rebuilt below, so its command total is rebuilt with
+        // it. The retained replies are not in it: they are waiting for an answer,
+        // not to be written, and the replay charges them again when it queues them.
+        self.queued_commands = 0;
         while let Some(mut message_to_send) = self.messages_to_send.pop_front() {
             if !message_to_send.message.retry_on_error {
                 message_to_send
@@ -1661,6 +1705,7 @@ impl NetworkHandler {
                         .send_error(Error::from(ClientError::MaxCommandAttemptsReached));
                 } else {
                     self.queued_bytes += message_to_send.message.queued_bytes();
+                    self.queued_commands += message_to_send.message.num_commands();
                     retained_to_send.push_back(message_to_send);
                 }
             }
@@ -1706,6 +1751,7 @@ impl NetworkHandler {
                         .send_error(Error::from(ErrorKind::DisconnectedByPeer));
                 }
                 self.queued_bytes = 0;
+                self.queued_commands = 0;
                 return false;
             }
 

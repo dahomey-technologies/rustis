@@ -1,6 +1,6 @@
 use crate::{
     ClientError, ErrorKind, Result, RetryReason, TimeoutKind,
-    client::{Client, ClientPreparedCommand, ReconnectionConfig},
+    client::{BatchPreparedCommand, Client, ClientPreparedCommand, ReconnectionConfig},
     commands::{
         ClientReplyMode, ConnectionCommands, GenericCommands, PubSubCommands, StringCommands,
     },
@@ -571,6 +571,51 @@ async fn neither_side_of_the_loop_drains_without_bound() -> Result<()> {
         hook.read_wave_high_water() <= cap,
         "a read wave took {} replies, above the {cap} cap",
         hook.read_wave_high_water()
+    );
+
+    Ok(())
+}
+
+/// The send queue's command count must be maintained, not recomputed.
+///
+/// A pipeline is one message carrying many commands, so a count of messages
+/// says nothing about the count of commands: the running total has to add what
+/// each message actually holds and give it back when the message leaves. This
+/// pins the total against a queue whose two numbers differ by a factor of ten.
+#[tokio::test]
+#[serial]
+async fn the_send_queue_counts_commands_not_messages() -> Result<()> {
+    log_try_init();
+
+    let hook = QueueMetricsTestHook::new();
+    let mut config = get_default_config()?;
+    config.queue_metrics_test_hook = Some(hook.clone());
+    let client = get_test_client_with_config(config).await?;
+
+    // One message, ten commands. Queued synchronously so the whole pipeline is
+    // waiting when the network task next samples the queue.
+    const COMMANDS: usize = 10;
+    let mut pipeline = client.create_pipeline();
+    for i in 0..COMMANDS {
+        pipeline.set(format!("key{i}"), i).queue();
+    }
+    let replies: Vec<String> = pipeline.execute().await?;
+    assert_eq!(COMMANDS, replies.len());
+
+    assert!(
+        hook.queued_commands_high_water() >= COMMANDS,
+        "a {COMMANDS}-command pipeline peaked at {} queued commands; the total \
+         is counting messages, not commands",
+        hook.queued_commands_high_water()
+    );
+
+    // The count must come back down: a total that only grows would read as a
+    // permanently full queue after the first burst.
+    let _: String = client.send(cmd("PING"), None).await?;
+    assert_eq!(
+        0,
+        hook.queued_commands(),
+        "the send queue is drained, so it holds no commands"
     );
 
     Ok(())

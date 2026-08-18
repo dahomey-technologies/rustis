@@ -41,9 +41,20 @@ The upgrade checklist. Each item is stated in the section it belongs to below.
   `NotACollection`, `MissingTransactionReply`, `IncompatibleShardReplies`,
   `NotAUnitVariant` and `MissingMapValue`.
 
+- **`Pipeline::queue`/`forget` and `Transaction::queue`/`forget` become
+  `queue_command`/`forget_command`.** They took a generic command; the batch trait
+  methods of the same name take a prepared one. Two calls that read alike and are
+  not the same call now differ by name.
+
 `cargo semver-checks` reports 11 removed trait methods and 4 removed structs.
 
 ### Added
+
+- **`prepare_command` is public**, with the extension pattern documented on the
+  crate's front page. A command rustis does not implement can be added in the crate's
+  own idiom — `client.myget("key").await` — instead of dropping to
+  `client.send(cmd("MYGET")…)` and losing the fluent shape. This is how every
+  built-in command trait is written; only the helper was private.
 
 - **`Client::is_terminated`** reports a client whose network task has ended — a
   non-zero reconnection budget exhausted, or the last handle dropped. The state was
@@ -63,6 +74,19 @@ The upgrade checklist. Each item is stated in the section it belongs to below.
   pattern matching or a detour through serde.
 
 ### Changed
+
+- **The send queue counts its commands incrementally.** Deciding whether to emit one
+  `debug!` line folded the whole queue on every send wave, in shipped builds, whether
+  or not anything was listening. The total is now maintained alongside the byte total
+  it sits next to.
+
+- **The response type on a queued command is documented as ignored.** `R` is
+  discarded when a command enters a batch — the tuple on `execute` decides the
+  decoding — and the crate's own examples wrote it two different ways. They now all
+  write `::<()>`.
+
+- **The raw-bytes limitation is stated on the front page.** `client.set("key", b"val")`
+  compiles and fails at runtime; the explanation lived only on the `resp` module page.
 
 - **`Value::Map` keeps the reply.** Its entries are in the order the server sent
   them, and a field the server repeats appears twice. A `HashMap` lost both, made

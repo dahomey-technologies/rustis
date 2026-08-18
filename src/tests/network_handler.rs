@@ -405,3 +405,93 @@ async fn reset_restores_the_reply_mode_the_server_restored() -> Result<()> {
 
     Ok(())
 }
+
+/// A caller that gives up on a reply — a `command_timeout`, a losing `select!`
+/// branch, a dropped future — leaves the network task holding a reply nobody
+/// awaits. That is the documented contract, not a fault, so it must not be
+/// reported at `warn!`: a service with deadlines would flood its logs precisely
+/// when Redis is slow. The event still names the command, which is the one thing
+/// a multiplexed caller cannot work out for itself.
+#[tokio::test]
+#[serial]
+async fn a_reply_nobody_awaits_is_logged_at_debug_with_its_command() -> Result<()> {
+    use crate::{commands::DebugCommands, tests::LogCapture};
+
+    let mut config = get_default_config()?;
+    config.command_timeout = Duration::from_millis(50);
+    let client = Client::connect(config).await?;
+
+    let capture = LogCapture::start();
+
+    // The server sleeps well past the deadline, so the caller times out and
+    // drops its receiver before the reply is written.
+    let result = client.debug_sleep(Duration::from_millis(300)).await;
+    assert!(
+        result.unwrap_err().is_timeout(),
+        "the command must fail on its deadline"
+    );
+
+    // Let the reply arrive, so the task finds no receiver for it.
+    sleep(Duration::from_millis(500)).await;
+    let events = capture.events();
+    drop(capture);
+
+    let abandoned: Vec<_> = events
+        .iter()
+        .filter(|(_, message)| message.contains("receiver"))
+        .collect();
+    assert!(
+        !abandoned.is_empty(),
+        "the abandoned reply must be logged: {events:?}"
+    );
+    for (level, message) in &abandoned {
+        assert_eq!(
+            log::Level::Debug,
+            *level,
+            "an abandoned reply is routine, not a warning: {message}"
+        );
+        assert!(
+            message.contains("DEBUG"),
+            "the event must name the command: {message}"
+        );
+    }
+
+    Ok(())
+}
+
+/// `retry_on_error` governs the reconnection replay, and that alone. A command
+/// left on the stock `false` is failed by the lost connection rather than
+/// replayed, so it never reaches the attempt budget — which is what makes the
+/// budget look inert on a default configuration, and is why the default says so.
+#[tokio::test]
+#[serial]
+async fn a_default_command_is_failed_by_a_lost_connection_rather_than_replayed() -> Result<()> {
+    log_try_init();
+
+    let mut config = get_default_config()?;
+    config.reconnection = ReconnectionConfig::new_constant(0, 10);
+    assert!(
+        !config.retry_on_error,
+        "this test is about the stock default; update it deliberately if it changes"
+    );
+    config.max_command_attempts = 1;
+    let client = get_test_client_with_config(config).await?;
+
+    // The socket is torn down before the reply is matched. With the replay off,
+    // the command is failed on the spot; the same command with `Some(true)` is
+    // replayed and reaches the budget instead — see
+    // `retryable_command_fails_after_max_command_attempts`.
+    let result: Result<String> = timeout(
+        Duration::from_secs(5),
+        client.send(cmd("PING").kill_connection_on_read(1), None),
+    )
+    .await?;
+
+    let error = result.unwrap_err();
+    assert!(
+        matches!(error.kind(), ErrorKind::DisconnectedByPeer),
+        "expected DisconnectedByPeer, got {error:?}"
+    );
+
+    Ok(())
+}

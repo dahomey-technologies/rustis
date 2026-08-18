@@ -95,17 +95,34 @@ impl Client {
         &self.connection_tag
     }
 
-    /// Whether the network task behind this client has ended.
+    /// Whether this client is finished for good.
     ///
-    /// It ends when the connection is gone for good — the reconnection budget
-    /// exhausted, or the last sender dropped — after which the client can no
-    /// longer answer anything. Reading the join handle is non-blocking and says
-    /// nothing about a connection that is merely idle.
+    /// The network task behind the client ends when the connection is gone
+    /// beyond recovery: a non-zero
+    /// [`ReconnectionConfig`](crate::client::ReconnectionConfig) budget
+    /// exhausted, or the last handle dropped. Every command issued afterwards
+    /// fails, including long after the server has come back, and the only
+    /// recovery is a new client from [`Client::connect`](Self::connect).
     ///
-    /// Only the pool needs this: it is how a dead client is evicted instead of
-    /// being handed to the next borrower.
-    #[cfg(feature = "pool")]
-    pub(crate) fn is_network_task_finished(&self) -> bool {
+    /// This is what a liveness probe reads: the state is otherwise invisible, a
+    /// process staying alive and serving traffic it cannot answer. Keep the
+    /// default budget of `0` in a long-lived service and it never happens.
+    ///
+    /// It reports the task, not the link. `false` says nothing about a connection
+    /// that is merely idle, disconnected, or backing off between attempts — those
+    /// all recover on their own.
+    ///
+    /// # Example
+    /// ```
+    /// use rustis::{client::Client, Result};
+    ///
+    /// # async fn example() -> Result<()> {
+    /// let client = Client::connect("127.0.0.1:6379").await?;
+    /// assert!(!client.is_terminated());
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn is_terminated(&self) -> bool {
         self.shared
             .as_ref()
             .as_ref()

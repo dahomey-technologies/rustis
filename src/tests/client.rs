@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use crate::{
     ClientError, ErrorKind, Result,
-    client::{Client, IntoConfig},
+    client::{Client, Config, IntoConfig},
     commands::{
         BlockingCommands, ClientKillOptions, ConnectionCommands, FlushingMode, LMoveWhere,
         ListCommands, ServerCommands, StringCommands,
@@ -238,6 +238,60 @@ async fn mget_mset() -> Result<()> {
         ],
         values
     );
+
+    Ok(())
+}
+
+/// A client that exhausts its reconnection budget can never answer again. That
+/// state must be observable — a liveness probe has nothing else to read — and it
+/// must be reported at `error!`, it being the last event of the client's life.
+#[cfg(feature = "tokio-runtime")]
+#[tokio::test]
+#[serial]
+async fn a_client_out_of_reconnection_budget_is_terminated_and_says_so() -> Result<()> {
+    use crate::{
+        client::ReconnectionConfig,
+        network::sleep,
+        tests::{LogCapture, fault_injection_proxy::FaultProxy},
+    };
+
+    // Once the proxy is gone nothing listens on that port, so the reconnection
+    // cannot succeed and the budget runs out.
+    let proxy = FaultProxy::start(get_default_addr(), vec![]).await?;
+    let mut config: Config = format!("redis://{}", proxy.addr).into_config()?;
+    config.reconnection = ReconnectionConfig::new_constant(1, 10);
+
+    let client = Client::connect(config).await?;
+    client.set("terminated_probe", "value").await?;
+    assert!(
+        !client.is_terminated(),
+        "a working client must not report itself terminated"
+    );
+
+    let capture = LogCapture::start();
+    drop(proxy);
+    // Long enough for the single reconnection attempt to fail and the task to end.
+    sleep(Duration::from_millis(500)).await;
+    let events = capture.events();
+    drop(capture);
+
+    assert!(
+        client.is_terminated(),
+        "a client out of reconnection budget must report itself terminated"
+    );
+
+    let given_up: Vec<_> = events
+        .iter()
+        .filter(|(_, message)| message.contains("reconnection attempts"))
+        .collect();
+    assert!(!given_up.is_empty(), "giving up must be logged: {events:?}");
+    for (level, message) in given_up {
+        assert_eq!(
+            log::Level::Error,
+            *level,
+            "a client that will never answer again is an error, not a warning: {message}"
+        );
+    }
 
     Ok(())
 }

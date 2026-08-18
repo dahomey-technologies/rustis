@@ -12,6 +12,7 @@ use crate::{
 use bytes::Bytes;
 use futures_util::{FutureExt, select};
 use smallvec::SmallVec;
+use std::borrow::Cow;
 use std::{
     collections::{HashMap, VecDeque},
     future::poll_fn,
@@ -950,9 +951,24 @@ impl NetworkHandler {
     /// before the next ready reply is parsed: on a multi-thread runtime another
     /// worker resumes the caller in parallel while this task keeps draining,
     /// which shortens first-reply latency on the critical path.
-    fn dispatch_result<T>(&self, sender: tokio::sync::oneshot::Sender<T>, value: T) {
+    /// `command` names what the reply answers, so an abandoned one can be traced
+    /// back on a multiplexed connection where hundreds are in flight.
+    fn dispatch_result<T>(
+        &self,
+        sender: tokio::sync::oneshot::Sender<T>,
+        value: T,
+        command: Option<&Bytes>,
+    ) {
         if sender.send(value).is_err() {
-            warn!("Cannot send value to caller because receiver is not there anymore");
+            // A caller that gave up on its reply is the documented contract of a
+            // `command_timeout` or a dropped future, not a fault. At `warn!` a
+            // service with deadlines would flood its logs exactly when Redis is
+            // slow, which is when the log is read.
+            let command = command.map_or_else(
+                || Cow::Borrowed("<none>"),
+                |name| String::from_utf8_lossy(name),
+            );
+            debug!("Dropping the reply to {command}: its receiver is gone");
         }
     }
 
@@ -1141,8 +1157,9 @@ impl NetworkHandler {
                             // errors — a `WRONGTYPE`, a `NOPERM` — which are
                             // exactly the ones a caller cannot act on without
                             // knowing what drew them.
-                            let result = match (result, message_to_receive.message.command_name()) {
-                                (Err(e), Some(command)) => Err(e.with_command(command)),
+                            let command_name = message_to_receive.message.command_name();
+                            let result = match (result, &command_name) {
+                                (Err(e), Some(command)) => Err(e.with_command(command.clone())),
                                 (result, _) => result,
                             };
 
@@ -1153,7 +1170,11 @@ impl NetworkHandler {
                                 }
                                 | MessageKind::PubSub { result_sender, .. }
                                 | MessageKind::Monitor { result_sender, .. } => {
-                                    self.dispatch_result(result_sender, result);
+                                    self.dispatch_result(
+                                        result_sender,
+                                        result,
+                                        command_name.as_ref(),
+                                    );
                                 }
                                 MessageKind::Batch { results_sender, .. } => match result {
                                     Ok(resp_buf) => {
@@ -1161,10 +1182,15 @@ impl NetworkHandler {
                                         self.dispatch_result(
                                             results_sender,
                                             Ok(message_to_receive.pending_responses),
+                                            command_name.as_ref(),
                                         );
                                     }
                                     Err(e) => {
-                                        self.dispatch_result(results_sender, Err(e));
+                                        self.dispatch_result(
+                                            results_sender,
+                                            Err(e),
+                                            command_name.as_ref(),
+                                        );
                                     }
                                 },
                                 MessageKind::Invalidation { .. }
@@ -1557,7 +1583,7 @@ impl NetworkHandler {
                     }
                 }
             } else {
-                warn!("Max reconnection attempts reached");
+                error!("Max reconnection attempts reached: the client is finished");
                 while let Some(message_to_receive) = self.messages_to_receive.pop_front() {
                     message_to_receive
                         .message

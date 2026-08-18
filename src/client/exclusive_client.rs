@@ -114,6 +114,12 @@ impl ExclusiveClient {
         self.inner.close().await
     }
 
+    /// See [`Client::is_terminated`].
+    #[inline]
+    pub fn is_terminated(&self) -> bool {
+        self.inner.is_terminated()
+    }
+
     /// See [`Client::on_reconnect`].
     #[inline]
     pub fn on_reconnect(&self) -> ReconnectReceiver {

@@ -180,8 +180,6 @@ impl<T> JoinHandle<T> {
     /// Whether the spawned task has already completed. Non-blocking: it does not
     /// poll the task, it only reads what the runtime already knows.
     ///
-    /// Only the pool needs this, to evict a client whose network task has ended.
-    #[cfg(feature = "pool")]
     pub(crate) fn is_finished(&self) -> bool {
         match self {
             #[cfg(feature = "tokio-runtime")]

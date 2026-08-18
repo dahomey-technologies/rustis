@@ -4,9 +4,10 @@ use crate::{
     resp::{Command, SubscriptionType},
 };
 use bytes::Bytes;
+use std::borrow::Cow;
 #[cfg(test)]
 use std::sync::atomic::{AtomicUsize, Ordering};
-use tracing::warn;
+use tracing::debug;
 
 #[cfg(test)]
 static MESSAGE_SEQUENCE_COUNTER: AtomicUsize = AtomicUsize::new(0);
@@ -212,43 +213,32 @@ impl Message {
     pub(crate) fn send_error(self, error: Error) {
         // The caller has many commands in flight and no other way to tell which
         // one this answers, so the error names the command it fails.
-        let error = match self.command_name() {
-            Some(command) => error.with_command(command),
+        let command = self.command_name();
+        let error = match &command {
+            Some(name) => error.with_command(name.clone()),
             None => error,
         };
-        match self.kind {
+        // A caller that gave up on its reply is the documented contract of a
+        // `command_timeout` or a dropped future, not a fault. At `warn!` a
+        // service with deadlines would flood its logs exactly when Redis is
+        // slow, which is when the log is read. The error carries the command
+        // name, so the one line says what was abandoned.
+        let abandoned = match self.kind {
             MessageKind::Single {
                 result_sender: Some(result_sender),
                 ..
-            } => {
-                if let Err(e) = result_sender.send(Err(error)) {
-                    warn!(
-                        "Cannot send value to caller because receiver is not there anymore: {e:?}",
-                    );
-                }
-            }
-            MessageKind::Batch { results_sender, .. } => {
-                if let Err(e) = results_sender.send(Err(error)) {
-                    warn!(
-                        "Cannot send value to caller because receiver is not there anymore: {e:?}",
-                    );
-                }
-            }
-            MessageKind::PubSub { result_sender, .. } => {
-                if let Err(e) = result_sender.send(Err(error)) {
-                    warn!(
-                        "Cannot send value to caller because receiver is not there anymore: {e:?}",
-                    );
-                }
-            }
-            MessageKind::Monitor { result_sender, .. } => {
-                if let Err(e) = result_sender.send(Err(error)) {
-                    warn!(
-                        "Cannot send value to caller because receiver is not there anymore: {e:?}",
-                    );
-                }
-            }
-            _ => (), // nothing to answer
+            } => result_sender.send(Err(error)).is_err(),
+            MessageKind::Batch { results_sender, .. } => results_sender.send(Err(error)).is_err(),
+            MessageKind::PubSub { result_sender, .. } => result_sender.send(Err(error)).is_err(),
+            MessageKind::Monitor { result_sender, .. } => result_sender.send(Err(error)).is_err(),
+            _ => false, // nothing to answer
+        };
+
+        if abandoned {
+            let command = command
+                .as_deref()
+                .map_or_else(|| Cow::Borrowed("<none>"), String::from_utf8_lossy);
+            debug!("Dropping the error for {command}: its receiver is gone");
         }
     }
 

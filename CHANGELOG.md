@@ -19,6 +19,11 @@ The upgrade checklist. Each item is stated in the section it belongs to below.
 - **Five deprecated string commands are removed**: `getset`, `psetex`, `setex`,
   `setnx` and `substr`.
 
+- **The queue memory budget now covers what is in flight.** A command was charged
+  to `BackpressureConfig::max_queued_bytes` until it was written, and is now charged
+  until its reply arrives. A configuration sized against the send queue alone may
+  shed commands it used to accept.
+
 `cargo semver-checks` reports 11 removed trait methods and 4 removed structs.
 
 ### Added
@@ -28,6 +33,12 @@ The upgrade checklist. Each item is stated in the section it belongs to below.
   invisible: the process stays alive and serving traffic it can never answer. A
   liveness probe reads this; the only recovery is a new client. `ExclusiveClient`
   has it too.
+
+- **`ClusterConfig::topology_refresh_interval`** reloads the cluster topology on a
+  timer, 60 seconds by default (`?topology_refresh_interval=`, `0` to disable). A
+  redirection was the only thing that corrected the local slot map, so a resharding
+  touching no slot this client uses was never noticed, and a node added to the
+  cluster was never connected to.
 
 ### Changed
 
@@ -87,6 +98,18 @@ The upgrade checklist. Each item is stated in the section it belongs to below.
   every named Sentinel left the client with nothing reachable. A confirmed master is
   now followed by `SENTINEL SENTINELS`, which adds the unknown instances and moves the
   one that answered to the front.
+
+- **The memory budget bounds the replies still awaited.** The charge was released the
+  moment a command was written, but writing it frees nothing — the memory is held
+  until the reply arrives. A connection that accepted every byte and answered none
+  therefore grew `messages_to_receive` without limit, which is the hole in the
+  documented "bound memory with `BackpressureConfig`" story.
+
+- **Neither direction of the network loop drains without bound.** The two share one
+  task, so a caller flooding the channel delayed every reply and a firehose of
+  replies delayed every send; one send wave was measured taking 2001 messages. Both
+  waves now hand control back after `max_messages_per_wave`. Measured on
+  `rustis_long_pipeline`: no change outside the run-to-run drift.
 
 ### Documentation
 

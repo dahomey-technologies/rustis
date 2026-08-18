@@ -1,5 +1,5 @@
 use crate::{
-    ClientError, Error, ErrorKind, Result,
+    ClientError, Error, ErrorKind, Result, TimeoutKind,
     client::{Client, IntoConfig, ReconnectionConfig},
     commands::{
         ClientKillOptions, ClusterCommands, ClusterShardResult, ConnectionCommands, FlushingMode,
@@ -66,7 +66,7 @@ async fn a_paused_subscriber_is_bounded_by_its_memory_budget() -> Result<()> {
 
     // Generous on purpose: the volume above is comfortably inside this, and the
     // timeout is here to fail a hang rather than to bound a slow machine.
-    timeout(Duration::from_secs(120), async {
+    timeout(Duration::from_secs(120), TimeoutKind::Command, async {
         for _ in 0..WAVES {
             for _ in 0..MESSAGES_PER_WAVE {
                 publisher.send_and_forget(

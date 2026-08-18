@@ -107,14 +107,14 @@ async fn generic_commands(client: &Client) -> Result<()> {
 /// write these predicates itself and has to be given them.
 #[test]
 fn errors_can_be_classified_from_outside() {
-    use rustis::{Error, ErrorKind};
+    use rustis::{Error, ErrorKind, TimeoutKind};
 
-    let error: Error = ErrorKind::Timeout.into();
+    let error: Error = ErrorKind::Timeout(TimeoutKind::Command).into();
 
     assert!(error.is_timeout());
     assert!(error.is_retryable());
     assert!(!error.is_server_error());
-    assert!(matches!(error.kind(), ErrorKind::Timeout));
+    assert!(matches!(error.kind(), ErrorKind::Timeout(_)));
 }
 
 /// A URI is parsed without a server, and an unknown parameter is an error that

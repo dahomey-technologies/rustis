@@ -1,5 +1,5 @@
 use crate::{
-    ClientError, Error, Result,
+    ClientError, Error, Result, TimeoutKind,
     client::{
         ClientTrackingInvalidationStream, CommandFuture, ExclusiveClient, IntoConfig, Message,
         MonitorStream, Pipeline, PreparedCommand, ProbeLabel, PubSubStream, ServerConfig, State,
@@ -410,7 +410,7 @@ impl Client {
     ) -> Result<RespResponse> {
         if self.command_timeout != Duration::ZERO {
             Self::name_command(
-                timeout(self.command_timeout, result_receiver).await,
+                timeout(self.command_timeout, TimeoutKind::Command, result_receiver).await,
                 command_name,
             )??
         } else {
@@ -477,7 +477,7 @@ impl Client {
 
         let results = if self.command_timeout != Duration::ZERO {
             Self::name_command(
-                timeout(self.command_timeout, results_receiver).await,
+                timeout(self.command_timeout, TimeoutKind::Command, results_receiver).await,
                 command_name,
             )??
         } else {

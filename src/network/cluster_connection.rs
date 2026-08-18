@@ -1554,26 +1554,30 @@ impl ClusterConnection {
                 RespView::Integer(i, _) => match &mut integer {
                     Integer::Single(current) => *current = f(*current, i),
                     Integer::Null => integer = Integer::Single(i),
-                    Integer::Array(_) => return Some(Err(Error::from(ClientError::Unexpected))),
+                    Integer::Array(_) => {
+                        return Some(Err(Error::from(ClientError::IncompatibleShardReplies)));
+                    }
                 },
                 RespView::Array(resp_array)
                 | RespView::Set(resp_array)
                 | RespView::Push(resp_array) => match &mut integer {
                     Integer::Single(_) => {
-                        return Some(Err(Error::from(ClientError::Unexpected)));
+                        return Some(Err(Error::from(ClientError::IncompatibleShardReplies)));
                     }
                     Integer::Array(items) => {
                         // Unequal per-shard array lengths must not be silently
                         // truncated by `zip`: an uncombined tail would be a wrong
                         // aggregate reported as success.
                         if items.len() != resp_array.len() {
-                            return Some(Err(Error::from(ClientError::Unexpected)));
+                            return Some(Err(Error::from(ClientError::IncompatibleShardReplies)));
                         }
                         for (item, view) in items.iter_mut().zip(resp_array) {
                             match view {
                                 Ok(RespView::Integer(i, _)) => *item = f(*item, i),
                                 Ok(_) => {
-                                    return Some(Err(Error::from(ClientError::Unexpected)));
+                                    return Some(Err(Error::from(
+                                        ClientError::IncompatibleShardReplies,
+                                    )));
                                 }
                                 Err(e) => return Some(Err(e)),
                             }
@@ -1586,7 +1590,9 @@ impl ClusterConnection {
                             match view {
                                 Ok(RespView::Integer(i, _)) => int_array.push(i),
                                 Ok(_) => {
-                                    return Some(Err(Error::from(ClientError::Unexpected)));
+                                    return Some(Err(Error::from(
+                                        ClientError::IncompatibleShardReplies,
+                                    )));
                                 }
                                 Err(e) => return Some(Err(e)),
                             }
@@ -1595,7 +1601,7 @@ impl ClusterConnection {
                         integer = Integer::Array(int_array)
                     }
                 },
-                _ => return Some(Err(Error::from(ClientError::Unexpected))),
+                _ => return Some(Err(Error::from(ClientError::IncompatibleShardReplies))),
             }
         }
 

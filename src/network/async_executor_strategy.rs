@@ -1,6 +1,6 @@
 #[cfg(any(feature = "native-tls", feature = "rustls"))]
 use crate::client::TlsConfig;
-use crate::{Error, ErrorKind, Result, client::Config};
+use crate::{Error, ErrorKind, Result, TimeoutKind, client::Config};
 use futures_util::{Future, FutureExt};
 use socket2::TcpKeepalive;
 #[cfg(feature = "tokio-runtime")]
@@ -73,6 +73,7 @@ pub(crate) async fn tcp_connect(
     {
         let stream = timeout(
             config.connect_timeout,
+            TimeoutKind::Connect,
             tokio::net::TcpStream::connect((host, port)),
         )
         .await??;
@@ -110,6 +111,7 @@ pub(crate) async fn unix_connect(
     {
         let stream = timeout(
             config.connect_timeout,
+            TimeoutKind::Connect,
             tokio::net::UnixStream::connect(path),
         )
         .await??;
@@ -141,6 +143,7 @@ pub(crate) async fn tcp_tls_connect(
     {
         let stream = timeout(
             config.connect_timeout,
+            TimeoutKind::Connect,
             tokio::net::TcpStream::connect((host, port)),
         )
         .await??;
@@ -156,6 +159,7 @@ pub(crate) async fn tcp_tls_connect(
         let builder = tls_config.into_tls_connector_builder();
         let stream = timeout(
             config.connect_timeout,
+            TimeoutKind::Connect,
             tokio::net::TcpStream::connect((host, port)),
         )
         .await??;
@@ -237,12 +241,22 @@ pub(crate) fn timeout_future<F: Future>(duration: Duration, future: F) -> Timeou
 }
 
 /// Await on a future for a maximum amount of time before returning an error.
+///
+/// The `kind` is the caller's to state: this helper serves both deadlines, and
+/// the two demand opposite answers -- a connect timeout says the server never
+/// became usable, a command timeout says one request went unanswered on a
+/// connection that may be healthy. Deciding here would label every expiry the
+/// same, which is the distinction [`TimeoutKind`] exists to keep.
 #[allow(dead_code)]
-pub(crate) async fn timeout<F: Future>(timeout: Duration, future: F) -> Result<F::Output> {
+pub(crate) async fn timeout<F: Future>(
+    timeout: Duration,
+    kind: TimeoutKind,
+    future: F,
+) -> Result<F::Output> {
     #[cfg(feature = "tokio-runtime")]
     {
         tokio::time::timeout(timeout, future)
             .await
-            .map_err(|_| Error::from(ErrorKind::Timeout))
+            .map_err(|_| Error::from(ErrorKind::Timeout(kind)))
     }
 }

@@ -1,5 +1,5 @@
 use crate::{
-    Error, Result,
+    Error, Result, TimeoutKind,
     client::{Config, ExclusiveClient, IntoConfig},
     commands::ConnectionCommands,
     network::timeout,
@@ -54,6 +54,12 @@ impl ManageConnection for PooledClientManager {
     /// [`connect_timeout`](Config::connect_timeout) otherwise, that being the
     /// time the same configuration already allows for making a usable
     /// connection. Both set to zero is an explicit opt-out and is honoured.
+    ///
+    /// Expiry is a [`TimeoutKind::Connect`], even though the budget is usually
+    /// `command_timeout` and the wait is a `PING`: the caller never issued that
+    /// command, and what the failure tells them is that this pooled connection
+    /// did not become usable -- it is discarded, and another is tried. The
+    /// deadline's size and its meaning are separate questions.
     async fn is_valid(&self, client: &mut ExclusiveClient) -> Result<()> {
         let budget = if self.config.command_timeout.is_zero() {
             self.config.connect_timeout
@@ -64,7 +70,12 @@ impl ManageConnection for PooledClientManager {
         if budget.is_zero() {
             client.ping::<()>(()).await?;
         } else {
-            timeout(budget, client.ping::<()>(()).into_future()).await??;
+            timeout(
+                budget,
+                TimeoutKind::Connect,
+                client.ping::<()>(()).into_future(),
+            )
+            .await??;
         }
 
         Ok(())

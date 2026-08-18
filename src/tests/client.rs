@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use crate::{
-    ClientError, ErrorKind, Result,
+    ClientError, ErrorKind, Result, TimeoutKind,
     client::{Client, Config, IntoConfig},
     commands::{
         BlockingCommands, ClientKillOptions, ConnectionCommands, FlushingMode, LMoveWhere,
@@ -137,7 +137,12 @@ async fn concurrent_drop_of_the_last_clones_still_closes_the_connection() -> Res
         // Once the last clone is gone the network task ends and drops the only
         // remaining reconnect sender, so the receiver reports the channel
         // closed. A leaked task keeps its sender alive and this times out.
-        let closed = timeout(Duration::from_secs(5), on_reconnect.recv()).await;
+        let closed = timeout(
+            Duration::from_secs(5),
+            TimeoutKind::Command,
+            on_reconnect.recv(),
+        )
+        .await;
         assert!(
             matches!(closed, Ok(Err(_))),
             "the network task must end when the last client clone is dropped, got {closed:?}"
@@ -172,7 +177,7 @@ async fn command_timeout() -> Result<()> {
     let result: Result<Option<(String, Vec<String>)>> =
         client.blmpop(5., "key", LMoveWhere::Left, 1).await;
     let error = result.expect_err("the command must time out");
-    assert!(matches!(error.kind(), ErrorKind::Timeout));
+    assert!(matches!(error.kind(), ErrorKind::Timeout(_)));
     // A multiplexed client has many commands in flight: the error is worthless
     // unless it names the one that expired.
     assert_eq!(Some("BLMPOP"), error.command());

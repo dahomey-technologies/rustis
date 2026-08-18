@@ -1,5 +1,5 @@
 use crate::{
-    Error, ErrorKind, Result,
+    Error, ErrorKind, Result, TimeoutKind,
     client::Client,
     network::{ResultReceiver, TimeoutFuture},
     resp::{Command, RespResponse},
@@ -153,7 +153,7 @@ impl<R: DeserializeOwned> Future for CommandFuture<'_, R> {
                 // Expiry is the one failure the network task never sees, so it
                 // is also the one it never names: the name is applied here.
                 Poll::Ready(Err(_)) => Client::name_command(
-                    Err(Error::from(ErrorKind::Timeout)),
+                    Err(Error::from(ErrorKind::Timeout(TimeoutKind::Command))),
                     this.command_name.clone(),
                 ),
                 Poll::Ready(Ok(result)) => {

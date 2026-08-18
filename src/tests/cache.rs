@@ -1,5 +1,5 @@
 use crate::{
-    ClientError, Error, ErrorKind, Result,
+    ClientError, Error, ErrorKind, Result, TimeoutKind,
     cache::Cache,
     client::Client,
     commands::{
@@ -338,7 +338,7 @@ async fn a_lost_invalidation_flushes_the_cache_instead_of_serving_stale_data() -
     }
     let _: String = writer.send(cmd("PING"), None).await?;
 
-    timeout(Duration::from_secs(30), async {
+    timeout(Duration::from_secs(30), TimeoutKind::Command, async {
         while cache.flush_generation() == 0 {
             tokio::task::yield_now().await;
         }

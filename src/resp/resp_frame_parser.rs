@@ -420,7 +420,7 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
                     continue;
                 }
                 if !is_collection_tag(done.tag) {
-                    return Err(Error::from(ClientError::Unexpected));
+                    return Err(Error::from(ClientError::MalformedFrame));
                 }
                 return Ok(Some(ParsedFrame::Collection(self.tape.split_freeze())));
             }
@@ -438,7 +438,7 @@ impl<'a, 'b> RespFrameParser<'a, 'b> {
             }
         }
 
-        Err(Error::from(ClientError::Unexpected))
+        Err(Error::from(ClientError::MalformedFrame))
     }
 
     /// Emits the tape node(s) for the value at `self.pos` and advances past it.

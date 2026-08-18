@@ -158,9 +158,6 @@ pub enum ClientError {
     SendQueueFull,
     #[error("a client-side cache key must serialize to exactly one argument")]
     InvalidCacheKey,
-    /// Raised when an unexpected error occurs
-    #[error("Unexpected error")]
-    Unexpected,
     /// Raised when cannot parse hash slot
     #[error("cannot parse hash slot")]
     CannotParseHashSlot,
@@ -231,6 +228,34 @@ pub enum ClientError {
     /// beyond the parser's configured ceiling.
     #[error("protocol: collection length exceeds the maximum allowed")]
     CollectionLengthTooLarge,
+    /// Raised when the frame parser ends in a state its own grammar forbids —
+    /// a closed frame that is not a collection, or a parse loop that ran out of
+    /// work with no frame produced. The reader is at an unknown offset, so the
+    /// connection is what fails, not the command.
+    #[error("protocol: the frame parser ended in an impossible state")]
+    MalformedFrame,
+    /// Raised when a decoded frame indexes outside the buffer or the tape that
+    /// describes it. The frame is bounded, so this fails one command.
+    #[error("protocol: the decoded frame and its tape disagree")]
+    InconsistentRespTape,
+    /// Raised when a reply is read as a collection and is a scalar.
+    #[error("protocol: the reply is not a collection")]
+    NotACollection,
+    /// Raised when a transaction's reply batch holds no answer to `EXEC`.
+    #[error("the transaction reply carries no answer to EXEC")]
+    MissingTransactionReply,
+    /// Raised when the nodes of a cluster answer shapes that the command's
+    /// response policy cannot combine — an integer against an array, or arrays
+    /// of different lengths.
+    #[error("cluster: the shards answered shapes that cannot be aggregated")]
+    IncompatibleShardReplies,
+    /// Raised when an enum is deserialized as a unit variant from a reply that
+    /// carries a payload.
+    #[error("the reply carries a payload, so it is not a unit variant")]
+    NotAUnitVariant,
+    /// Raised when a map is deserialized and a field arrives with no value.
+    #[error("the map holds a field with no value")]
+    MissingMapValue,
 }
 
 impl ClientError {
@@ -242,25 +267,100 @@ impl ClientError {
     /// not the caller at the head of the receive queue — is what the error
     /// belongs to. A decode failure happens past that point, on a frame whose
     /// bounds are known, and fails exactly one command.
+    ///
+    /// The match is exhaustive on purpose, with no wildcard arm: a new variant
+    /// does not compile until it has been classified here. An allow-list with a
+    /// default would silently make every future framing failure a per-command
+    /// one, which is the reading that risks leaving the stream desynchronised.
     #[inline]
     pub(crate) fn is_framing_error(&self) -> bool {
-        matches!(
-            self,
+        match self {
+            // Raised by the frame parser, on bytes whose boundaries are not yet
+            // known: the reader cannot be placed at the next reply.
             ClientError::CannotParseInteger
-                | ClientError::CannotParseDouble
-                | ClientError::CannotParseBulkString
-                | ClientError::CannotParseBulkError
-                | ClientError::CannotParseVerbatimString
-                | ClientError::CannotParseBoolean
-                | ClientError::CannotParseMap
-                | ClientError::CannotParseSequence
-                | ClientError::UnknownRespTag(_)
-                | ClientError::BulkLengthTooLarge
-                | ClientError::CollectionLengthTooLarge
-                | ClientError::MaxNestingDepthExceeded
-                | ClientError::VerbatimStringTooShort
-        )
+            | ClientError::CannotParseDouble
+            | ClientError::CannotParseBulkString
+            | ClientError::CannotParseBulkError
+            | ClientError::CannotParseVerbatimString
+            | ClientError::CannotParseBoolean
+            | ClientError::CannotParseMap
+            | ClientError::CannotParseSequence
+            | ClientError::UnknownRespTag(_)
+            | ClientError::InvalidTag
+            | ClientError::BulkLengthTooLarge
+            | ClientError::CollectionLengthTooLarge
+            | ClientError::MaxNestingDepthExceeded
+            | ClientError::VerbatimStringTooShort
+            | ClientError::MalformedFrame => true,
+
+            // Raised past framing — while decoding a bounded frame into the
+            // caller's type, while routing, or on the caller's own input — so
+            // exactly one command fails and the stream stays usable.
+            ClientError::ExpectedArrayForMGet
+            | ClientError::CannotParseNil
+            | ClientError::CannotParseChar
+            | ClientError::CannotParseStr
+            | ClientError::CannotParseString
+            | ClientError::CannotParseStruct
+            | ClientError::CannotParseBytes
+            | ClientError::CannotParseEnum
+            | ClientError::DisconnectedFromServer
+            | ClientError::InvalidChannel
+            | ClientError::NotExclusive
+            | ClientError::AlreadySubscribed
+            | ClientError::UnexpectedSubscriptionConfirmation
+            | ClientError::UnexpectedPubSubMessage
+            | ClientError::SerdeDeserialize(_)
+            | ClientError::SerdeSerialize(_)
+            | ClientError::InvalidArgumentGroupStep
+            | ClientError::MaxCommandAttemptsReached
+            | ClientError::SendQueueFull
+            | ClientError::InvalidCacheKey
+            | ClientError::CannotParseHashSlot
+            | ClientError::CannotParseAddress
+            | ClientError::CannotParsePort
+            | ClientError::CannotParseRequestPolicy
+            | ClientError::CannotParseResponsePolicy
+            | ClientError::ConfigParseError
+            | ClientError::InvalidUri(_)
+            | ClientError::InvalidConfig(_)
+            | ClientError::InconsistentRoutingState
+            | ClientError::ClusterConfig
+            | ClientError::ExecCalledWithoutMulti
+            | ClientError::CrossSlot
+            | ClientError::CommandNotSupportedInCluster
+            | ClientError::UnexpectedMessageReceived
+            | ClientError::MismatchedKeySlots
+            | ClientError::CannotParseRedisServerVersion
+            | ClientError::InconsistentRespTape
+            | ClientError::NotACollection
+            | ClientError::MissingTransactionReply
+            | ClientError::IncompatibleShardReplies
+            | ClientError::NotAUnitVariant
+            | ClientError::MissingMapValue => false,
+        }
     }
+}
+
+/// Which deadline expired, in an [`ErrorKind::Timeout`].
+///
+/// The two demand opposite answers, so they are told apart by the type rather
+/// than by whether the error happens to name a command: a connect timeout says
+/// this server did not become usable — try another one, or wait for the
+/// reconnection — while a command timeout says this one request did not get its
+/// reply in time, on a connection that may well be healthy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
+#[non_exhaustive]
+pub enum TimeoutKind {
+    /// [`Config::connect_timeout`](crate::client::Config::connect_timeout)
+    /// expired: the connection, or its handshake, did not complete.
+    #[error("the connect timeout expired before the connection was usable")]
+    Connect,
+    /// [`Config::command_timeout`](crate::client::Config::command_timeout)
+    /// expired: the command was sent and its reply did not arrive in time. The
+    /// command may still have run.
+    #[error("the command timeout expired before the reply arrived")]
+    Command,
 }
 
 /// What an [`struct@Error`] is, independently of the command it belongs to.
@@ -300,9 +400,9 @@ pub enum ErrorKind {
     #[cfg(feature = "rustls")]
     #[error("invalid dns name: {0}")]
     InvalidDnsName(Arc<rustls::pki_types::InvalidDnsNameError>),
-    /// The I/O operation’s timeout expired
-    #[error("The I/O operation’s timeout expired")]
-    Timeout,
+    /// A deadline expired before the operation completed
+    #[error("{0}")]
+    Timeout(TimeoutKind),
     /// Internal error to trigger retry sending the command
     #[doc(hidden)]
     #[error("Retry")]
@@ -421,7 +521,7 @@ impl Display for ErrorContext {
 /// # use rustis::{Error, ErrorKind, Result};
 /// # fn handle(result: Result<String>) {
 /// if let Err(e) = result {
-///     if matches!(e.kind(), ErrorKind::Timeout) {
+///     if matches!(e.kind(), ErrorKind::Timeout(_)) {
 ///         eprintln!("{:?} timed out", e.command());
 ///     }
 /// }
@@ -507,7 +607,7 @@ impl Error {
     /// it arrives as `None`.
     #[must_use]
     pub fn is_timeout(&self) -> bool {
-        matches!(self.kind, ErrorKind::Timeout)
+        matches!(self.kind, ErrorKind::Timeout(_))
     }
 
     /// Whether the server answered, and answered an error.

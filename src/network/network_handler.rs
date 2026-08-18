@@ -7,7 +7,7 @@ use crate::{
     resp::{
         ClientReplyMode, CommandKind, RespResponse, RespView, StateSlot, SubscriptionType, cmd,
     },
-    sleep, spawn, timeout,
+    sleep, spawn, timeout_future,
 };
 use bytes::Bytes;
 use futures_util::{FutureExt, select};
@@ -1682,7 +1682,7 @@ impl NetworkHandler {
                 loop {
                     let delay = end.duration_since(Instant::now());
                     let result =
-                        timeout(delay, poll_fn(|cx| self.msg_receiver.poll_recv(cx))).await;
+                        timeout_future(delay, poll_fn(|cx| self.msg_receiver.poll_recv(cx))).await;
                     if let Ok(msg) = result {
                         if !self.try_handle_message(msg).await {
                             return false;

@@ -14,6 +14,7 @@
 //! discarding one leaves a key stale, so what has to be proven is not only the
 //! bound but that the loss is counted and acted upon.
 
+use crate::TimeoutKind;
 use crate::{
     ClientError, Error, ErrorKind, Result,
     client::{BackpressureConfig, Client, Config, IntoConfig, ReconnectionConfig},
@@ -84,7 +85,7 @@ async fn the_send_queue_stops_growing_at_its_memory_budget() -> Result<()> {
     let baseline_rss = resident_bytes();
     let value = "v".repeat(VALUE_BYTES);
 
-    timeout(Duration::from_secs(60), async {
+    timeout(Duration::from_secs(60), TimeoutKind::Command, async {
         while proxy.connections_accepted() < 3 {
             tokio::task::yield_now().await;
         }
@@ -156,7 +157,7 @@ async fn a_command_refused_by_a_full_send_queue_reports_it() -> Result<()> {
     let client = Client::connect(storm_config(proxy.addr, BUDGET)?).await?;
     client.send_and_forget(cmd("PING").kill_connection_on_read(1), None)?;
 
-    let error = timeout(Duration::from_secs(30), async {
+    let error = timeout(Duration::from_secs(30), TimeoutKind::Command, async {
         while proxy.connections_accepted() < 3 {
             tokio::task::yield_now().await;
         }
@@ -225,7 +226,7 @@ async fn a_command_already_queued_survives_the_reconnection_that_replays_it() ->
     // refused up front are counted separately: shedding a new command is the
     // budget working, losing an accepted one is the bug this guards against.
     let mut handles = Vec::new();
-    timeout(Duration::from_secs(30), async {
+    timeout(Duration::from_secs(30), TimeoutKind::Command, async {
         while proxy.connections_accepted() < 2 {
             tokio::task::yield_now().await;
         }
@@ -249,7 +250,7 @@ async fn a_command_already_queued_survives_the_reconnection_that_replays_it() ->
     let mut accepted = 0usize;
     let mut shed = 0usize;
     for handle in handles {
-        match timeout(Duration::from_secs(30), handle).await {
+        match timeout(Duration::from_secs(30), TimeoutKind::Command, handle).await {
             Ok(Ok(Ok(()))) => accepted += 1,
             Ok(Ok(Err(e))) if matches!(e.kind(), ErrorKind::Client(ClientError::SendQueueFull)) => {
                 shed += 1
@@ -371,7 +372,7 @@ async fn a_paused_monitor_is_bounded_by_its_memory_budget() -> Result<()> {
     let baseline_rss = resident_bytes();
     let value = "v".repeat(VALUE_BYTES);
 
-    timeout(Duration::from_secs(60), async {
+    timeout(Duration::from_secs(60), TimeoutKind::Command, async {
         for i in 0..OFFERED {
             writer.send_and_forget(
                 cmd("SET")
@@ -478,7 +479,7 @@ async fn a_paused_invalidation_reader_is_bounded_by_its_memory_budget() -> Resul
     let baseline_rss = resident_bytes();
     let padding = "p".repeat(KEY_PADDING);
 
-    timeout(Duration::from_secs(60), async {
+    timeout(Duration::from_secs(60), TimeoutKind::Command, async {
         for i in 0..OFFERED_KEYS {
             writer.send_and_forget(
                 cmd("SET")
@@ -602,6 +603,7 @@ async fn the_budget_bounds_the_replies_still_awaited() -> Result<()> {
 
     let refused: Result<()> = timeout(
         Duration::from_secs(2),
+        TimeoutKind::Command,
         client.send(cmd("SET").arg("budget_probe").arg(value.as_str()), None),
     )
     .await?;

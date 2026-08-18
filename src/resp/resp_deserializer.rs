@@ -790,7 +790,7 @@ impl<'de> de::MapAccess<'de> for NilSeqAccess {
     where
         V: de::DeserializeSeed<'de>,
     {
-        Err(Error::from(ClientError::Unexpected))
+        Err(Error::from(ClientError::MissingMapValue))
     }
 
     #[inline(always)]
@@ -1156,7 +1156,7 @@ impl<'de> de::MapAccess<'de> for MapAccess<'de> {
     {
         match self.iter.next() {
             Some(view) => seed.deserialize(RespDeserializer::new(view?)),
-            None => Err(Error::from(ClientError::Unexpected)),
+            None => Err(Error::from(ClientError::MissingMapValue)),
         }
     }
 
@@ -1278,7 +1278,7 @@ impl<'de> de::VariantAccess<'de> for VariantAccess<'de> {
     // If the `Visitor` expected this variant to be a unit variant, the input
     // should have been the plain string case handled in `deserialize_enum`.
     fn unit_variant(self) -> Result<()> {
-        Err(Error::from(ClientError::Unexpected))
+        Err(Error::from(ClientError::NotAUnitVariant))
     }
 
     // Newtype variants are represented as map so

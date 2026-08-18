@@ -1,5 +1,6 @@
 use crate::{
     ConnectionState, ErrorKind, Future, Result, RetryReason, TcpStreamReader, TcpStreamWriter,
+    TimeoutKind,
     client::{
         BufferConfig, Config, CustomTransport, PreparedCommand, TransportReader, TransportWriter,
     },
@@ -8,7 +9,7 @@ use crate::{
         ServerCommands,
     },
     resp::{BufferDecoder, Command, CommandEncoder, RespResponse, StateSlot},
-    tcp_connect,
+    tcp_connect, timeout,
 };
 #[cfg(any(feature = "native-tls", feature = "rustls"))]
 use crate::{TcpTlsStreamReader, TcpTlsStreamWriter, tcp_tls_connect};
@@ -300,10 +301,18 @@ impl StandaloneConnection {
         // span the network loop will run under. It can only exist from here: the
         // tag identifying the connection is what the lines above just built.
         let span = info_span!("connection", tag = %connection.tag);
-        connection
-            .post_connect(connection_state)
-            .instrument(span)
-            .await?;
+        let handshake = connection.post_connect(connection_state).instrument(span);
+
+        // `connect_timeout` bounds the handshake as well as the dial. A server
+        // that accepts the socket and never answers `HELLO` leaves a connection
+        // that is open and unusable, and the dial alone succeeded in
+        // microseconds -- so a deadline covering only it never fires, and the
+        // caller waits forever on a `Client::connect` it gave a budget to.
+        if config.connect_timeout.is_zero() {
+            handshake.await?;
+        } else {
+            timeout(config.connect_timeout, TimeoutKind::Connect, handshake).await??;
+        }
 
         Ok(connection)
     }

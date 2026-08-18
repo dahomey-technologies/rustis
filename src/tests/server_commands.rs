@@ -1071,7 +1071,7 @@ async fn monitor() -> Result<()> {
         let result = monitor_stream
             .next()
             .await
-            .ok_or_else(|| ErrorKind::Client(ClientError::Unexpected))?;
+            .ok_or_else(|| ErrorKind::Client(ClientError::DisconnectedFromServer))?;
         if result.database != 2 || result.command != "SET" {
             continue;
         }
@@ -1135,7 +1135,7 @@ async fn auto_remonitor() -> Result<()> {
         let result = monitor_stream
             .next()
             .await
-            .ok_or_else(|| ErrorKind::Client(ClientError::Unexpected))?;
+            .ok_or_else(|| ErrorKind::Client(ClientError::DisconnectedFromServer))?;
         if result.database != 2 || result.command != "SET" {
             continue;
         }

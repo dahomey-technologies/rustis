@@ -32,6 +32,15 @@ The upgrade checklist. Each item is stated in the section it belongs to below.
 - **`Value::SimpleString` equals the `Value::BulkString` carrying the same bytes.**
   A comparison that relied on the two being distinct now answers `true`.
 
+- **`ErrorKind::Timeout` carries a `TimeoutKind`.** `matches!(e.kind(),
+  ErrorKind::Timeout)` becomes `ErrorKind::Timeout(_)`, and the two deadlines can
+  now be told apart by name.
+
+- **`ClientError::Unexpected` is removed**, replaced by the seven variants that
+  say which condition occurred: `MalformedFrame`, `InconsistentRespTape`,
+  `NotACollection`, `MissingTransactionReply`, `IncompatibleShardReplies`,
+  `NotAUnitVariant` and `MissingMapValue`.
+
 `cargo semver-checks` reports 11 removed trait methods and 4 removed structs.
 
 ### Added
@@ -91,6 +100,21 @@ The upgrade checklist. Each item is stated in the section it belongs to below.
   five and `quit`. No module command reports a deprecation.
 
 ### Fixed
+
+- **`connect_timeout` bounds the handshake, not only the dial.** A server that
+  accepted the socket and never answered `HELLO` left `Client::connect` waiting
+  forever: the dial succeeded in microseconds, so the only deadline in the path
+  had already been met and nothing bounded the handshake that followed. The
+  budget now covers both, and the error it raises is
+  `ErrorKind::Timeout(TimeoutKind::Connect)`.
+
+- **An internal failure names the condition it hit.** `ClientError::Unexpected`
+  reported a dozen distinguishable conditions as `Unexpected error`, which points
+  nowhere. Worse, the frame parser raised it, and the framing list did not carry
+  it: a failure leaving the reader at an unknown offset was classified as a
+  per-command error, so it was dispatched to a single caller with the stream
+  possibly desynchronised. The parser's two sites are now `MalformedFrame`, which
+  the framing list does carry.
 
 - **Enabling both TLS backends reports one error.** `rustls` and `native-tls` each
   define a `TlsConfig` and an `Error::Tls`, with different fields, so the union defined

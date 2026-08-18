@@ -1,5 +1,5 @@
 use crate::{
-    ClientError, ErrorKind, Result, RetryReason,
+    ClientError, ErrorKind, Result, RetryReason, TimeoutKind,
     client::{Client, ClientPreparedCommand, ReconnectionConfig},
     commands::{
         ClientReplyMode, ConnectionCommands, GenericCommands, PubSubCommands, StringCommands,
@@ -180,6 +180,7 @@ async fn inflight_unsubscribe_does_not_desync_responses_after_reconnect() -> Res
     // reply is consumed by the stale UNSUBSCRIBE slot and the call hangs.
     let echoed: String = timeout(
         Duration::from_secs(2),
+        TimeoutKind::Command,
         client.send(cmd("ECHO").arg("net03_marker"), None),
     )
     .await??;
@@ -254,6 +255,7 @@ async fn retryable_command_fails_after_max_command_attempts() -> Result<()> {
     // reconnect that would replay it — which the cap turns into a failure.
     let result: Result<String> = timeout(
         Duration::from_secs(5),
+        TimeoutKind::Command,
         client.send(cmd("PING").kill_connection_on_read(1), Some(true)),
     )
     .await?;
@@ -298,8 +300,12 @@ async fn a_command_is_routed_by_two_successive_redirection_reasons() -> Result<(
         address,
     }]));
 
-    let result: Result<String> =
-        timeout(Duration::from_secs(5), client.send(cmd("PING"), Some(true))).await?;
+    let result: Result<String> = timeout(
+        Duration::from_secs(5),
+        TimeoutKind::Command,
+        client.send(cmd("PING"), Some(true)),
+    )
+    .await?;
 
     assert_eq!(
         "PONG", result?,
@@ -340,13 +346,24 @@ async fn reply_mode_is_restored_after_reconnect() -> Result<()> {
     client.set("reply_b", "b").forget()?;
     timeout(
         Duration::from_secs(5),
+        TimeoutKind::Command,
         client.client_reply(ClientReplyMode::On).into_future(),
     )
     .await??;
 
     // Each response must reach the caller that asked for it.
-    let a: String = timeout(Duration::from_secs(5), client.get("reply_a").into_future()).await??;
-    let b: String = timeout(Duration::from_secs(5), client.get("reply_b").into_future()).await??;
+    let a: String = timeout(
+        Duration::from_secs(5),
+        TimeoutKind::Command,
+        client.get("reply_a").into_future(),
+    )
+    .await??;
+    let b: String = timeout(
+        Duration::from_secs(5),
+        TimeoutKind::Command,
+        client.get("reply_b").into_future(),
+    )
+    .await??;
     assert_eq!("a", a, "responses must not be shifted after a reconnection");
     assert_eq!("b", b, "responses must not be shifted after a reconnection");
 
@@ -370,8 +387,18 @@ async fn reply_skip_silences_only_the_next_command() -> Result<()> {
     client.set("skip_a", "a").forget()?;
     client.set("skip_b", "b").forget()?;
 
-    let a: String = timeout(Duration::from_secs(5), client.get("skip_a").into_future()).await??;
-    let b: String = timeout(Duration::from_secs(5), client.get("skip_b").into_future()).await??;
+    let a: String = timeout(
+        Duration::from_secs(5),
+        TimeoutKind::Command,
+        client.get("skip_a").into_future(),
+    )
+    .await??;
+    let b: String = timeout(
+        Duration::from_secs(5),
+        TimeoutKind::Command,
+        client.get("skip_b").into_future(),
+    )
+    .await??;
     assert_eq!("a", a, "responses must not be shifted after a SKIP");
     assert_eq!("b", b, "responses must not be shifted after a SKIP");
 
@@ -392,7 +419,12 @@ async fn reset_restores_the_reply_mode_the_server_restored() -> Result<()> {
     client.client_reply(ClientReplyMode::Off).forget()?;
     client.send_and_forget(cmd("RESET"), None)?;
 
-    let pong: String = timeout(Duration::from_secs(5), client.send(cmd("PING"), None)).await??;
+    let pong: String = timeout(
+        Duration::from_secs(5),
+        TimeoutKind::Command,
+        client.send(cmd("PING"), None),
+    )
+    .await??;
     assert_eq!(
         "PONG", pong,
         "RESET turns replies back on, and the client must expect them again"
@@ -478,6 +510,7 @@ async fn a_default_command_is_failed_by_a_lost_connection_rather_than_replayed()
     // `retryable_command_fails_after_max_command_attempts`.
     let result: Result<String> = timeout(
         Duration::from_secs(5),
+        TimeoutKind::Command,
         client.send(cmd("PING").kill_connection_on_read(1), None),
     )
     .await?;
@@ -522,7 +555,12 @@ async fn neither_side_of_the_loop_drains_without_bound() -> Result<()> {
 
     // A round trip that only completes once the burst has been written and
     // answered, so both waves have been exercised by the time it returns.
-    let _: String = timeout(Duration::from_secs(30), client.send(cmd("PING"), None)).await??;
+    let _: String = timeout(
+        Duration::from_secs(30),
+        TimeoutKind::Command,
+        client.send(cmd("PING"), None),
+    )
+    .await??;
 
     assert!(
         hook.write_wave_high_water() <= cap,

@@ -247,7 +247,7 @@ use rustis::{Error, ErrorKind, Result};
 fn report(result: Result<String>) {
     if let Err(e) = result {
         match e.kind() {
-            ErrorKind::Timeout => eprintln!("{:?} timed out", e.command()),
+            ErrorKind::Timeout(_) => eprintln!("{:?} timed out", e.command()),
             ErrorKind::Redis(redis_error) => eprintln!("the server refused it: {redis_error}"),
             _ => eprintln!("{e}"),
         }

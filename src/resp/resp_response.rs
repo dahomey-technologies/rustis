@@ -326,7 +326,7 @@ impl RespResponse {
                 let len = tape.node(root + 1).payload_index();
                 Ok(RespResponseIter::new(buf, tape, root, len))
             }
-            _ => Err(Error::from(ClientError::Unexpected)),
+            _ => Err(Error::from(ClientError::NotACollection)),
         }
     }
 }
@@ -391,7 +391,7 @@ fn decode_value(kind: ScalarKind, data: &[u8], value: Range<usize>) -> Result<Re
     // enough that constructing one eagerly only to drop it costs measurably.
     let value = data
         .get(value)
-        .ok_or_else(|| Error::from(ClientError::Unexpected))?;
+        .ok_or_else(|| Error::from(ClientError::InconsistentRespTape))?;
     Ok(match kind {
         ScalarKind::SimpleString => RespView::SimpleString(value),
         ScalarKind::Error => RespView::Error(value),
@@ -717,7 +717,7 @@ impl Iterator for RespResponseIter {
             // different element, silently.
             let Ok(root) = u32::try_from(root) else {
                 self.remaining = 0;
-                return Some(Err(Error::from(ClientError::Unexpected)));
+                return Some(Err(Error::from(ClientError::InconsistentRespTape)));
             };
             return Some(Ok(RespResponse::Frame {
                 buf: self.buf.clone(),

@@ -1,5 +1,5 @@
 use crate::{
-    ClientError, ErrorKind, RedisError, RedisErrorKind, Result,
+    ClientError, ErrorKind, RedisError, RedisErrorKind, Result, TimeoutKind,
     client::{BatchPreparedCommand, Client, ClientPreparedCommand, IntoConfig, ReconnectionConfig},
     commands::{
         ClientReplyMode, ClientTrackingOptions, ClientTrackingStatus, ClusterCommands,
@@ -385,6 +385,7 @@ async fn reconnect_purges_pending_requests_so_callers_do_not_hang() -> Result<()
     // stale, never-fulfilled in-flight request.
     let echoed: String = timeout(
         Duration::from_secs(2),
+        TimeoutKind::Command,
         client.send(cmd("ECHO").arg("clu02_marker"), None),
     )
     .await??;
@@ -431,7 +432,12 @@ async fn refresh_removing_a_node_does_not_hang_in_flight_callers() -> Result<()>
     // itself routed to the removed node — instead of hanging behind an orphaned
     // request that can never be fulfilled. Completing within the timeout is the
     // assertion: without the purge, this call never returns.
-    let _: Result<String> = timeout(Duration::from_secs(3), client.send(cmd("PING"), None)).await?;
+    let _: Result<String> = timeout(
+        Duration::from_secs(3),
+        TimeoutKind::Command,
+        client.send(cmd("PING"), None),
+    )
+    .await?;
 
     Ok(())
 }
@@ -712,6 +718,7 @@ async fn empty_topology_discovery_is_rejected_instead_of_killing_the_client() ->
     // which is precisely what indexes the node list.
     let pong = timeout(
         Duration::from_secs(3),
+        TimeoutKind::Command,
         client.send::<String>(cmd("PING"), None),
     )
     .await;
@@ -1091,14 +1098,19 @@ async fn cluster_reply_off_silences_every_node_and_stays_usable() -> Result<()> 
     }
     timeout(
         Duration::from_secs(5),
+        TimeoutKind::Command,
         client.client_reply(ClientReplyMode::On).into_future(),
     )
     .await??;
 
     // Every write landed, and each response reaches the caller that asked for it.
     for key in keys {
-        let value: String =
-            timeout(Duration::from_secs(5), client.get(key).into_future()).await??;
+        let value: String = timeout(
+            Duration::from_secs(5),
+            TimeoutKind::Command,
+            client.get(key).into_future(),
+        )
+        .await??;
         assert_eq!(
             "value", value,
             "`{key}` must have been written while the connection was silent, and its \
@@ -1206,6 +1218,7 @@ async fn cluster_reply_skip_follows_the_routing_of_the_command_it_silences() -> 
     client.set("clu_skip_single", "one").forget()?;
     let value: String = timeout(
         Duration::from_secs(5),
+        TimeoutKind::Command,
         client.get("clu_skip_single").into_future(),
     )
     .await??;
@@ -1219,8 +1232,12 @@ async fn cluster_reply_skip_follows_the_routing_of_the_command_it_silences() -> 
     client
         .mset([(spread[0], "a"), (spread[1], "b"), (spread[2], "c")])
         .forget()?;
-    let values: Vec<String> =
-        timeout(Duration::from_secs(5), client.mget(spread).into_future()).await??;
+    let values: Vec<String> = timeout(
+        Duration::from_secs(5),
+        TimeoutKind::Command,
+        client.mget(spread).into_future(),
+    )
+    .await??;
     assert_eq!(
         vec!["a".to_owned(), "b".to_owned(), "c".to_owned()],
         values,
@@ -1232,6 +1249,7 @@ async fn cluster_reply_skip_follows_the_routing_of_the_command_it_silences() -> 
     client.client_setname("clu_skip_named").forget()?;
     let name: Option<String> = timeout(
         Duration::from_secs(5),
+        TimeoutKind::Command,
         client.client_getname().into_future(),
     )
     .await??;
@@ -1270,11 +1288,13 @@ async fn a_held_reply_skip_does_not_survive_a_reconnection() -> Result<()> {
 
     timeout(
         Duration::from_secs(5),
+        TimeoutKind::Command,
         client.set("clu_skip_reconnect", "value").into_future(),
     )
     .await??;
     let value: String = timeout(
         Duration::from_secs(5),
+        TimeoutKind::Command,
         client.get("clu_skip_reconnect").into_future(),
     )
     .await??;
@@ -1388,6 +1408,7 @@ async fn try_again_is_retried_instead_of_reaching_the_caller() -> Result<()> {
 
     let value: String = timeout(
         Duration::from_secs(5),
+        TimeoutKind::Command,
         client.get::<String>("clu_tryagain").into_future(),
     )
     .await??;
@@ -1424,6 +1445,7 @@ async fn cluster_down_is_retried_instead_of_reaching_the_caller() -> Result<()> 
 
     let value: String = timeout(
         Duration::from_secs(5),
+        TimeoutKind::Command,
         client.get::<String>("clu_clusterdown").into_future(),
     )
     .await??;
@@ -1743,6 +1765,7 @@ async fn a_redirection_spends_the_attempt_budget() -> Result<()> {
 
     let result: Result<String> = timeout(
         Duration::from_secs(5),
+        TimeoutKind::Command,
         client.get::<String>("clu_attempts").into_future(),
     )
     .await?;

@@ -1,5 +1,6 @@
 use crate::{
-    Result, client::PooledClientManager, commands::StringCommands, tests::get_default_addr,
+    Result, TimeoutKind, client::PooledClientManager, commands::StringCommands,
+    tests::get_default_addr,
 };
 use serial_test::serial;
 
@@ -100,7 +101,12 @@ async fn the_health_check_gives_up_on_a_silent_server() -> Result<()> {
     let mut client = manager.connect().await?;
 
     let start = Instant::now();
-    let result = timeout(Duration::from_secs(5), manager.is_valid(&mut client)).await;
+    let result = timeout(
+        Duration::from_secs(5),
+        TimeoutKind::Command,
+        manager.is_valid(&mut client),
+    )
+    .await;
     server.abort();
 
     assert!(

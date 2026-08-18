@@ -149,7 +149,7 @@ impl Transaction {
                 (result, _) => result,
             }
         } else {
-            Err(Error::from(ClientError::Unexpected))
+            Err(Error::from(ClientError::MissingTransactionReply))
         }
     }
 

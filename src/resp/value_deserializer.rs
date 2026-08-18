@@ -915,7 +915,7 @@ impl<'de> VariantAccess<'de> for &'de Value {
     // If the `Visitor` expected this variant to be a unit variant, the input
     // should have been the plain string case handled in `deserialize_enum`.
     fn unit_variant(self) -> Result<()> {
-        Err(Error::from(ClientError::Unexpected))
+        Err(Error::from(ClientError::NotAUnitVariant))
     }
 
     // Newtype variants are represented as map so

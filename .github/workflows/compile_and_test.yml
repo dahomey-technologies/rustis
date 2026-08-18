@@ -234,6 +234,9 @@ jobs:
           - name: both TLS runtimes
             features: tokio-runtime,tokio-rustls,tokio-native-tls
             expected: "cannot be enabled at the same time"
+          - name: both TLS backends
+            features: tokio-runtime,rustls,native-tls
+            expected: "Features `rustls` and `native-tls` cannot be enabled at the same time"
           - name: rustls alone
             features: tokio-runtime,rustls
             expected: "Feature `rustls` cannot be enabled on its own"

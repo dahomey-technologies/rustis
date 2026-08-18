@@ -6,6 +6,21 @@ All notable changes to this project are documented here. The format is based on
 Versions up to and including `0.19.3` are documented in the
 [GitHub releases](https://github.com/dahomey-technologies/rustis/releases).
 
+## [Unreleased]
+
+### Fixed
+
+- **Enabling both TLS backends reports one error that says so.** `rustls` and
+  `native-tls` each define their own `TlsConfig` and their own `Error::Tls`, with
+  different fields, so the union defined both names twice and produced 61
+  compiler errors -- two duplicate definitions and a cascade of field mismatches
+  from each backend's code being written against the other's shape. Feature
+  unification reaches this without anyone asking for it: two crates in one
+  dependency graph, each enabling one backend. The pair is now named by a
+  `compile_error!` that says which backends collided and that a dependency may
+  have brought the second one in. Each of the five rejected feature
+  configurations now reports exactly one cause instead of one to three.
+
 ## [0.24.0] - 2026-08-12
 
 ### BREAKING CHANGES

@@ -301,17 +301,52 @@ compile_error!(
     "Features `tokio-native-tls` and `tokio-rustls` cannot be enabled at the same time."
 );
 
+// The two backends each define their own `TlsConfig` and their own `Tls` error
+// variant, with different fields, so the union defines both names twice. Feature
+// unification reaches it without anyone asking: two crates in one dependency
+// graph, each enabling one backend. The pair is named here rather than left to
+// the two guards below, which would report it as two independent mistakes.
+//
+// The cascade behind this message is not suppressed. Doing so would mean giving
+// one backend precedence over the other under `cfg` — a silent winner, and a
+// `not(feature = "rustls")` clause to remember on every `native-tls` item ever
+// added. The guard names the cause; the errors after it are its consequences.
+#[cfg(all(
+    feature = "rustls",
+    feature = "native-tls",
+    // The two runtime features imply both backends, and the guard above already
+    // names that pair. Every rejected configuration reports exactly one cause.
+    not(all(feature = "tokio-rustls", feature = "tokio-native-tls"))
+))]
+compile_error!(
+    "Features `rustls` and `native-tls` cannot be enabled at the same time: each defines its own \
+     `TlsConfig` and its own `Error::Tls`, with different fields. Pick one backend — \
+     `tokio-rustls` or `tokio-native-tls`. If a dependency enabled the other one, the two were \
+     unified into this build."
+);
+
 // The backend-only features gate the TLS configuration types; the connection
 // code that reads them lives behind the runtime feature. Enabled alone they
 // build a `TlsConfig` nothing would ever use, so name that rather than let the
 // missing stream types surface as "not found in this scope".
-#[cfg(all(feature = "rustls", not(feature = "tokio-rustls")))]
+//
+// Both carry `not(<the other backend>)` so the pair above is reported once,
+// by the guard that diagnoses it, instead of three times.
+#[cfg(all(
+    feature = "rustls",
+    not(feature = "tokio-rustls"),
+    not(feature = "native-tls")
+))]
 compile_error!(
     "Feature `rustls` cannot be enabled on its own: it only gates the TLS configuration types. \
      Enable `tokio-rustls`, which implies it and brings the TLS connection code."
 );
 
-#[cfg(all(feature = "native-tls", not(feature = "tokio-native-tls")))]
+#[cfg(all(
+    feature = "native-tls",
+    not(feature = "tokio-native-tls"),
+    not(feature = "rustls")
+))]
 compile_error!(
     "Feature `native-tls` cannot be enabled on its own: it only gates the TLS configuration types. \
      Enable `tokio-native-tls`, which implies it and brings the TLS connection code."

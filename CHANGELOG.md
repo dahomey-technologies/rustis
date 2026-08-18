@@ -29,6 +29,9 @@ The upgrade checklist. Each item is stated in the section it belongs to below.
   `HashMap::from([…])` or read it with `get`/`contains_key` on the inner type must
   change; `Value::get` replaces the lookup.
 
+- **`Value::SimpleString` equals the `Value::BulkString` carrying the same bytes.**
+  A comparison that relied on the two being distinct now answers `true`.
+
 `cargo semver-checks` reports 11 removed trait methods and 4 removed structs.
 
 ### Added
@@ -45,8 +48,10 @@ The upgrade checklist. Each item is stated in the section it belongs to below.
   touching no slot this client uses was never noticed, and a node added to the
   cluster was never connected to.
 
-- **`Value::as_map` and `Value::get`** read the entries of a map and look a field
-  up in them.
+- **`Value` accessors**: `as_str`, `as_bytes`, `as_i64`, `as_f64`, `as_bool`,
+  `as_array`, `as_map`, `as_error`, `is_null` and `get`. The object model held one
+  method, `into`, so reading a reply whose shape the caller does not model meant
+  pattern matching or a detour through serde.
 
 ### Changed
 
@@ -54,6 +59,11 @@ The upgrade checklist. Each item is stated in the section it belongs to below.
   them, and a field the server repeats appears twice. A `HashMap` lost both, made
   `Display`/`Debug` nondeterministic, and was the sole reason `Value` carried a
   hand-written `Hash` over `f64` and nested maps.
+
+- **`Value` compares payloads, not variants.** `SimpleString` and `BulkString` carry
+  the same thing and the deserializers read them identically, so which one a reply
+  arrives in is a server-version detail. Comparing on the variant made caller code
+  fail on a server upgrade.
 
 - **A reply nobody awaits is logged at `debug!`, not `warn!`, and names its command.**
   A caller that gives up on its reply — a `command_timeout`, a dropped future — is the

@@ -144,6 +144,88 @@ fn a_map_is_read_as_a_sequence_of_entries() {
     assert_eq!(None, Value::Integer(1).as_map());
 }
 
+/// The two string variants carry the same payload and the deserializer reads
+/// them identically, so which one a reply arrives in is a server-version
+/// detail — `+OK` from one release, `$2\r\nOK` from the next. Comparing them
+/// on the variant would make caller code version-fragile for no gain.
+#[test]
+fn a_simple_string_equals_the_same_bulk_string() {
+    assert_eq!(
+        Value::SimpleString("OK".to_owned()),
+        Value::BulkString(b"OK".to_vec())
+    );
+    assert_eq!(
+        Value::BulkString(b"OK".to_vec()),
+        Value::SimpleString("OK".to_owned())
+    );
+
+    // Nesting must follow, since it compares elementwise.
+    assert_eq!(
+        Value::Array(vec![Value::SimpleString("OK".to_owned())]),
+        Value::Array(vec![Value::BulkString(b"OK".to_vec())])
+    );
+
+    // Different payloads stay different, and a non-UTF-8 bulk string equals no
+    // simple string at all.
+    assert_ne!(
+        Value::SimpleString("OK".to_owned()),
+        Value::BulkString(b"KO".to_vec())
+    );
+    assert_ne!(
+        Value::SimpleString("\u{fffd}".to_owned()),
+        Value::BulkString(vec![0xff])
+    );
+}
+
+/// `Value` is what a caller gets when it does not model the reply shape. It
+/// must therefore be readable without `serde`: one accessor per variant, each
+/// answering `None` when the variant does not match.
+#[test]
+fn a_value_can_be_read_without_serde() {
+    // Both string variants read as text, since they mean the same thing.
+    assert_eq!(Some("OK"), Value::SimpleString("OK".to_owned()).as_str());
+    assert_eq!(Some("OK"), Value::BulkString(b"OK".to_vec()).as_str());
+    assert_eq!(None, Value::BulkString(vec![0xff]).as_str());
+    assert_eq!(
+        Some(b"OK".as_slice()),
+        Value::SimpleString("OK".to_owned()).as_bytes()
+    );
+
+    assert_eq!(Some(12), Value::Integer(12).as_i64());
+    assert_eq!(None, Value::SimpleString("12".to_owned()).as_i64());
+    assert_eq!(Some(12.5), Value::Double(12.5).as_f64());
+    assert_eq!(Some(true), Value::Boolean(true).as_bool());
+
+    assert!(Value::Null.is_null());
+    assert!(!Value::Integer(0).is_null());
+
+    let array = Value::Array(vec![Value::Integer(1), Value::Integer(2)]);
+    assert_eq!(2, array.as_array().expect("an array").len());
+    assert_eq!(None, array.as_map());
+
+    let map = Value::Map(vec![
+        (Value::SimpleString("a".to_owned()), Value::Integer(1)),
+        (Value::SimpleString("b".to_owned()), Value::Integer(2)),
+    ]);
+    assert_eq!(2, map.as_map().expect("a map").len());
+    // A lookup answers the first entry with that field, and reads a bulk-string
+    // field against a simple-string key.
+    assert_eq!(
+        Some(&Value::Integer(1)),
+        map.get(&Value::BulkString(b"a".to_vec()))
+    );
+    assert_eq!(None, map.get(&Value::SimpleString("c".to_owned())));
+
+    let error = Value::Error(RedisError {
+        kind: RedisErrorKind::Err,
+        description: "MyError".to_owned(),
+    });
+    assert_eq!(
+        Some(&RedisErrorKind::Err),
+        error.as_error().map(|e| &e.kind)
+    );
+}
+
 #[test]
 fn boolean_equality() {
     // Two booleans must compare on their inner value, not merely on the variant.

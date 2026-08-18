@@ -8,11 +8,17 @@ and which matches perfectly the RESP protocol: the enum [`resp::Value`](Value).
 
 Each variant of this enum matches a [`RESP`](https://redis.io/docs/reference/protocol-spec/) type.
 
-Because, navigating through a [`resp::Value`](Value) instance can be verbose and requires a lot of pattern matching,
-**rustis** provides a [`resp::Value`](Value) to Rust type conversion with a [serde](https://serde.rs/)
-deserializer implementation of a [`resp::Value`](Value) reference.
+A [`resp::Value`](Value) is read either variant by variant, through the accessors
+[`as_str`](Value::as_str), [`as_bytes`](Value::as_bytes), [`as_i64`](Value::as_i64),
+[`as_f64`](Value::as_f64), [`as_bool`](Value::as_bool), [`as_array`](Value::as_array),
+[`as_map`](Value::as_map), [`as_error`](Value::as_error), [`is_null`](Value::is_null) and
+[`get`](Value::get) — each answering [`None`] when the variant does not match — or all at once,
+by converting it to a Rust type. **rustis** provides that conversion with a
+[serde](https://serde.rs/) deserializer implementation of a [`resp::Value`](Value) reference,
+reached through the associate function [`Value::into`](Value::into).
 
-This conversion is easily accessible through the associate function [`Value::into`](Value::into).
+A command whose reply shape is known is best deserialized straight into the type that models it:
+`Value` is the fallback for the replies that are not.
 
 # Command arguments
 

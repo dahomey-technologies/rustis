@@ -55,6 +55,78 @@ impl Value {
         T::deserialize(&self)
     }
 
+    /// The text of a [`Value::SimpleString`] or of a UTF-8
+    /// [`Value::BulkString`], [`None`] for any other variant and for bytes that
+    /// are not UTF-8.
+    ///
+    /// Both string variants answer here because they mean the same thing: which
+    /// one a reply arrives in is a server-version detail.
+    #[inline]
+    #[must_use]
+    pub fn as_str(&self) -> Option<&str> {
+        match self {
+            Value::SimpleString(s) => Some(s),
+            Value::BulkString(bs) => std::str::from_utf8(bs).ok(),
+            _ => None,
+        }
+    }
+
+    /// The bytes of a [`Value::SimpleString`] or [`Value::BulkString`], [`None`]
+    /// for any other variant.
+    #[inline]
+    #[must_use]
+    pub fn as_bytes(&self) -> Option<&[u8]> {
+        match self {
+            Value::SimpleString(s) => Some(s.as_bytes()),
+            Value::BulkString(bs) => Some(bs),
+            _ => None,
+        }
+    }
+
+    /// The value of a [`Value::Integer`], [`None`] for any other variant. A
+    /// numeric string is not converted: that is
+    /// [`into`](Value::into)'s job.
+    #[inline]
+    #[must_use]
+    pub fn as_i64(&self) -> Option<i64> {
+        match self {
+            Value::Integer(i) => Some(*i),
+            _ => None,
+        }
+    }
+
+    /// The value of a [`Value::Double`], [`None`] for any other variant.
+    #[inline]
+    #[must_use]
+    pub fn as_f64(&self) -> Option<f64> {
+        match self {
+            Value::Double(d) => Some(*d),
+            _ => None,
+        }
+    }
+
+    /// The value of a [`Value::Boolean`], [`None`] for any other variant.
+    #[inline]
+    #[must_use]
+    pub fn as_bool(&self) -> Option<bool> {
+        match self {
+            Value::Boolean(b) => Some(*b),
+            _ => None,
+        }
+    }
+
+    /// The elements of a [`Value::Array`], [`Value::Set`] or [`Value::Push`],
+    /// [`None`] for any other variant. The three are one shape on the wire and
+    /// a caller reading them rarely cares which arrived.
+    #[inline]
+    #[must_use]
+    pub fn as_array(&self) -> Option<&[Value]> {
+        match self {
+            Value::Array(v) | Value::Set(v) | Value::Push(v) => Some(v),
+            _ => None,
+        }
+    }
+
     /// The entries of a [`Value::Map`], in the order the server sent them,
     /// [`None`] for any other variant.
     #[inline]
@@ -64,6 +136,24 @@ impl Value {
             Value::Map(entries) => Some(entries),
             _ => None,
         }
+    }
+
+    /// The error of a [`Value::Error`], [`None`] for any other variant.
+    #[inline]
+    #[must_use]
+    pub fn as_error(&self) -> Option<&RedisError> {
+        match self {
+            Value::Error(e) => Some(e),
+            _ => None,
+        }
+    }
+
+    /// Whether this is a [`Value::Null`]. An empty array or map is not null:
+    /// RESP distinguishes them and so does `Value`.
+    #[inline]
+    #[must_use]
+    pub fn is_null(&self) -> bool {
+        matches!(self, Value::Null)
     }
 
     /// The value of the first entry of a [`Value::Map`] whose field equals
@@ -97,10 +187,20 @@ fn canonical_double_bits(d: f64) -> u64 {
     }
 }
 
+/// Equality compares payloads, not variants.
+///
+/// [`Value::SimpleString`] and [`Value::BulkString`] carry the same thing and
+/// the deserializer reads them identically, so a reply that arrives as `+OK`
+/// from one server release and as `$2\r\nOK` from the next compares equal
+/// either way. Comparing on the variant would make caller code fragile against
+/// a server upgrade, and would buy nothing: no caller can act on the
+/// difference.
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::SimpleString(l0), Self::SimpleString(r0)) => l0 == r0,
+            (Self::SimpleString(l0), Self::BulkString(r0))
+            | (Self::BulkString(r0), Self::SimpleString(l0)) => l0.as_bytes() == r0.as_slice(),
             (Self::Integer(l0), Self::Integer(r0)) => l0 == r0,
             (Self::Double(l0), Self::Double(r0)) => {
                 canonical_double_bits(*l0) == canonical_double_bits(*r0)

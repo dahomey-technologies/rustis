@@ -255,6 +255,10 @@ does not parse, is rejected with an error rather than ignored.
 * [`retry_on_error`](Config::retry_on_error) - Defines the default strategy for retries on network error (default `false`).
 * [`max_command_attempts`](Config::max_command_attempts) - Maximum number of times a command is sent
   before giving up (default `5`).
+* [`read_preference`](ClusterConfig::read_preference) - (Cluster only) Which node of a shard reads
+  are routed to (default `master`).
+* [`topology_refresh_interval`](ClusterConfig::topology_refresh_interval) - (Cluster only) How often
+  the topology is reloaded on its own, `0` to reload it only on a redirection (default `60000` ms).
 * [`wait_between_failures`](SentinelConfig::wait_between_failures) - (Sentinel only) Waiting time after
   failing before connecting to the next Sentinel instance (default `250` ms).
 * [`sentinel_username`](SentinelConfig::username) - (Sentinel only) Sentinel username

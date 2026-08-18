@@ -1671,3 +1671,40 @@ async fn reads_stay_on_the_master_by_default() -> Result<()> {
     client.del("clu_default_master_key").await?;
     Ok(())
 }
+
+/// A cluster whose topology moves under a healthy connection is never corrected
+/// by traffic alone: the client learns of a change only when a command earns a
+/// redirection. A resharding that touches no slot this client uses therefore
+/// leaves it holding a map that is wrong until it happens to be wrong for a
+/// command. The topology is refreshed on a timer as well.
+#[tokio::test]
+#[serial]
+async fn the_topology_is_refreshed_without_a_redirection() -> Result<()> {
+    use crate::client::{Config, ServerConfig};
+
+    let hook = ClusterTestHook::new();
+    let host = get_default_host();
+    let mut config: Config =
+        format!("redis+cluster://{host}:7000,{host}:7001,{host}:7002").into_config()?;
+    config.cluster_test_hook = Some(hook.clone());
+    if let ServerConfig::Cluster(cluster_config) = &mut config.server {
+        cluster_config.topology_refresh_interval = Some(Duration::from_millis(200));
+    }
+
+    let client = Client::connect(config).await?;
+    let after_connect = hook.topology_refreshes();
+
+    // No traffic at all: whatever happens next is the timer's doing.
+    sleep(Duration::from_millis(900)).await;
+
+    let refreshes = hook.topology_refreshes() - after_connect;
+    assert!(
+        refreshes >= 2,
+        "a 200 ms interval must refresh several times in 900 ms, got {refreshes}"
+    );
+
+    // The connection is still usable afterwards.
+    client.set("topology_probe", "value").await?;
+
+    Ok(())
+}

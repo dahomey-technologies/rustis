@@ -7,6 +7,7 @@ use crate::{
 };
 use serde::de::DeserializeOwned;
 use std::{future::IntoFuture, sync::Arc, task::Poll};
+use tokio::time::Instant;
 
 #[allow(clippy::large_enum_variant)]
 pub(crate) enum Connection {
@@ -95,6 +96,31 @@ impl Connection {
             Connection::Standalone(connection) => connection.try_read(),
             Connection::Sentinel(connection) => connection.try_read(),
             Connection::Cluster(connection) => connection.try_read(),
+        }
+    }
+
+    /// When this connection next has upkeep to do on its own, `None` when it has
+    /// none.
+    ///
+    /// Only a cluster connection has any: a standalone or Sentinel connection has
+    /// one server and nothing to discover.
+    #[inline]
+    pub(crate) fn next_maintenance(&self) -> Option<Instant> {
+        match self {
+            Connection::Standalone(_) | Connection::Sentinel(_) => None,
+            Connection::Cluster(connection) => connection.next_maintenance(),
+        }
+    }
+
+    /// Runs the upkeep [`Self::next_maintenance`] announced.
+    ///
+    /// The caller must run this outside a cancellable branch: a reload dropped
+    /// halfway would leave the topology partly applied.
+    #[inline]
+    pub(crate) async fn run_maintenance(&mut self) {
+        match self {
+            Connection::Standalone(_) | Connection::Sentinel(_) => (),
+            Connection::Cluster(connection) => connection.run_maintenance().await,
         }
     }
 

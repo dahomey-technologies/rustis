@@ -147,6 +147,10 @@ pub struct BackpressureConfig {
     /// queued is never dropped, and neither is one being replayed after a
     /// reconnection or a cluster redirection.
     ///
+    /// The budget covers what is in flight, not only what is waiting to be
+    /// written: a message is released when its reply arrives, so a connection
+    /// that accepts every byte and answers none is bounded too.
+    ///
     /// Only commands sent with `retry_on_error` accumulate across a
     /// disconnection: the others are failed immediately, so they never reach
     /// this budget.
@@ -476,6 +480,12 @@ pub struct Config {
     /// between 32 and 128 and only mildly concurrency-dependent; what matters is
     /// that it stays *below* the in-flight concurrency, otherwise it never fires.
     ///
+    /// It also bounds how long either direction may hold the network task. The
+    /// two share one task, so a side that consumes until its source runs dry
+    /// starves the other: a caller flooding the channel would delay every reply,
+    /// and a firehose of replies would delay every send. Each wave returns
+    /// control after this many messages.
+    ///
     /// The default is `48`.
     pub max_messages_per_wave: usize,
     /// Test-only hook to observe and inject retry reasons in the send batch.
@@ -796,11 +806,19 @@ impl Config {
                     ..Default::default()
                 };
 
-                if let Some(ref mut query) = query
-                    && let Some(read_preference) =
+                if let Some(ref mut query) = query {
+                    if let Some(read_preference) =
                         Self::take_query_param::<ReadPreference>(query, "read_preference")?
-                {
-                    cluster_config.read_preference = read_preference;
+                    {
+                        cluster_config.read_preference = read_preference;
+                    }
+
+                    if let Some(millis) =
+                        Self::take_query_param::<u64>(query, "topology_refresh_interval")?
+                    {
+                        cluster_config.topology_refresh_interval =
+                            (millis != 0).then(|| Duration::from_millis(millis));
+                    }
                 }
 
                 ServerConfig::Cluster(cluster_config)
@@ -1111,6 +1129,7 @@ impl Display for Config {
             ServerConfig::Cluster(ClusterConfig {
                 nodes,
                 read_preference: _,
+                topology_refresh_interval: _,
             }) => {
                 f.write_str(
                     &nodes
@@ -1234,16 +1253,29 @@ impl Display for Config {
         if let ServerConfig::Cluster(ClusterConfig {
             nodes: _,
             read_preference,
+            topology_refresh_interval,
         }) = &self.server
-            && *read_preference != ReadPreference::default()
         {
-            if !query_separator {
-                query_separator = true;
-                f.write_char('?')?;
-            } else {
-                f.write_char('&')?;
+            if *read_preference != ReadPreference::default() {
+                if !query_separator {
+                    query_separator = true;
+                    f.write_char('?')?;
+                } else {
+                    f.write_char('&')?;
+                }
+                f.write_fmt(format_args!("read_preference={read_preference}"))?;
             }
-            f.write_fmt(format_args!("read_preference={read_preference}"))?;
+
+            if *topology_refresh_interval != Some(DEFAULT_TOPOLOGY_REFRESH_INTERVAL) {
+                if !query_separator {
+                    query_separator = true;
+                    f.write_char('?')?;
+                } else {
+                    f.write_char('&')?;
+                }
+                let millis = topology_refresh_interval.map_or(0, |i| i.as_millis() as u64);
+                f.write_fmt(format_args!("topology_refresh_interval={millis}"))?;
+            }
         }
 
         if let ServerConfig::Sentinel(SentinelConfig {
@@ -1455,8 +1487,11 @@ impl FromStr for ReadPreference {
     }
 }
 
+/// The default interval between two proactive topology refreshes.
+const DEFAULT_TOPOLOGY_REFRESH_INTERVAL: Duration = Duration::from_secs(60);
+
 /// Configuration for connecting to a Redis [`Cluster`](https://redis.io/docs/management/scaling/)
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 #[non_exhaustive]
 pub struct ClusterConfig {
     /// An array of `(host, port)` tuples for each known cluster node.
@@ -1465,6 +1500,31 @@ pub struct ClusterConfig {
     /// Which node of a shard reads are routed to (default
     /// [`Master`](ReadPreference::Master)).
     pub read_preference: ReadPreference,
+
+    /// How often the cluster topology is reloaded on its own, or `None` to
+    /// reload it only when the cluster asks for it.
+    ///
+    /// A redirection is the only other thing that corrects the local slot map,
+    /// so a healthy connection to a topology that has moved stays wrong until a
+    /// command happens to be wrong. A resharding that touches no slot this
+    /// client uses is never noticed at all, and a node added to the cluster is
+    /// never connected to.
+    ///
+    /// One `CLUSTER SHARDS` per interval per client is the whole cost. In a URL,
+    /// `topology_refresh_interval=0` means `None`.
+    ///
+    /// The default is 60 seconds.
+    pub topology_refresh_interval: Option<Duration>,
+}
+
+impl Default for ClusterConfig {
+    fn default() -> Self {
+        Self {
+            nodes: Vec::new(),
+            read_preference: ReadPreference::default(),
+            topology_refresh_interval: Some(DEFAULT_TOPOLOGY_REFRESH_INTERVAL),
+        }
+    }
 }
 
 /// Config for TLS.

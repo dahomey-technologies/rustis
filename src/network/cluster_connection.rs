@@ -25,6 +25,7 @@ use std::{
     task::Poll,
     time::Duration,
 };
+use tokio::time::Instant;
 use tracing::{debug, error, info, trace, warn};
 
 /// Test-only handle used to make the cluster topology-change failure path
@@ -50,6 +51,9 @@ pub(crate) struct ClusterTestHook {
     /// reproducing a transient cluster reply (`TRYAGAIN`, `CLUSTERDOWN`) without
     /// having to catch a real resharding at the right microsecond.
     transient_error: Arc<std::sync::Mutex<Option<Bytes>>>,
+    /// Counts every completed topology discovery, so a test can tell a refresh
+    /// that happened on its own from one a redirection asked for.
+    topology_refreshes: Arc<std::sync::atomic::AtomicUsize>,
 }
 
 #[cfg(test)]
@@ -89,6 +93,17 @@ impl ClusterTestHook {
     /// that a later refresh sees the real topology again.
     pub(crate) fn hide_node_on_initial_discovery(&self, node_id: &str) {
         *self.hidden_node_id.lock().unwrap() = Some(node_id.to_owned());
+    }
+
+    /// How many topology discoveries have completed on this connection.
+    pub(crate) fn topology_refreshes(&self) -> usize {
+        self.topology_refreshes
+            .load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    fn record_topology_refresh(&self) {
+        self.topology_refreshes
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     }
 
     fn take_hidden_node_id(&self) -> Option<String> {
@@ -300,6 +315,12 @@ impl ClusterNodeResult {
 /// Cluster connection
 /// read & write_batch functions are implemented following Redis Command Tips
 /// See <https://redis.io/docs/reference/command-tips/>
+/// `interval` from now, capped rather than overflowing the monotonic clock.
+fn deadline_after(interval: Duration) -> Instant {
+    let now = Instant::now();
+    now.checked_add(interval).unwrap_or(now)
+}
+
 pub(crate) struct ClusterConnection {
     cluster_config: ClusterConfig,
     config: Config,
@@ -334,6 +355,9 @@ pub(crate) struct ClusterConnection {
     pending_reply_skip: Option<Command>,
     /// State to manage the "Lazy MULTI" logic
     transaction_state: TransactionState,
+    /// When the next proactive reload is due, `None` when there is none. The
+    /// interval it is computed from lives on `cluster_config`.
+    next_topology_refresh: Option<Instant>,
     /// Whether the topology has already been refreshed during the send batch
     /// currently being fed. Reset by `flush`, which ends that batch.
     refreshed_in_current_batch: bool,
@@ -372,6 +396,7 @@ impl ClusterConnection {
             is_reply_on: true,
             pending_reply_skip: None,
             transaction_state: TransactionState::default(),
+            next_topology_refresh: cluster_config.topology_refresh_interval.map(deadline_after),
             refreshed_in_current_batch: false,
             delayed_in_current_batch: false,
             #[cfg(test)]
@@ -1927,8 +1952,39 @@ impl ClusterConnection {
     /// Nodes appearing here are restored from [`Self::state_snapshot`]: a refresh runs
     /// inside `feed` / `read`, which the handler drives without lending its registry,
     /// so the snapshot is what makes the caller's state reach a joining shard.
+    /// When the topology is next due to be reloaded on its own.
+    ///
+    /// A redirection is the only other thing that corrects the local slot map, so
+    /// a healthy connection to a topology that has moved stays wrong until a
+    /// command happens to be wrong — and a resharding that touches no slot this
+    /// client uses is never noticed at all.
+    pub(crate) fn next_maintenance(&self) -> Option<Instant> {
+        self.next_topology_refresh
+    }
+
+    /// Reloads the topology and schedules the next reload.
+    ///
+    /// A failure is logged and not propagated: the previous topology is still in
+    /// place and still serving, so giving up over a failed refresh would turn a
+    /// stale map into no client at all. The next interval tries again.
+    pub(crate) async fn run_maintenance(&mut self) {
+        self.next_topology_refresh = self
+            .cluster_config
+            .topology_refresh_interval
+            .map(deadline_after);
+
+        if let Err(e) = self.refresh_nodes_and_slot_ranges().await {
+            debug!("Cannot refresh the cluster topology: {e}");
+        }
+    }
+
     async fn refresh_nodes_and_slot_ranges(&mut self) -> Result<()> {
         debug!("Reloading slot ranges");
+
+        #[cfg(test)]
+        if let Some(hook) = &self.test_hook {
+            hook.record_topology_refresh();
+        }
 
         let addresses = self.discovery_addresses();
         #[cfg_attr(not(test), allow(unused_mut))]

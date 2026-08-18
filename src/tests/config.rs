@@ -431,6 +431,30 @@ fn into_config() -> Result<()> {
             .to_string()
     );
 
+    assert_eq!(
+        "redis+cluster://127.0.0.1:7000?topology_refresh_interval=5000",
+        "redis+cluster://127.0.0.1:7000?topology_refresh_interval=5000"
+            .into_config()?
+            .to_string()
+    );
+
+    // `0` means no proactive refresh, and is not the default, so it survives the
+    // round trip rather than being folded away.
+    assert_eq!(
+        "redis+cluster://127.0.0.1:7000?topology_refresh_interval=0",
+        "redis+cluster://127.0.0.1:7000?topology_refresh_interval=0"
+            .into_config()?
+            .to_string()
+    );
+
+    // the default interval is implicit in the URL
+    assert_eq!(
+        "redis+cluster://127.0.0.1:7000",
+        "redis+cluster://127.0.0.1:7000?topology_refresh_interval=60000"
+            .into_config()?
+            .to_string()
+    );
+
     assert!("127.0.0.1:xyz".into_config().is_err());
     assert!("redis://127.0.0.1:xyz".into_config().is_err());
     assert!("redis://username@127.0.0.1".into_config().is_err());

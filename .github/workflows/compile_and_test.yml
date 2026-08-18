@@ -39,6 +39,21 @@ jobs:
         run: cargo check --release
       - name: Checking style
         run: cargo fmt --all -- --check
+      # The benchmark and web-example crates belong in `[dev-dependencies]`.
+      # They were optional dependencies once, so that a Cargo feature could gate
+      # them, which made `fred` and `redis` — competing drivers — read as
+      # dependencies of this crate on crates.io. Nothing but this step notices
+      # one moving back: an optional dependency is never built unless its
+      # feature is on, so every other job stays green.
+      - name: No harness crate is a normal dependency
+        run: |
+          offenders=$(cargo tree -e normal --all-features --prefix none \
+            | grep -E '^(criterion|fred|redis|axum|actix-web|pprof) ' | sort -u || true)
+          if [ -n "$offenders" ]; then
+            echo "These belong in [dev-dependencies]:"
+            echo "$offenders"
+            exit 1
+          fi
       # Broken intra-doc links compile fine and only show up as dead links on
       # docs.rs, so nothing here caught them until this step existed. Denying
       # rustdoc warnings also covers links from public docs into private items,

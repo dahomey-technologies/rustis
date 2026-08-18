@@ -1708,3 +1708,55 @@ async fn the_topology_is_refreshed_without_a_redirection() -> Result<()> {
 
     Ok(())
 }
+
+/// A redirection is a retry, and it spends the per-message attempt budget.
+///
+/// The budget is spent whatever `retry_on_error` says: that flag governs the
+/// reconnection replay alone. This is the half of `max_command_attempts` that a
+/// stock configuration actually exercises, and the reason the default of `5`
+/// has to absorb an ordinary slot migration.
+#[tokio::test]
+#[serial]
+async fn a_redirection_spends_the_attempt_budget() -> Result<()> {
+    crate::tests::log_try_init();
+
+    let cluster_hook = ClusterTestHook::new();
+
+    let host = get_default_host();
+    let mut config =
+        format!("redis+cluster://{host}:7000,{host}:7001,{host}:7002").into_config()?;
+    config.cluster_test_hook = Some(cluster_hook.clone());
+    assert!(
+        !config.retry_on_error,
+        "this test is about the stock default; update it deliberately if it changes"
+    );
+    // One attempt allowed: the first redirection exhausts the budget.
+    config.max_command_attempts = 1;
+    let client = Client::connect(config).await?;
+
+    client.set("clu_attempts", "value").await?;
+
+    // A real `MOVED` reply, which the receive path turns into a retry rather
+    // than into routing information attached before the send.
+    let slot = client.cluster_keyslot("clu_attempts").await?;
+    cluster_hook.arm_transient_error_on_next_result(&format!("MOVED {slot} {host}:7001"));
+
+    let result: Result<String> = timeout(
+        Duration::from_secs(5),
+        client.get::<String>("clu_attempts").into_future(),
+    )
+    .await?;
+
+    let error = result.unwrap_err();
+    assert!(
+        matches!(
+            error.kind(),
+            ErrorKind::Client(ClientError::MaxCommandAttemptsReached)
+        ),
+        "a redirection must spend an attempt, got {error:?}"
+    );
+
+    client.del("clu_attempts").await?;
+
+    Ok(())
+}

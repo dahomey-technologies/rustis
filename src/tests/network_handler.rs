@@ -270,26 +270,21 @@ async fn retryable_command_fails_after_max_command_attempts() -> Result<()> {
     Ok(())
 }
 
-/// The default attempt budget must absorb an ordinary cluster slot migration.
+/// A command carrying redirection reasons is routed by them, twice in a row.
 ///
-/// Redirections and reconnections share one budget, and a migration legitimately
-/// costs an `ASK` followed by a `MOVED` when it completes between the two. A
-/// command must survive that sequence on the stock configuration; a budget of
-/// `3` would leave almost no room, which is why the default is higher.
+/// This covers the *send* path only: the reasons are attached before the write,
+/// so the command is routed as a redirection asks and never replayed. What spends
+/// the attempt budget is a redirection arriving as a **reply**, which
+/// `a_redirection_spends_the_attempt_budget` in the cluster suite covers.
 #[tokio::test]
 #[serial]
-async fn a_command_survives_an_ask_then_moved_on_the_default_attempt_budget() -> Result<()> {
+async fn a_command_is_routed_by_two_successive_redirection_reasons() -> Result<()> {
     log_try_init();
 
     let hook = SendBatchTestHook::new();
     let mut config = get_default_config()?;
     config.send_batch_test_hook = Some(hook.clone());
     let client = get_test_client_with_config(config.clone()).await?;
-
-    assert_eq!(
-        5, config.max_command_attempts,
-        "this test is about the stock budget; update it deliberately if it changes"
-    );
 
     // Two successive redirections, as a slot migration that finishes midway
     // would produce, then the command is left alone and must succeed.

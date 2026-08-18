@@ -70,5 +70,19 @@ jobs:
         cargo semver-checks --baseline-rev "$BASELINE" \
           --only-explicit-features \
           --features tokio-runtime,tokio-rustls,pool,json,client-cache
+    # `cargo publish` builds the crate once, with default features — that is
+    # `tokio-runtime` alone. Everything gated behind another feature is packaged
+    # unbuilt, so a break in the docs.rs set fails the docs.rs build *after* the
+    # version is on crates.io, where it cannot be replaced. The two sets checked
+    # here are the ones a release must not break: what docs.rs renders, and the
+    # TLS backend the default set never compiles.
+    #
+    # This duplicates two entries of `compile_and_test.yml`'s matrix on purpose:
+    # that workflow runs on push and pull request, and a release can be cut from
+    # a tag whose checks are older than the manifest.
+    - name: Check the docs.rs feature set
+      run: cargo check --no-default-features --features tokio-runtime,tokio-rustls,pool,json,client-cache
+    - name: Check the native-tls backend
+      run: cargo check --no-default-features --features tokio-runtime,tokio-native-tls,pool,json,client-cache
     - name: Publish crate
       run: cargo publish --token ${{secrets.CRATES_IO_API_TOKEN}}

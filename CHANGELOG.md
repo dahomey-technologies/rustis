@@ -39,6 +39,20 @@ Versions up to and including `0.19.3` are documented in the
   now live in one list, and what each executor adds on top is named at its own
   call site. The implemented sets are unchanged.
 
+- **A `tests/` directory compiles the crate as a downstream consumer does.** The
+  whole suite lived in `src/tests/`, where `pub(crate)` is in scope, so nothing
+  exercised the published surface by path. `tests/public_api.rs` queues a command
+  from each family into a pipeline and a transaction, which is the check that
+  fails when a batch impl list falls behind.
+
+- **CI builds what it had been skipping.** `--all-targets` only covers the
+  targets the named features enable, so the 14 benchmark targets, the 8
+  `bench`-gated examples and the 4 `web-examples` ones were compiled by no job at
+  all. A `fuzzing` entry joins the feature matrix for the same reason. `publish.yml`
+  now checks the docs.rs feature set and the native-tls backend before publishing:
+  `cargo publish` builds with default features only, so a break in either used to
+  surface after the version was on crates.io, where it cannot be replaced.
+
 ## [0.24.0] - 2026-08-12
 
 ### BREAKING CHANGES

@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - "src/**"
+      - "tests/**"
       - "redis/**"
       - ".github/workflows/**"
       - "Cargo.toml"
@@ -15,6 +16,7 @@ on:
   pull_request:
     paths:
       - "src/**"
+      - "tests/**"
       - ".github/workflows/**"
       - "Cargo.toml"
       - "Cargo.lock"
@@ -100,7 +102,32 @@ jobs:
       - name: cargo clippy --all-targets
         run: cargo clippy --all-targets --no-default-features --features tokio-runtime,tokio-rustls,pool,json,client-cache -- -D warnings
 
-  # Check that the version bump in `Cargo.toml` matches what actually changed in
+  # `--all-targets` only covers the targets the named features enable, so the job
+  # above — which names neither `bench` nor `web-examples` — compiles none of the
+  # 14 benchmark targets, none of the 8 `bench`-gated examples and none of the 4
+  # axum/actix ones. Roughly two thirds of `examples/` and every benchmark were
+  # built by no job at all, which is how they rot: an API change lands, the
+  # library and its tests are green, and the breakage surfaces the next time a
+  # maintainer profiles something.
+  #
+  # A job of its own rather than extra features on the panic-policy one: it pulls
+  # criterion, fred, redis, axum, actix and pprof, and a failure here is about a
+  # gated target rather than about the panic policy.
+  clippy-gated-targets:
+    name: Clippy (benches and gated examples)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v5
+      - name: cargo clippy --all-targets (bench, web-examples)
+        run: |
+          cargo clippy --all-targets --no-default-features \
+            --features tokio-runtime,tokio-rustls,pool,json,client-cache,bench,web-examples \
+            -- -D warnings
+
   # Report the public-API breaks a pull request introduces, so each one is a
   # deliberate entry in `CHANGELOG.md` rather than a discovery made after
   # publishing.
@@ -200,6 +227,10 @@ jobs:
           - tokio-runtime,json
           - tokio-runtime,client-cache
           - tokio-runtime,pool,json,client-cache
+          # `fuzzing` exposes internal entry points to the `fuzz/` targets. It is
+          # built by no other job here, and `cargo-fuzz` runs on its own
+          # schedule, so without this entry it breaks silently.
+          - tokio-runtime,fuzzing
           - tokio-runtime,tokio-rustls
           - tokio-runtime,tokio-native-tls
           - tokio-runtime,tokio-rustls,pool,json,client-cache

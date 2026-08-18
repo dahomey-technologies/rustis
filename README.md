@@ -157,4 +157,8 @@ Extra arguments are forwarded, so `./run_tests.sh string` filters by name.
 # Benchmarks
 
 1. From the `redis` directory, run `docker_up.sh` or `docker_up.cmd`
-2. run `cargo bench`
+2. run `cargo bench --features bench`
+
+The feature is required: every benchmark target declares
+`required-features = ["bench"]`, so a plain `cargo bench` skips all of them and
+reports success having measured nothing.

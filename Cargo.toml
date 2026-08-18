@@ -14,6 +14,13 @@ edition = "2024"
 # 1.85. Verified by the `msrv` CI job, which is what keeps this number true.
 rust-version = "1.88"
 
+# The library has no `#[bench]` functions: every benchmark is a criterion target
+# with `harness = false`. Left at the default, `cargo bench` builds the lib test
+# target under `[profile.bench]` — fat LTO, one codegen unit, the whole
+# `cfg(test)` tree — for three minutes, to report `0 measured`.
+[lib]
+bench = false
+
 [features]
 default = ["tokio-runtime"]
 tokio-runtime = ["tokio/macros", "tokio/net", "tokio/rt", "tokio/io-util"]

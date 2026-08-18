@@ -21,6 +21,14 @@ Versions up to and including `0.19.3` are documented in the
   have brought the second one in. Each of the five rejected feature
   configurations now reports exactly one cause instead of one to three.
 
+- **`cargo bench` no longer spends three minutes measuring nothing.** Every
+  benchmark is a criterion target with `harness = false`, and the library has no
+  `#[bench]` functions, but the lib test target was still built under
+  `[profile.bench]` -- fat LTO, one codegen unit, the whole `cfg(test)` tree --
+  on every invocation, to report `0 measured`. `bench = false` in a `[lib]`
+  section removes the build. The README also said to run `cargo bench`, which
+  skips all 14 targets: the feature they require is now named there.
+
 ## [0.24.0] - 2026-08-12
 
 ### BREAKING CHANGES

@@ -147,10 +147,33 @@ A [`PooledClientManager`] hands out an [`ExclusiveClient`] for the same reason:
 a borrowed connection returns to the pool only once the command completes, so
 the block stays confined to it.
 
-Everything else is unaffected. Pub/sub is fine on a multiplexed connection —
+No other command is refused. Pub/sub is fine on a multiplexed connection —
 RESP3 keeps messages and command replies apart — and so are `MULTI`/`EXEC`
-transactions, which [`Client::create_transaction`] still opens: only `WATCH`
-attaches state to the connection.
+transactions, which [`Client::create_transaction`] still opens: of the two
+families above, only `WATCH` attaches state to the connection. A handful of
+commands do attach state without being incompatible with sharing; they are the
+subject of the next section.
+
+# Connection-scoped commands
+
+Some commands configure the connection instead of acting on data: `select`,
+`auth`, `client_setname`, `client_setinfo`, `client_no_evict`, `client_no_touch`,
+`client_tracking`, `client_reply` and `script_debug`.
+
+A [`Client`] is clonable, and one connection carries the commands of every clone.
+These commands therefore apply to every clone: `client.select(5)` moves the
+commands of all clones to database 5.
+
+The client records each of them and replays it after a reconnection, so the state
+survives a broken socket. It cannot scope the state to one clone, because the
+connection is the scope.
+
+Set the database with [`Config::database`](crate::client::Config::database).
+Set the credentials with [`Config::username`](crate::client::Config::username),
+[`Config::password`](crate::client::Config::password) or
+[`Config::credentials_provider`](crate::client::Config::credentials_provider). The
+handshake sends them on every connection. An [`ExclusiveClient`] owns its
+connection, which scopes these commands to the caller.
 
 # Configuration
 

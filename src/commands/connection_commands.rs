@@ -23,6 +23,12 @@ pub trait ConnectionCommands<'a>: Sized {
     /// # Errors
     /// a Redis error if the password, or username/password pair, is invalid.
     ///
+    /// # Warning
+    /// Every clone of a [`Client`](crate::client::Client) shares the connection, so
+    /// this changes the identity of all clones. Set the credentials in the
+    /// [`Config`](crate::client::Config) instead. See
+    /// [Connection-scoped commands](crate::client#connection-scoped-commands).
+    ///
     /// # Cluster
     /// Authentication is per-connection, and a cluster client holds one connection
     /// per node: authenticating on a single node would leave every other shard
@@ -438,6 +444,12 @@ pub trait ConnectionCommands<'a>: Sized {
     }
 
     /// Select the Redis logical database having the specified zero-based numeric index.
+    ///
+    /// # Warning
+    /// Every clone of a [`Client`](crate::client::Client) shares the connection, so
+    /// this moves the commands of all clones to `index`. Use
+    /// [`Config::database`](crate::client::Config::database) instead. See
+    /// [Connection-scoped commands](crate::client#connection-scoped-commands).
     ///
     /// # Cluster
     /// A cluster has a single database, and the server answers any non-zero index

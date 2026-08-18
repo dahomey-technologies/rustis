@@ -638,3 +638,44 @@ where
 
     panic!("{}: condition still false after 30s", label);
 }
+
+/// The client spec requires a client to learn the Sentinel fleet from the
+/// Sentinel it reached, so a configuration naming one instance survives that
+/// instance being replaced. Without it the list is frozen at whatever the URI
+/// said, and a redeployed fleet leaves the client with no reachable Sentinel.
+#[tokio::test]
+#[serial]
+async fn a_sentinel_connection_learns_the_other_instances() -> Result<()> {
+    use crate::{
+        ConnectionState,
+        client::{Config, SentinelConfig},
+        network::SentinelConnection,
+    };
+
+    log_try_init();
+
+    // One instance only: the other two must be discovered.
+    let sentinel_config = SentinelConfig {
+        instances: vec![(get_default_host(), 26379)],
+        service_name: "myservice".to_owned(),
+        ..Default::default()
+    };
+    let mut connection_state = ConnectionState::default();
+    let connection =
+        SentinelConnection::connect(&sentinel_config, &Config::default(), &mut connection_state)
+            .await?;
+
+    let known = connection.known_instances();
+    let ports: Vec<u16> = known.iter().map(|(_, port)| *port).collect();
+    assert!(
+        ports.contains(&26380) && ports.contains(&26381),
+        "the fleet must be learned from the answering Sentinel, got {known:?}"
+    );
+    assert_eq!(
+        Some(26379),
+        ports.first().copied(),
+        "the Sentinel that answered must stay first, so the next discovery starts there"
+    );
+
+    Ok(())
+}

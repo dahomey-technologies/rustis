@@ -1,7 +1,7 @@
 use crate::{
     ConnectionState, Error, ErrorKind, Result, RetryReason, StandaloneConnection,
     client::{Config, SentinelConfig},
-    commands::{RoleResult, SentinelCommands, ServerCommands},
+    commands::{RoleResult, SentinelCommands, SentinelInfo, ServerCommands},
     resp::{Command, RespResponse},
     sleep,
 };
@@ -42,10 +42,17 @@ impl SentinelConnection {
     #[inline]
     pub(crate) async fn reconnect(&mut self, connection_state: &mut ConnectionState) -> Result<()> {
         self.inner_connection =
-            Self::connect_to_sentinel(&self.sentinel_config, &self.config, connection_state)
+            Self::connect_to_sentinel(&mut self.sentinel_config, &self.config, connection_state)
                 .await?;
 
         Ok(())
+    }
+
+    /// The Sentinel instances this connection knows, the one that last answered
+    /// first.
+    #[cfg(test)]
+    pub(crate) fn known_instances(&self) -> &[(String, u16)] {
+        &self.sentinel_config.instances
     }
 
     /// Follow `Redis service discovery via Sentinel` documentation
@@ -59,11 +66,14 @@ impl SentinelConnection {
         config: &Config,
         connection_state: &mut ConnectionState,
     ) -> Result<SentinelConnection> {
+        // The discovery updates the instance list, so it runs against the copy
+        // this connection keeps rather than against the caller's configuration.
+        let mut sentinel_config = sentinel_config.clone();
         let inner_connection =
-            Self::connect_to_sentinel(sentinel_config, config, connection_state).await?;
+            Self::connect_to_sentinel(&mut sentinel_config, config, connection_state).await?;
 
         Ok(SentinelConnection {
-            sentinel_config: sentinel_config.clone(),
+            sentinel_config,
             config: config.clone(),
             inner_connection,
         })
@@ -90,7 +100,7 @@ impl SentinelConnection {
                   `max_discovery_rounds`, so the increment is bounded by it."
     )]
     async fn connect_to_sentinel(
-        sentinel_config: &SentinelConfig,
+        sentinel_config: &mut SentinelConfig,
         config: &Config,
         connection_state: &mut ConnectionState,
     ) -> Result<StandaloneConnection> {
@@ -115,7 +125,10 @@ impl SentinelConnection {
             }
             rounds += 1;
 
-            for sentinel_instance in &sentinel_config.instances {
+            // The list grows while it is walked, so the walk is by index over a
+            // snapshot of the instances known at the start of this round.
+            let instances = sentinel_config.instances.clone();
+            for sentinel_instance in &instances {
                 // Step 1: connecting to Sentinel
                 let (host, port) = sentinel_instance;
 
@@ -194,6 +207,11 @@ impl SentinelConnection {
                     replica_infos: _,
                 } = role
                 {
+                    // The fleet is learned only once a master is confirmed, so a
+                    // failing discovery does not pay for the extra round trip.
+                    Self::learn_fleet(&mut sentinel_connection, sentinel_config, (host, *port))
+                        .await;
+
                     return Ok(master_connection);
                 } else {
                     sleep(sentinel_config.wait_between_failures).await;
@@ -225,6 +243,54 @@ impl SentinelConnection {
 
     pub(crate) fn tag(&self) -> Arc<str> {
         self.inner_connection.tag()
+    }
+
+    /// Refreshes the instance list from the Sentinel that just answered.
+    ///
+    /// A configuration names the Sentinels that existed when it was written. The
+    /// client spec requires the list to be maintained from the fleet itself,
+    /// otherwise replacing every named instance — a redeployment, a scale-out —
+    /// leaves the client with nothing reachable and no way to learn better.
+    ///
+    /// The answering instance is moved to the front, so the next discovery starts
+    /// on the one known to work instead of walking the dead ones again.
+    ///
+    /// A failure here is not a connection failure: the master is already
+    /// confirmed. The list simply stays as it was.
+    async fn learn_fleet(
+        sentinel_connection: &mut StandaloneConnection,
+        sentinel_config: &mut SentinelConfig,
+        answered: (&String, u16),
+    ) {
+        let peers: Vec<SentinelInfo> = match sentinel_connection
+            .sentinel_sentinels(sentinel_config.service_name.clone())
+            .await
+        {
+            Ok(peers) => peers,
+            Err(e) => {
+                debug!("Cannot refresh the Sentinel instance list: {e}");
+                return;
+            }
+        };
+
+        let (answered_host, answered_port) = answered;
+        let mut instances = vec![(answered_host.clone(), answered_port)];
+        instances.extend(
+            sentinel_config
+                .instances
+                .drain(..)
+                .filter(|instance| instance != &(answered_host.clone(), answered_port)),
+        );
+
+        for peer in peers {
+            let instance = (peer.ip, peer.port);
+            if !instances.contains(&instance) {
+                debug!("Learned Sentinel {}:{}", instance.0, instance.1);
+                instances.push(instance);
+            }
+        }
+
+        sentinel_config.instances = instances;
     }
 }
 

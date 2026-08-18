@@ -127,6 +127,12 @@ The upgrade checklist. Each item is stated in the section it belongs to below.
 
 ### Internal
 
+- **The benchmark and web-example crates are dev dependencies.** `criterion`,
+  `fred`, `redis`, `axum`, `actix-web` and `pprof` were optional dependencies so a
+  Cargo feature could gate them, which made two competing drivers read as
+  dependencies of this crate on crates.io. `bench` and `web-examples` carry no
+  dependency now; `required-features` still keeps their targets out of a build.
+
 - **The command families are declared once instead of four times.** `Client`,
   `ExclusiveClient`, `Pipeline` and `Transaction` each carried a hand-written block of
   empty `impl`s, and nothing checked the four against each other. A family added to

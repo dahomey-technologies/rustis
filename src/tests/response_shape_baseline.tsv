@@ -17,6 +17,20 @@ BZPOPMIN	BZpopMinMaxResult<String, String>	Null
 # sibling that can answer `0` is `cf_addnx`, and it does declare `bool`.
 CF.ADD	()	Boolean
 
+# A hash field holds text, so HGET answers a bulk string whatever the value
+# means: a `bool` written as `1` reads back from `$1\r\n1`. The rule rejects a
+# bulk string for `bool` because that is how a reply carrying real data gets
+# flattened into a flag, but here the string *is* the flag, and a payload that
+# is neither `1`/`0` nor `true`/`false` is refused rather than coerced.
+HGET	bool	BulkString
+
+# Reading a missing hash field as a non-`Option` integer is the coercion this
+# report exists to expose, and `hget_missing_field` asserts it deliberately: it
+# is the negative test that pins the documented behaviour of a nil read as `u32`
+# being `0`. The type to declare in real code is `Option<u32>`, which the same
+# test covers on the line above.
+HGET	u32	Null
+
 # LPOP/RPOP with a count on a missing key answer a nil array. An empty
 # collection is the faithful reading: the caller asked for the elements and
 # there are none, which is the same statement as an existing empty list.

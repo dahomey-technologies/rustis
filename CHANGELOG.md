@@ -10,111 +10,76 @@ Versions up to and including `0.19.3` are documented in the
 
 ### BREAKING CHANGES
 
-The upgrade checklist. Each item is stated fully, with the reason it moved, in the
-section it belongs to below.
+The upgrade checklist. Each item is stated in the section it belongs to below.
 
-- **Six connection-driving commands are gone from the public command traits**:
-  `hello`, `asking`, `readonly`, `readwrite` and `cluster_slots` are now internal,
-  and `quit` is deleted. The client sends all of them itself, at the points where
-  they are correct. The four types that existed only to serve them went with them:
-  `HelloOptions`, `HelloResult`, `LegacyClusterShardResult` and
-  `LegacyClusterNodeResult`.
+- **Six connection-driving commands leave the public traits**: `hello`, `asking`,
+  `readonly`, `readwrite` and `cluster_slots` become internal, and `quit` is deleted.
+  The four types that served them become internal too: `HelloOptions`, `HelloResult`,
+  `LegacyClusterShardResult` and `LegacyClusterNodeResult`.
+- **Five deprecated string commands are removed**: `getset`, `psetex`, `setex`,
+  `setnx` and `substr`.
 
-- **Five deprecated string commands are gone**: `getset`, `psetex`, `setex`,
-  `setnx` and `substr`. Each has a replacement named below.
-
-`cargo semver-checks` reports the eleven removed trait methods and the four
-removed types.
+`cargo semver-checks` reports 11 removed trait methods and 4 removed structs.
 
 ### Removed
 
-- **The commands that drive the connection are no longer part of the public API.**
-  `hello`, `asking`, `readonly`, `readwrite` and `cluster_slots` moved to an
-  internal trait. A `Client` is clonable and multiplexed, so one connection carries
-  every clone's commands, and each of these either reconfigures that shared
-  connection underneath the others or contradicts a decision the client has already
-  made. `HELLO` is the sharpest: the handshake fixes the protocol at RESP3 and every
-  deserializer is written against RESP3 -- push frames for pub/sub, maps, doubles,
-  `_` for nil -- so a caller switching to RESP2 mid-session left the decoder reading
-  a protocol the server had stopped speaking, and because the switch was not
-  connection state the client records, a reconnection silently returned to RESP3.
-  `READONLY`/`READWRITE` are the mechanism behind `ClusterConfig::read_preference`,
-  and their own documentation already told the caller there was nothing to arm.
-  `ASKING` is only correct immediately before the redirected command, on the node it
-  redirects to. Nothing is lost: the client sends all five itself, at the points
-  where they are correct. `CLUSTER SLOTS` callers want `cluster_shards`, which Redis
-  has replaced it with since 7.0. Refusing them at run time was the alternative and
-  was rejected -- the caller learns from the compiler instead of from an incident.
-  The generic command API can still send any of them, which stays the caller's
-  responsibility.
+- **The connection-driving commands are internal.** A `Client` is clonable, so one
+  connection carries the commands of every clone. `HELLO` changed the protocol version
+  the deserializers depend on, and a reconnection silently undid the change.
+  `READONLY` and `READWRITE` changed the read mode that `ClusterConfig::read_preference`
+  depends on. `ASKING` is correct only immediately before the command it redirects.
+  The client sends all of them itself, at the correct points. `CLUSTER SLOTS` callers
+  use `cluster_shards`. The generic command API can still send these commands.
 
-  `HelloOptions`, `HelloResult`, `LegacyClusterShardResult` and
-  `LegacyClusterNodeResult` are `pub(crate)` for the same reason. The first two are
-  the argument and the reply of `HELLO`; the last two are what `CLUSTER SLOTS` is
-  deserialized into. With no public command naming them, they were surface a caller
-  could read about and not use.
+- **`quit` is deleted.** Redis deprecated it in 7.2.0. On a multiplexed client it
+  closed the connection of every clone. Use `Client::close`.
 
-  `quit` is deleted outright rather than moved: nothing in the crate called it, its
-  only test was commented out, and on a multiplexed client it closed the connection
-  every other clone was using. Redis deprecated it in 7.2.0 in favour of simply
-  closing the connection, which is what `Client::close` does.
-
-- **The string commands Redis marks deprecated are gone**, with their documented
-  replacements: `getset` (`set_get_with_options`), `setex` and `psetex`
-  (`set_with_options` with `SetExpiration::Ex`/`Px`), `setnx` (`set_with_options`
-  with `SetCondition::NX`), `substr` (`getrange`). The list is not from memory: it is
-  every command the server reports with a `deprecated_since` field in
-  `COMMAND DOCS`, which is 21 commands, of which the crate implemented six -- these
-  five plus `quit`, above. The other fifteen it never exposed. No
-  command shipped by RedisJSON, RediSearch, RedisBloom or RedisTimeSeries carries a
-  deprecation notice, so no module command moved. Coverage is unchanged: the tests
-  deleted with these commands cover paths that `set_with_options`, `getrange` and
-  `set_get_with_options` already test.
+- **The deprecated string commands are removed.** Use `set_get_with_options` for
+  `getset`, `set_with_options` with `SetExpiration::Ex` or `Px` for `setex` and
+  `psetex`, `set_with_options` with `SetCondition::NX` for `setnx`, and `getrange` for
+  `substr`. `COMMAND DOCS` reports 21 deprecated commands; the crate implemented these
+  five and `quit`. No module command reports a deprecation.
 
 ### Fixed
 
-- **Enabling both TLS backends reports one error that says so.** `rustls` and
-  `native-tls` each define their own `TlsConfig` and their own `Error::Tls`, with
-  different fields, so the union defined both names twice and produced 61
-  compiler errors -- two duplicate definitions and a cascade of field mismatches
-  from each backend's code being written against the other's shape. Feature
-  unification reaches this without anyone asking for it: two crates in one
-  dependency graph, each enabling one backend. The pair is now named by a
-  `compile_error!` that says which backends collided and that a dependency may
-  have brought the second one in. Each of the five rejected feature
-  configurations now reports exactly one cause instead of one to three.
+- **Enabling both TLS backends reports one error.** `rustls` and `native-tls` each
+  define a `TlsConfig` and an `Error::Tls`, with different fields, so the union defined
+  both names twice and produced 61 errors and no usable message. Feature unification
+  reaches this configuration without anyone asking for it. A guard now names the pair,
+  and each of the five rejected feature configurations reports exactly one cause.
 
-- **`cargo bench` no longer spends three minutes measuring nothing.** Every
-  benchmark is a criterion target with `harness = false`, and the library has no
-  `#[bench]` functions, but the lib test target was still built under
-  `[profile.bench]` -- fat LTO, one codegen unit, the whole `cfg(test)` tree --
-  on every invocation, to report `0 measured`. `bench = false` in a `[lib]`
-  section removes the build. The README also said to run `cargo bench`, which
-  skips all 14 targets: the feature they require is now named there.
+- **`cargo bench` no longer costs three minutes to measure nothing.** Every benchmark
+  is a criterion target with `harness = false`, but the lib test target was still built
+  under `[profile.bench]` on every invocation, to report `0 measured`. `bench = false`
+  in a `[lib]` section removes the build: 3m02s becomes 0.13s. The README now names the
+  `bench` feature the targets require.
+
+### Documentation
+
+- **`select` and `auth` warn that the connection is shared.** Every clone of a
+  `Client` shares one connection, so these commands apply to all clones. A new
+  `Connection-scoped commands` section in the `client` module lists the nine commands
+  that configure the connection, and points to `Config::database` and the credentials
+  fields.
 
 ### Internal
 
 - **The command families are declared once instead of four times.** `Client`,
-  `ExclusiveClient`, `Pipeline` and `Transaction` each carried a hand-written
-  block of empty `impl`s, and nothing checked the four against each other -- the
-  failure mode being a family added to the client and forgotten in the batch
-  executors, which compiles and then fails at the call site. The 22 data families
-  now live in one list, and what each executor adds on top is named at its own
-  call site. The implemented sets are unchanged.
+  `ExclusiveClient`, `Pipeline` and `Transaction` each carried a hand-written block of
+  empty `impl`s, and nothing checked the four against each other. A family added to
+  the client and forgotten in a batch executor compiled, then failed at the call site.
+  The 22 data families now live in one list. The implemented sets are unchanged.
 
-- **A `tests/` directory compiles the crate as a downstream consumer does.** The
-  whole suite lived in `src/tests/`, where `pub(crate)` is in scope, so nothing
-  exercised the published surface by path. `tests/public_api.rs` queues a command
-  from each family into a pipeline and a transaction, which is the check that
-  fails when a batch impl list falls behind.
+- **A `tests/` directory compiles the crate as a downstream consumer.** The whole
+  suite lived in `src/tests/`, where `pub(crate)` is in scope, so nothing exercised the
+  published surface by path. `tests/public_api.rs` queues a command from each family
+  into a pipeline and a transaction, which fails when a batch impl list falls behind.
 
-- **CI builds what it had been skipping.** `--all-targets` only covers the
-  targets the named features enable, so the 14 benchmark targets, the 8
-  `bench`-gated examples and the 4 `web-examples` ones were compiled by no job at
-  all. A `fuzzing` entry joins the feature matrix for the same reason. `publish.yml`
-  now checks the docs.rs feature set and the native-tls backend before publishing:
-  `cargo publish` builds with default features only, so a break in either used to
-  surface after the version was on crates.io, where it cannot be replaced.
+- **CI builds the targets and feature sets it skipped.** `--all-targets` covers only
+  the targets the named features enable, so no job built the 14 benchmark targets, the
+  8 `bench`-gated examples or the 4 `web-examples` ones. `fuzzing` joins the feature
+  matrix for the same reason. `publish.yml` now checks the docs.rs feature set and the
+  native-tls backend, because `cargo publish` builds with default features only.
 
 ## [0.24.0] - 2026-08-12
 

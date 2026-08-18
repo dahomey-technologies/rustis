@@ -318,28 +318,6 @@ async fn getdel() -> Result<()> {
 
 #[tokio::test]
 #[serial]
-async fn getset() -> Result<()> {
-    let client = get_test_client().await?;
-
-    client.flushall(FlushingMode::Sync).await?;
-
-    client.set("key", "value").await?;
-
-    let value: String = client.getset("key", "newvalue").await?;
-    assert_eq!("value", value);
-
-    client.del("key").await?;
-
-    let value: Value = client.getset("key", "newvalue").await?;
-    assert!(matches!(value, Value::Null));
-
-    client.close().await?;
-
-    Ok(())
-}
-
-#[tokio::test]
-#[serial]
 async fn incr() -> Result<()> {
     let client = get_test_client().await?;
 
@@ -667,25 +645,6 @@ async fn msetex() -> Result<()> {
 
 #[tokio::test]
 #[serial]
-async fn psetex() -> Result<()> {
-    let client = get_test_client().await?;
-
-    client.flushall(FlushingMode::Sync).await?;
-
-    client.psetex("key", 1000, "value").await?;
-    let value: String = client.get("key").await?;
-    assert_eq!("value", value);
-
-    let ttl = client.pttl("key").await?;
-    assert!(ttl <= 1000);
-
-    client.close().await?;
-
-    Ok(())
-}
-
-#[tokio::test]
-#[serial]
 async fn set_with_options() -> Result<()> {
     let client = get_test_client().await?;
 
@@ -838,48 +797,6 @@ async fn set_with_options_conditionals() -> Result<()> {
 
 #[tokio::test]
 #[serial]
-async fn setex() -> Result<()> {
-    let client = get_test_client().await?;
-
-    client.flushall(FlushingMode::Sync).await?;
-
-    client.setex("key", 1, "value").await?;
-    let value: String = client.get("key").await?;
-    assert_eq!("value", value);
-
-    let ttl = client.pttl("key").await?;
-    assert!(ttl <= 1000);
-
-    client.close().await?;
-
-    Ok(())
-}
-
-#[tokio::test]
-#[serial]
-async fn setnx() -> Result<()> {
-    let client = get_test_client().await?;
-
-    // cleanup
-    client.flushall(FlushingMode::Sync).await?;
-
-    let result = client.setnx("key", "value").await?;
-    let value: String = client.get("key").await?;
-    assert!(result);
-    assert_eq!("value", value);
-
-    let result = client.setnx("key", "value1").await?;
-    assert!(!result);
-    let value: String = client.get("key").await?;
-    assert_eq!("value", value);
-
-    client.close().await?;
-
-    Ok(())
-}
-
-#[tokio::test]
-#[serial]
 async fn setrange() -> Result<()> {
     let client = get_test_client().await?;
 
@@ -913,29 +830,6 @@ async fn strlen() -> Result<()> {
 
     let len = client.strlen("nonexisting").await?;
     assert_eq!(0, len);
-
-    client.close().await?;
-
-    Ok(())
-}
-
-#[tokio::test]
-#[serial]
-async fn substr() -> Result<()> {
-    let client = get_test_client().await?;
-
-    client.flushall(FlushingMode::Sync).await?;
-
-    client.set("mykey", "This is a string").await?;
-
-    let value: String = client.substr("mykey", 0, 3).await?;
-    assert_eq!("This", value);
-    let value: String = client.substr("mykey", -3, -1).await?;
-    assert_eq!("ing", value);
-    let value: String = client.substr("mykey", 0, -1).await?;
-    assert_eq!("This is a string", value);
-    let value: String = client.substr("mykey", 10, 100).await?;
-    assert_eq!("string", value);
 
     client.close().await?;
 

@@ -271,24 +271,6 @@ pub trait StringCommands<'a>: Sized {
         )
     }
 
-    /// Atomically sets key to value and returns the old value stored at key.
-    /// Returns an error when key exists but does not hold a string value.
-    /// Any previous time to live associated with the key is discarded on successful SET operation.
-    ///
-    /// # Return
-    /// the old value stored at key, or nil when key did not exist.
-    ///
-    /// # See Also
-    /// [<https://redis.io/commands/getset/>](https://redis.io/commands/getset/)
-    #[must_use]
-    fn getset<R: Response>(
-        self,
-        key: impl Serialize,
-        value: impl Serialize,
-    ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("GETSET").key(key).arg(value))
-    }
-
     /// Increments the number stored at key by one.
     ///
     /// If the key does not exist, it is set to 0 before performing the operation.
@@ -553,24 +535,6 @@ pub trait StringCommands<'a>: Sized {
         )
     }
 
-    /// Works exactly like [setex](StringCommands::setex) with the sole
-    /// difference that the expire time is specified in milliseconds instead of seconds.
-    ///
-    /// If key already holds a value, it is overwritten, regardless of its type.
-    /// Any previous time to live associated with the key is discarded on successful SET operation.
-    ///
-    /// # See Also
-    /// [<https://redis.io/commands/psetex/>](https://redis.io/commands/psetex/)
-    #[must_use]
-    fn psetex(
-        self,
-        key: impl Serialize,
-        milliseconds: u64,
-        value: impl Serialize,
-    ) -> PreparedCommand<'a, Self, ()> {
-        prepare_command(self, cmd("PSETEX").key(key).arg(milliseconds).arg(value))
-    }
-
     ///Set key to hold the string value.
     ///
     /// If key already holds a value, it is overwritten, regardless of its type.
@@ -633,38 +597,6 @@ pub trait StringCommands<'a>: Sized {
         )
     }
 
-    /// Set key to hold the string value and set key to timeout after a given number of seconds.
-    ///
-    /// # See Also
-    /// [<https://redis.io/commands/setex/>](https://redis.io/commands/setex/)
-    #[must_use]
-    fn setex(
-        self,
-        key: impl Serialize,
-        seconds: u64,
-        value: impl Serialize,
-    ) -> PreparedCommand<'a, Self, ()> {
-        prepare_command(self, cmd("SETEX").key(key).arg(seconds).arg(value))
-    }
-
-    /// Set key to hold string value if key does not exist.
-    ///
-    /// In that case, it is equal to SET.
-    /// When key already holds a value, no operation is performed.
-    /// SETNX is short for "SET if Not eXists".
-    ///
-    /// # Return
-    /// specifically:
-    /// * `true` - if the key was set
-    /// * `false` - if the key was not set
-    ///
-    /// # See Also
-    /// [<https://redis.io/commands/setnx/>](https://redis.io/commands/setnx/)
-    #[must_use]
-    fn setnx(self, key: impl Serialize, value: impl Serialize) -> PreparedCommand<'a, Self, bool> {
-        prepare_command(self, cmd("SETNX").key(key).arg(value))
-    }
-
     /// Overwrites part of the string stored at key,
     /// starting at the specified offset,
     /// for the entire length of value.
@@ -696,51 +628,6 @@ pub trait StringCommands<'a>: Sized {
     #[must_use]
     fn strlen(self, key: impl Serialize) -> PreparedCommand<'a, Self, usize> {
         prepare_command(self, cmd("STRLEN").key(key).readonly())
-    }
-
-    /// Returns the substring of the string value stored at key, determined by the offsets start and end (both are inclusive).
-    ///
-    /// Negative offsets can be used in order to provide an offset starting from the end of the string.
-    /// So -1 means the last character, -2 the penultimate and so forth.
-    ///
-    /// The function handles out of range requests by limiting the resulting range to the actual length of the string.
-    ///
-    /// # Example
-    /// ```
-    /// # use rustis::{
-    /// #    client::Client,
-    /// #    commands::{FlushingMode, ServerCommands, StringCommands},
-    /// #    Result,
-    /// # };
-    ///
-    /// # #[tokio::main]
-    /// # async fn main() -> Result<()> {
-    /// #    let client = Client::connect("127.0.0.1:6379").await?;
-    /// #    client.flushdb(FlushingMode::Sync).await?;
-    /// client.set("mykey", "This is a string").await?;
-    ///
-    /// let value: String = client.substr("mykey", 0, 3).await?;
-    /// assert_eq!("This", value);
-    /// let value: String = client.substr("mykey", -3, -1).await?;
-    /// assert_eq!("ing", value);
-    /// let value: String = client.substr("mykey", 0, -1).await?;
-    /// assert_eq!("This is a string", value);
-    /// let value: String = client.substr("mykey", 10, 100).await?;
-    /// assert_eq!("string", value);
-    /// #    Ok(())
-    /// # }
-    /// ```
-    ///
-    /// # See Also
-    /// [<https://redis.io/commands/substr/>](https://redis.io/commands/substr/)
-    #[must_use]
-    fn substr<R: Response>(
-        self,
-        key: impl Serialize,
-        start: isize,
-        end: isize,
-    ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("SUBSTR").key(key).arg(start).arg(end).readonly())
     }
 }
 

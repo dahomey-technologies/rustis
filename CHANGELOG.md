@@ -20,8 +20,11 @@ section it belongs to below.
   `HelloOptions`, `HelloResult`, `LegacyClusterShardResult` and
   `LegacyClusterNodeResult`.
 
-`cargo semver-checks` reports the six removed trait methods and the four removed
-types.
+- **Five deprecated string commands are gone**: `getset`, `psetex`, `setex`,
+  `setnx` and `substr`. Each has a replacement named below.
+
+`cargo semver-checks` reports the eleven removed trait methods and the four
+removed types.
 
 ### Removed
 
@@ -55,6 +58,18 @@ types.
   only test was commented out, and on a multiplexed client it closed the connection
   every other clone was using. Redis deprecated it in 7.2.0 in favour of simply
   closing the connection, which is what `Client::close` does.
+
+- **The string commands Redis marks deprecated are gone**, with their documented
+  replacements: `getset` (`set_get_with_options`), `setex` and `psetex`
+  (`set_with_options` with `SetExpiration::Ex`/`Px`), `setnx` (`set_with_options`
+  with `SetCondition::NX`), `substr` (`getrange`). The list is not from memory: it is
+  every command the server reports with a `deprecated_since` field in
+  `COMMAND DOCS`, which is 21 commands, of which the crate implemented six -- these
+  five plus `quit`, above. The other fifteen it never exposed. No
+  command shipped by RedisJSON, RediSearch, RedisBloom or RedisTimeSeries carries a
+  deprecation notice, so no module command moved. Coverage is unchanged: the tests
+  deleted with these commands cover paths that `set_with_options`, `getrange` and
+  `set_get_with_options` already test.
 
 ### Fixed
 

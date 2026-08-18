@@ -1,13 +1,6 @@
 use crate::{
     Result,
-    client::{Client, PreparedCommand},
-    commands::{
-        ArrayCommands, BitmapCommands, BloomCommands, ClusterCommands, ConnectionCommands,
-        CountMinSketchCommands, CuckooCommands, GenericCommands, GeoCommands, HashCommands,
-        HyperLogLogCommands, JsonCommands, ListCommands, ScriptingCommands, SearchCommands,
-        ServerCommands, SetCommands, SortedSetCommands, StreamCommands, StringCommands,
-        TDigestCommands, TimeSeriesCommands, TopKCommands, VectorSetCommands,
-    },
+    client::{Client, PreparedCommand, command_traits::*},
     resp::{Command, RespBatchDeserializer, Response},
 };
 use serde::de::DeserializeOwned;
@@ -172,27 +165,4 @@ impl<'a, R: Response> BatchPreparedCommand for PreparedCommand<'a, &'a mut Pipel
     }
 }
 
-impl<'a> ArrayCommands<'a> for &'a mut Pipeline<'_> {}
-impl<'a> BitmapCommands<'a> for &'a mut Pipeline<'_> {}
-impl<'a> BloomCommands<'a> for &'a mut Pipeline<'_> {}
-impl<'a> ClusterCommands<'a> for &'a mut Pipeline<'_> {}
-impl<'a> ConnectionCommands<'a> for &'a mut Pipeline<'_> {}
-impl<'a> CountMinSketchCommands<'a> for &'a mut Pipeline<'_> {}
-impl<'a> CuckooCommands<'a> for &'a mut Pipeline<'_> {}
-impl<'a> GenericCommands<'a> for &'a mut Pipeline<'_> {}
-impl<'a> GeoCommands<'a> for &'a mut Pipeline<'_> {}
-impl<'a> HashCommands<'a> for &'a mut Pipeline<'_> {}
-impl<'a> HyperLogLogCommands<'a> for &'a mut Pipeline<'_> {}
-impl<'a> JsonCommands<'a> for &'a mut Pipeline<'_> {}
-impl<'a> ListCommands<'a> for &'a mut Pipeline<'_> {}
-impl<'a> SearchCommands<'a> for &'a mut Pipeline<'_> {}
-impl<'a> SetCommands<'a> for &'a mut Pipeline<'_> {}
-impl<'a> ScriptingCommands<'a> for &'a mut Pipeline<'_> {}
-impl<'a> ServerCommands<'a> for &'a mut Pipeline<'_> {}
-impl<'a> SortedSetCommands<'a> for &'a mut Pipeline<'_> {}
-impl<'a> StreamCommands<'a> for &'a mut Pipeline<'_> {}
-impl<'a> StringCommands<'a> for &'a mut Pipeline<'_> {}
-impl<'a> TDigestCommands<'a> for &'a mut Pipeline<'_> {}
-impl<'a> TimeSeriesCommands<'a> for &'a mut Pipeline<'_> {}
-impl<'a> TopKCommands<'a> for &'a mut Pipeline<'_> {}
-impl<'a> VectorSetCommands<'a> for &'a mut Pipeline<'_> {}
+impl_pipeline_command_traits!(Pipeline<'_>);

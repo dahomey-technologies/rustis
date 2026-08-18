@@ -29,6 +29,16 @@ Versions up to and including `0.19.3` are documented in the
   section removes the build. The README also said to run `cargo bench`, which
   skips all 14 targets: the feature they require is now named there.
 
+### Internal
+
+- **The command families are declared once instead of four times.** `Client`,
+  `ExclusiveClient`, `Pipeline` and `Transaction` each carried a hand-written
+  block of empty `impl`s, and nothing checked the four against each other -- the
+  failure mode being a family added to the client and forgotten in the batch
+  executors, which compiles and then fails at the call site. The 22 data families
+  now live in one list, and what each executor adds on top is named at its own
+  call site. The implemented sets are unchanged.
+
 ## [0.24.0] - 2026-08-12
 
 ### BREAKING CHANGES

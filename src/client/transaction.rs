@@ -1,13 +1,6 @@
 use crate::{
     ClientError, Error, ErrorKind, Result,
-    client::{BatchPreparedCommand, Client, PreparedCommand},
-    commands::{
-        ArrayCommands, BitmapCommands, BloomCommands, CountMinSketchCommands, CuckooCommands,
-        GenericCommands, GeoCommands, HashCommands, HyperLogLogCommands, JsonCommands,
-        ListCommands, ScriptingCommands, SearchCommands, ServerCommands, SetCommands,
-        SortedSetCommands, StreamCommands, StringCommands, TDigestCommands, TimeSeriesCommands,
-        TopKCommands, VectorSetCommands,
-    },
+    client::{BatchPreparedCommand, Client, PreparedCommand, command_traits::*},
     resp::{Command, RespDeserializer, Response, cmd},
 };
 use serde::{
@@ -333,25 +326,4 @@ impl<'a, R: Response> BatchPreparedCommand for PreparedCommand<'a, &'a mut Trans
     }
 }
 
-impl<'a> ArrayCommands<'a> for &'a mut Transaction {}
-impl<'a> BitmapCommands<'a> for &'a mut Transaction {}
-impl<'a> BloomCommands<'a> for &'a mut Transaction {}
-impl<'a> CountMinSketchCommands<'a> for &'a mut Transaction {}
-impl<'a> CuckooCommands<'a> for &'a mut Transaction {}
-impl<'a> GenericCommands<'a> for &'a mut Transaction {}
-impl<'a> GeoCommands<'a> for &'a mut Transaction {}
-impl<'a> HashCommands<'a> for &'a mut Transaction {}
-impl<'a> HyperLogLogCommands<'a> for &'a mut Transaction {}
-impl<'a> JsonCommands<'a> for &'a mut Transaction {}
-impl<'a> ListCommands<'a> for &'a mut Transaction {}
-impl<'a> SearchCommands<'a> for &'a mut Transaction {}
-impl<'a> SetCommands<'a> for &'a mut Transaction {}
-impl<'a> ScriptingCommands<'a> for &'a mut Transaction {}
-impl<'a> ServerCommands<'a> for &'a mut Transaction {}
-impl<'a> SortedSetCommands<'a> for &'a mut Transaction {}
-impl<'a> StreamCommands<'a> for &'a mut Transaction {}
-impl<'a> StringCommands<'a> for &'a mut Transaction {}
-impl<'a> TDigestCommands<'a> for &'a mut Transaction {}
-impl<'a> TimeSeriesCommands<'a> for &'a mut Transaction {}
-impl<'a> TopKCommands<'a> for &'a mut Transaction {}
-impl<'a> VectorSetCommands<'a> for &'a mut Transaction {}
+impl_transaction_command_traits!(Transaction);

@@ -1242,7 +1242,24 @@ async fn dropping_a_stream_releases_its_subscriptions() -> Result<()> {
 
     // The client has to forget it too: it refuses a second subscription for as long as it believes
     // the first one is still live.
-    subscriber.subscribe(CHANNEL).await?.close().await?;
+    //
+    // Polled, not asserted once. The server drops the subscription before it sends the
+    // confirmation, and the client clears its own table only when it reads that push, so the
+    // channel is already gone from `observer`'s view while `subscriber` still holds the entry.
+    // Waiting on the server's view above says nothing about the client's.
+    wait_for(Duration::from_secs(5), || async {
+        match subscriber.subscribe(CHANNEL).await {
+            Ok(stream) => {
+                stream.close().await?;
+                Ok(true)
+            }
+            Err(e) if matches!(e.kind(), ErrorKind::Client(ClientError::AlreadySubscribed)) => {
+                Ok(false)
+            }
+            Err(e) => Err(e),
+        }
+    })
+    .await?;
 
     Ok(())
 }

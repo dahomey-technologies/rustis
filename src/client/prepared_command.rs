@@ -49,10 +49,9 @@ where
 
 /// Shortcut function to creating a [`PreparedCommand`](PreparedCommand).
 ///
-/// This is the crate's own extension point, and it is public because a
-/// downstream crate needs it for the same reason every built-in command trait
-/// does: to add a command rustis does not implement while keeping the fluent
-/// `client.mycommand("key").await` shape.
+/// Use it to add a command rustis does not implement, keeping the fluent
+/// `client.mycommand("key").await` shape. Every built-in command trait is
+/// written this way.
 ///
 /// ```
 /// use rustis::{
@@ -71,15 +70,14 @@ where
 ///     }
 /// }
 ///
-/// // Implement it for the executors the command should be usable on. `&Client`
-/// // sends it directly; `&mut Pipeline` and `&mut Transaction` would let it be
-/// // queued into a batch.
+/// // Implement it per executor. Add `&mut Pipeline` and `&mut Transaction` to
+/// // make the command queueable into a batch.
 /// impl<'a> MyCommands<'a> for &'a Client {}
 /// ```
 ///
-/// Use [`CommandBuilder::key`](crate::resp::CommandBuilder::key) for arguments
-/// that are Redis keys and `arg` for the rest: cluster routing reads the keys,
-/// so a key passed as a plain argument is a command sent to the wrong node.
+/// Add Redis keys with [`CommandBuilder::key`](crate::resp::CommandBuilder::key),
+/// everything else with `arg`. Cluster routing reads the keys, so a key passed as
+/// an argument is sent to the wrong node.
 pub fn prepare_command<'a, E, R: Response>(
     executor: E,
     command: impl Into<Command>,

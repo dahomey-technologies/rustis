@@ -50,11 +50,10 @@ The upgrade checklist. Each item is stated in the section it belongs to below.
 
 ### Added
 
-- **`prepare_command` is public**, with the extension pattern documented on the
-  crate's front page. A command rustis does not implement can be added in the crate's
-  own idiom — `client.myget("key").await` — instead of dropping to
-  `client.send(cmd("MYGET")…)` and losing the fluent shape. This is how every
-  built-in command trait is written; only the helper was private.
+- **`prepare_command` is public**, with the extension pattern on the crate's front
+  page. A missing command is added in the crate's own idiom, `client.myget("key").await`,
+  instead of `client.send(cmd("MYGET")…)`. Every built-in command trait is written this
+  way; only the helper was private.
 
 - **`Client::is_terminated`** reports a client whose network task has ended — a
   non-zero reconnection budget exhausted, or the last handle dropped. The state was

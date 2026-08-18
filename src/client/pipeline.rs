@@ -38,11 +38,9 @@ impl Pipeline<'_> {
 
     /// Queue a command built with the generic API.
     ///
-    /// The built-in command traits are queued with
-    /// [`BatchPreparedCommand::queue`] instead: `pipeline.get::<()>("k").queue()`.
-    /// The two carry different names because they read the same and are not the
-    /// same call — this one takes the command, that one takes nothing and
-    /// consumes the prepared command it is called on.
+    /// Built-in commands use [`BatchPreparedCommand::queue`] instead:
+    /// `pipeline.get::<()>("k").queue()`. The names differ because the calls do:
+    /// this one takes a command, that one consumes a prepared command.
     pub fn queue_command(&mut self, command: impl Into<Command>) {
         self.commands.push(command.into());
         self.forget_flags.push(false);
@@ -155,15 +153,10 @@ impl Pipeline<'_> {
 ///
 /// # The response type is ignored here
 ///
-/// A [`PreparedCommand`](crate::client::PreparedCommand) carries the type its
-/// response decodes to, and queuing discards it: only the command survives.
-/// What a batch decodes to is decided by the type on
-/// [`Pipeline::execute`](crate::client::Pipeline::execute) — in the example
-/// there, the tuple `(String, String)`, not the type written on either `get`.
-///
-/// Write `::<()>` on a queued command, as this crate's examples do. Any other
-/// type compiles and means nothing, which is what leads a reader to believe the
-/// batch decodes command by command.
+/// Queuing discards a [`PreparedCommand`](crate::client::PreparedCommand)'s
+/// response type. The type on
+/// [`Pipeline::execute`](crate::client::Pipeline::execute) decides the decoding.
+/// Write `::<()>` on a queued command. Any other type compiles and means nothing.
 pub trait BatchPreparedCommand<R = ()> {
     /// Queue a command. Its response type is ignored — see the trait docs.
     fn queue(self);

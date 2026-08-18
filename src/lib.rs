@@ -182,7 +182,7 @@ This command can then be passed as a parameter to one of the following associate
 depending on the client, transaction or pipeline struct used:
 * [`send`](crate::client::Client::send)
 * [`send_and_forget`](crate::client::Client::send_and_forget)
-* [`Pipeline::queue`](crate::client::Pipeline::queue), to batch several of them
+* [`Pipeline::queue_command`](crate::client::Pipeline::queue_command), to batch several of them
 
 ```
 use rustis::{client::Client, resp::cmd, Result};
@@ -237,10 +237,8 @@ This does not apply to the strongly typed command API ([`commands`]): those func
 mark their keys.
 
 ## Adding a command family of your own
-The generic API sends anything, but it costs the fluent shape: `client.myget("key").await`
-becomes `client.send(cmd("MYGET").key("key"), None).await`. A command rustis does not implement
-can be added on the same footing as the built-in ones, in ten lines, with
-[`prepare_command`](crate::client::prepare_command):
+The generic API sends anything, but it costs the fluent shape. Add a missing command on the
+same footing as the built-in ones with [`prepare_command`](crate::client::prepare_command):
 
 ```
 use rustis::{
@@ -262,16 +260,15 @@ trait MyCommands<'a> {
 impl<'a> MyCommands<'a> for &'a Client {}
 ```
 
-This is how every trait in [`commands`] is written. Implementing it for
-[`Pipeline`](crate::client::Pipeline) and [`Transaction`](crate::client::Transaction) as well
-makes the command queueable into a batch.
+Every trait in [`commands`] is written this way. Implement it for
+[`Pipeline`](crate::client::Pipeline) and [`Transaction`](crate::client::Transaction) too to
+queue the command into a batch.
 
 # Warning: raw bytes need an adapter type
-`client.set("key", b"val")` compiles and fails **at runtime**. serde has no specialization, so
-`&[u8]` and `Vec<u8>` cannot be told apart from any other slice and are serialized as sequences
-of integers rather than as one bulk string. Wrap them in
-[`RefBulkString`](crate::resp::RefBulkString) or [`BulkString`](crate::resp::BulkString), which
-allocate nothing; see the [`resp`] module page for the full explanation.
+`client.set("key", b"val")` compiles and fails **at runtime**: serde serializes `&[u8]` and
+`Vec<u8>` as sequences of integers, not as one bulk string. Wrap them in
+[`RefBulkString`](crate::resp::RefBulkString) or [`BulkString`](crate::resp::BulkString). See the
+[`resp`] module page for the reason.
 
 # Errors
 Every fallible call returns [`Result<T>`](crate::Result), whose error is [`Error`].

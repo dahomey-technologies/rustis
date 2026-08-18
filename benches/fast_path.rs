@@ -116,7 +116,7 @@ fn bench_get_e2e(c: &mut Criterion) {
 async fn pipelined(client: &Client, count: usize, build: fn(&str) -> Command) {
     let mut pipeline = client.create_pipeline();
     for _ in 0..count {
-        pipeline.queue(build(KEY));
+        pipeline.queue_command(build(KEY));
     }
     let _: Vec<String> = pipeline.execute().await.unwrap();
 }

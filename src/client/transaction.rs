@@ -38,12 +38,10 @@ impl Transaction {
 
     /// Queue a command built with the generic API into the transaction.
     ///
-    /// The built-in command traits are queued with
+    /// Built-in commands use
     /// [`BatchPreparedCommand::queue`](crate::client::BatchPreparedCommand::queue)
-    /// instead: `transaction.get::<()>("k").queue()`. The two carry different
-    /// names because they read the same and are not the same call — this one
-    /// takes the command, that one takes nothing and consumes the prepared
-    /// command it is called on.
+    /// instead: `transaction.get::<()>("k").queue()`. The names differ because the
+    /// calls do: this one takes a command, that one consumes a prepared command.
     pub fn queue_command(&mut self, command: impl Into<Command>) {
         self.commands.push(command.into());
         self.forget_flags.push(false);

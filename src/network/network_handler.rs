@@ -459,14 +459,11 @@ pub(crate) struct NetworkHandler {
     /// the queue is walked often enough that summing it per message would be
     /// quadratic in the queue depth.
     queued_bytes: usize,
-    /// Running total of `Message::num_commands` over the send queue only.
+    /// Running total of `Message::num_commands` over the send queue.
     ///
-    /// Kept incrementally for the same reason as `queued_bytes`: the send loop
-    /// needs the figure on every wave, and folding the queue to get it is an
-    /// O(queue-depth) walk paid in shipped builds whether or not anything reads
-    /// the line it decides. Unlike `queued_bytes` the charge is released when
-    /// the message is written, not when its reply arrives — what this counts is
-    /// what is still waiting to go out.
+    /// Kept incrementally: the send loop reads it on every wave, and folding the
+    /// queue costs an O(queue-depth) walk in shipped builds. The charge is
+    /// released on write, not on reply: this counts what still waits to go out.
     queued_commands: usize,
     /// Number of incoming results belonging to a message that has already been
     /// resolved, and which must therefore be dropped instead of matched.

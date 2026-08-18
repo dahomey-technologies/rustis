@@ -45,7 +45,7 @@ impl ReconnectionState {
                 self.attempts = incr_with_max(self.attempts, *max_attempts)?;
                 let delay = u64::from(*delay).saturating_mul(u64::from(self.attempts));
 
-                Some(cmp::min(u64::from(*max_delay), add_jitter(delay, *jitter)))
+                Some(add_jitter(cmp::min(u64::from(*max_delay), delay), *jitter))
             }
             ReconnectionConfig::Exponential {
                 min_delay,
@@ -59,7 +59,7 @@ impl ReconnectionState {
                     .saturating_pow(self.attempts - 1)
                     .saturating_mul(u64::from(*min_delay));
 
-                Some(cmp::min(u64::from(*max_delay), add_jitter(delay, *jitter)))
+                Some(add_jitter(cmp::min(u64::from(*max_delay), delay), *jitter))
             }
         }
     }
@@ -73,6 +73,13 @@ fn incr_with_max(curr: u32, max: u32) -> Option<u32> {
     }
 }
 
+/// Spreads a delay over `[delay, delay + jitter)`.
+///
+/// The caller clamps the delay to `max_delay` before this point. Clamping the
+/// jittered value instead cancels the jitter once the backoff saturates, which
+/// re-synchronises every client of a fleet on the same wake-up instant, exactly
+/// when the outage is longest. The effective ceiling is therefore
+/// `max_delay + jitter`.
 fn add_jitter(delay: u64, jitter: u32) -> u64 {
     if jitter == 0 {
         delay

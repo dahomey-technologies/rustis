@@ -2,8 +2,10 @@ use crate::{
     Error, Result,
     client::{Config, ExclusiveClient, IntoConfig},
     commands::ConnectionCommands,
+    network::timeout,
 };
 use bb8::ManageConnection;
+use std::future::IntoFuture;
 
 /// An object which manages a pool of clients, based on [bb8](https://docs.rs/bb8/latest/bb8/)
 ///
@@ -42,14 +44,35 @@ impl ManageConnection for PooledClientManager {
         ExclusiveClient::connect(config).await
     }
 
+    /// A health check must answer, or the borrower waits on it.
+    ///
+    /// The ping carries its own deadline because
+    /// [`command_timeout`](Config::command_timeout) defaults to none: a server
+    /// that accepts the socket and then goes silent would otherwise park the
+    /// check for good, and with it every caller waiting for a connection. The
+    /// budget is `command_timeout` when it is set, and
+    /// [`connect_timeout`](Config::connect_timeout) otherwise, that being the
+    /// time the same configuration already allows for making a usable
+    /// connection. Both set to zero is an explicit opt-out and is honoured.
     async fn is_valid(&self, client: &mut ExclusiveClient) -> Result<()> {
-        client.ping::<()>(()).await?;
+        let budget = if self.config.command_timeout.is_zero() {
+            self.config.connect_timeout
+        } else {
+            self.config.command_timeout
+        };
+
+        if budget.is_zero() {
+            client.ping::<()>(()).await?;
+        } else {
+            timeout(budget, client.ping::<()>(()).into_future()).await??;
+        }
+
         Ok(())
     }
 
     /// A client whose network task has ended can never answer again, so it must
     /// leave the pool instead of being handed to the next borrower.
     fn has_broken(&self, client: &mut ExclusiveClient) -> bool {
-        client.inner().is_network_task_finished()
+        client.inner().is_terminated()
     }
 }

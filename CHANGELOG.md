@@ -21,6 +21,22 @@ The upgrade checklist. Each item is stated in the section it belongs to below.
 
 `cargo semver-checks` reports 11 removed trait methods and 4 removed structs.
 
+### Added
+
+- **`Client::is_terminated`** reports a client whose network task has ended — a
+  non-zero reconnection budget exhausted, or the last handle dropped. The state was
+  invisible: the process stays alive and serving traffic it can never answer. A
+  liveness probe reads this; the only recovery is a new client. `ExclusiveClient`
+  has it too.
+
+### Changed
+
+- **A reply nobody awaits is logged at `debug!`, not `warn!`, and names its command.**
+  A caller that gives up on its reply — a `command_timeout`, a dropped future — is the
+  documented contract, not a fault, and a service with deadlines flooded its logs
+  exactly when Redis was slow. Giving up on reconnection moved the other way, to
+  `error!`: that client will never answer again.
+
 ### Removed
 
 - **The connection-driving commands are internal.** A `Client` is clonable, so one
@@ -54,6 +70,24 @@ The upgrade checklist. Each item is stated in the section it belongs to below.
   in a `[lib]` section removes the build: 3m02s becomes 0.13s. The README now names the
   `bench` feature the targets require.
 
+- **Reconnection jitter no longer vanishes when the backoff saturates.** The delay was
+  clamped to `max_delay` *after* the jitter was added, so every client of a fleet woke
+  at exactly `max_delay` — re-synchronising the herd precisely when the outage is
+  longest. The clamp now applies to the delay and the jitter is added to the result, so
+  the effective ceiling is `max_delay + jitter`.
+
+- **The pool health check no longer parks on a silent server.** `is_valid` pinged with
+  no deadline of its own, and `command_timeout` defaults to none, so a server that
+  accepts the socket and never answers held the check — and every caller waiting for a
+  connection — for good. The ping is bounded by `command_timeout`, or by
+  `connect_timeout` when that is unset.
+
+- **A Sentinel connection learns the fleet from the fleet.** The instance list was
+  frozen at whatever the configuration named, against the client spec, so replacing
+  every named Sentinel left the client with nothing reachable. A confirmed master is
+  now followed by `SENTINEL SENTINELS`, which adds the unknown instances and moves the
+  one that answered to the front.
+
 ### Documentation
 
 - **`select` and `auth` warn that the connection is shared.** Every clone of a
@@ -61,6 +95,12 @@ The upgrade checklist. Each item is stated in the section it belongs to below.
   `Connection-scoped commands` section in the `client` module lists the nine commands
   that configure the connection, and points to `Config::database` and the credentials
   fields.
+
+- **`retry_on_error` says why it defaults to `false`.** Replaying a command the server
+  may already have applied makes delivery at-least-once, so it stays opt-in. The
+  default does not make `max_command_attempts` inert: that budget bounds cluster
+  `ASK`/`MOVED` redirections whatever the flag says. `set_jitter` gained the rule for
+  sizing jitter against the delay it spreads.
 
 ### Internal
 

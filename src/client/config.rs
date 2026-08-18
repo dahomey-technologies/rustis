@@ -403,6 +403,23 @@ pub struct Config {
     /// * `true` - retry sending the command/batch of commands on network error
     /// * `false` - do not retry sending the command/batch of commands on network error
     ///
+    /// # The default is `false` on purpose
+    ///
+    /// A command that reached the server before the connection broke has already
+    /// been applied, and nothing on the wire says whether it was. Replaying it
+    /// therefore applies `INCR`, `LPUSH`, `XADD` or a Lua script with side effects
+    /// twice. `true` buys availability at the price of at-least-once delivery, so
+    /// it is opt-in: set it per command on the ones you know are idempotent, or
+    /// globally once the whole workload is. See
+    /// [Cancellation and timeouts](crate::client#cancellation-and-timeouts).
+    ///
+    /// On `false` a command in flight when the socket dies is failed with
+    /// [`ErrorKind::DisconnectedByPeer`](crate::ErrorKind::DisconnectedByPeer)
+    /// and never counted against
+    /// [`max_command_attempts`](Self::max_command_attempts). That budget still
+    /// bounds cluster `ASK`/`MOVED` redirections, which are retried whatever this
+    /// flag says.
+    ///
     /// This strategy can be overriden for each command/batch
     /// of commands in the following functions:
     /// * [`PreparedCommand::retry_on_error`](crate::client::PreparedCommand::retry_on_error)
@@ -1656,8 +1673,11 @@ impl IntoConfig for Url {
 /// A cap suits a script or a batch job that should fail loudly rather than hang.
 /// It is **not recommended for long-lived backend services** (Axum, Actix-Web, a
 /// worker): an outage longer than the budget leaves a process that is still
-/// alive, still serving traffic, and permanently unable to reach Redis — a state
-/// no liveness probe detects. Keep the default `0` there, and bound memory with
+/// alive, still serving traffic, and permanently unable to reach Redis. A
+/// liveness probe must read
+/// [`Client::is_terminated`](crate::client::Client::is_terminated) to see it, and
+/// the only recovery is a new client. Keep the default `0` there, and bound
+/// memory with
 /// [`BackpressureConfig`] instead, which sheds load without ending the
 /// connection.
 #[derive(Debug, Clone)]
@@ -1682,7 +1702,7 @@ pub enum ReconnectionConfig {
         /// Reaching a non-zero cap ends the network task for good; see the note
         /// on [`ReconnectionConfig`] before setting it in a backend service.
         max_attempts: u32,
-        /// Maximum delay in ms
+        /// Maximum delay in ms, before the jitter is added.
         max_delay: u32,
         /// Delay in ms to add to the total waiting time at each attempt
         delay: u32,
@@ -1700,7 +1720,7 @@ pub enum ReconnectionConfig {
         max_attempts: u32,
         /// Minimum delay in ms
         min_delay: u32,
-        /// Maximum delay in ms
+        /// Maximum delay in ms, before the jitter is added.
         max_delay: u32,
         // multiplicative factor
         multiplicative_factor: u32,
@@ -1772,6 +1792,14 @@ impl ReconnectionConfig {
     }
 
     /// Set the amount of jitter to add to each reconnection delay.
+    ///
+    /// Each delay is spread over `[delay, delay + jitter_ms)`, after the delay is
+    /// clamped to `max_delay`. The effective ceiling is `max_delay + jitter_ms`.
+    ///
+    /// Size the jitter against the delay it spreads, not against an absolute
+    /// figure: a fleet reconnecting together is spread over `jitter_ms` only. The
+    /// default 100 ms suits the default 1 s delay. Raise it towards half the
+    /// delay for a large fleet, and lower it for a policy in the tens of ms.
     ///
     /// Default: 100 ms
     pub fn set_jitter(&mut self, jitter_ms: u32) {

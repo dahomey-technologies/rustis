@@ -4,34 +4,22 @@ use crate::{
     resp::{Response, cmd},
 };
 
-/// The commands that drive the connection itself, and which the client sends on
-/// the caller's behalf rather than at the caller's request.
+/// The commands that drive the connection, sent by the client and not by the caller.
 ///
-/// These are not hidden for tidiness. A `Client` is clonable and multiplexed, so
-/// one connection carries every clone's commands, and each of these either
-/// reconfigures that shared connection underneath the others or contradicts a
-/// decision the client has already made:
+/// A [`Client`](crate::client::Client) is clonable, and one connection carries the
+/// commands of every clone. Each of these commands reconfigures that shared
+/// connection, or contradicts a decision the client has already made:
 ///
-/// - `HELLO` sets the protocol version. The handshake fixes it at RESP3 and every
-///   deserializer is written against RESP3 — push frames for pub/sub, maps,
-///   doubles, `_` for nil. A caller switching to RESP2 mid-session leaves the
-///   decoder reading a protocol the server is no longer speaking, and since the
-///   switch is not connection state the client records, a reconnection silently
-///   returns to RESP3.
-/// - `READONLY` / `READWRITE` set the read mode of a cluster connection, which is
-///   the mechanism behind
-///   [`ClusterConfig::read_preference`](crate::client::ClusterConfig::read_preference).
-///   A caller flipping it takes a replica out of the mode the routing depends on.
-/// - `ASKING` arms one node for the redirection that follows it, so it is only
-///   correct immediately before the redirected command, on that node.
-/// - `CLUSTER SLOTS` is the pre-7.0 spelling of `CLUSTER SHARDS`, kept because
-///   topology discovery falls back to it against an older server. Redis marks it
-///   deprecated; a caller wanting the topology wants `cluster_shards`.
+/// - `HELLO` sets the protocol version. The handshake fixes it at RESP3, which every
+///   deserializer requires.
+/// - `READONLY` and `READWRITE` set the read mode that
+///   [`ClusterConfig::read_preference`](crate::client::ClusterConfig::read_preference)
+///   depends on.
+/// - `ASKING` is correct only immediately before the command it redirects.
+/// - `CLUSTER SLOTS` is deprecated since Redis 7.0. Callers use `cluster_shards`.
 ///
-/// Refusing them at run time was the alternative. Not exposing them is better: the
-/// caller learns from the compiler instead of from a production incident. The
-/// generic command API can still send any of them, which is the documented escape
-/// hatch and stays the caller's responsibility.
+/// The client sends each command at the point where it is correct. The generic
+/// command API can still send them, which stays the caller's responsibility.
 pub(crate) trait InternalCommands<'a>: Sized {
     /// When a cluster client receives an -ASK redirect,
     /// the ASKING command is sent to the target node followed by the command which was redirected.

@@ -10,10 +10,7 @@ use serde::{
     de::{DeserializeSeed, EnumAccess, IntoDeserializer, VariantAccess, Visitor},
     forward_to_deserialize_any,
 };
-use std::{
-    collections::{HashMap, hash_map},
-    slice, str, vec,
-};
+use std::{slice, str, vec};
 
 /// Reads a string that must hold exactly one character. The slice pattern keeps
 /// the length test and the read as one expression, so neither can drift from the
@@ -747,12 +744,12 @@ impl<'de> serde::de::MapAccess<'de> for SeqAccess<'de> {
 
 struct MapAccess<'de> {
     len: usize,
-    iter: hash_map::Iter<'de, Value, Value>,
+    iter: slice::Iter<'de, (Value, Value)>,
     value: Option<&'de Value>,
 }
 
 impl<'de> MapAccess<'de> {
-    pub(crate) fn new(values: &'de HashMap<Value, Value>) -> Self {
+    pub(crate) fn new(values: &'de [(Value, Value)]) -> Self {
         Self {
             len: values.len(),
             iter: values.iter(),
@@ -886,12 +883,11 @@ impl<'de> Enum<'de> {
         }
     }
 
-    /// Reads the 1-element map form. A `HashMap` has no slice pattern, so the
-    /// cardinality is tested by asking for a second entry and requiring none.
-    fn from_map(values: &'de HashMap<Value, Value>) -> Result<Self> {
-        let mut iter = values.iter();
-        match (iter.next(), iter.next()) {
-            (Some((variant_identifier, variant_value)), None) => Ok(Self {
+    /// Reads the 1-element map form. As with the array form, the slice pattern
+    /// is the cardinality test and the two reads at once.
+    fn from_map(values: &'de [(Value, Value)]) -> Result<Self> {
+        match values {
+            [(variant_identifier, variant_value)] => Ok(Self {
                 variant_identifier,
                 variant_value,
             }),

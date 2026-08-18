@@ -3,7 +3,7 @@ use serde::{
     Deserialize, Deserializer,
     de::{MapAccess, SeqAccess, Visitor},
 };
-use std::{collections::HashMap, fmt};
+use std::fmt;
 
 /// Sentinel field name used to smuggle RESP push frames through serde's map
 /// channel: the deserializer emits this as the first (and only) map key to signal
@@ -107,10 +107,10 @@ impl<'de> Visitor<'de> for ValueVisitor {
     {
         let len = map.size_hint();
 
-        // As with `visit_seq`, an empty map is `Value::Map({})`, not `Value::Null`;
+        // As with `visit_seq`, an empty map is `Value::Map([])`, not `Value::Null`;
         // a nil arrives through `visit_none`. Likewise an empty push stays a
         // `Value::Push([])`.
-        let mut values: HashMap<Value, Value> = HashMap::with_capacity(len.unwrap_or_default());
+        let mut values: Vec<(Value, Value)> = Vec::with_capacity(len.unwrap_or_default());
         loop {
             let key = match map.next_key::<PushOrKey>()? {
                 None => break,
@@ -121,7 +121,7 @@ impl<'de> Visitor<'de> for ValueVisitor {
                 Some(PushOrKey::Key(key)) => key,
             };
 
-            values.insert(key, map.next_value()?);
+            values.push((key, map.next_value()?));
         }
         Ok(Value::Map(values))
     }

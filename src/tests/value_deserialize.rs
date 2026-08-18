@@ -5,7 +5,6 @@ use crate::{
 };
 use bytes::Bytes;
 use serde::Deserialize;
-use std::collections::HashMap;
 
 fn deserialize_value(str: &str) -> Result<Value> {
     let buf = str.as_bytes();
@@ -131,7 +130,7 @@ fn map() {
     let result =
         deserialize_value("%2\r\n$2\r\nid\r\n:12\r\n$4\r\nname\r\n$4\r\nMike\r\n").unwrap(); // {b"id": 12, b"name": b"Mike"}
     assert_eq!(
-        Value::Map(HashMap::from([
+        Value::Map(Vec::from([
             (Value::BulkString(b"id".to_vec()), Value::Integer(12)),
             (
                 Value::BulkString(b"name".to_vec()),
@@ -142,7 +141,7 @@ fn map() {
     );
 
     let result = deserialize_value("%0\r\n").unwrap(); // {}
-    assert_eq!(Value::Map(HashMap::new()), result);
+    assert_eq!(Value::Map(Vec::new()), result);
 }
 
 #[test]

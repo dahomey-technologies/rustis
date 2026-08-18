@@ -1,10 +1,6 @@
 use crate::{RedisError, Result};
 use serde::de::DeserializeOwned;
-use std::{
-    collections::HashMap,
-    fmt::{self, Display, Formatter, Write},
-    hash::{Hash, Hasher},
-};
+use std::fmt::{self, Display, Formatter, Write};
 
 /// Generic Redis Object Model
 ///
@@ -17,10 +13,9 @@ pub enum Value {
     Integer(i64),
     /// [RESP Double](https://redis.io/docs/latest/develop/reference/protocol-spec/#doubles)
     ///
-    /// Equality on this variant is total, as `Value` is `Eq` and usable as a
-    /// [`Value::Map`] key: all NaNs are equal to each other — so a `,nan` reply
-    /// equals itself — and `-0.0` equals `0.0`. Both depart from IEEE-754,
-    /// which has no reflexive NaN.
+    /// Equality on this variant is total, as `Value` is `Eq`: all NaNs are
+    /// equal to each other — so a `,nan` reply equals itself — and `-0.0`
+    /// equals `0.0`. Both depart from IEEE-754, which has no reflexive NaN.
     Double(f64),
     /// [RESP Bulk String](https://redis.io/docs/latest/develop/reference/protocol-spec/#bulk-strings)
     BulkString(Vec<u8>),
@@ -29,7 +24,13 @@ pub enum Value {
     /// [RESP Array](https://redis.io/docs/latest/develop/reference/protocol-spec/#arrays)
     Array(Vec<Value>),
     /// [RESP Map](https://redis.io/docs/latest/develop/reference/protocol-spec/#maps)
-    Map(HashMap<Value, Value>),
+    ///
+    /// The entries are in the order the server sent them, and a field the
+    /// server repeats appears twice. A `HashMap` would lose both, and `Value`
+    /// is the fallback a caller reaches for precisely when it does not model
+    /// the reply shape: it must hand back the reply itself. Callers that want
+    /// map semantics deserialize into their own `HashMap`.
+    Map(Vec<(Value, Value)>),
     /// [RESP Set](https://redis.io/docs/latest/develop/reference/protocol-spec/#sets)
     Set(Vec<Value>),
     /// [RESP Push](https://redis.io/docs/latest/develop/reference/protocol-spec/#pushes)
@@ -53,14 +54,39 @@ impl Value {
     {
         T::deserialize(&self)
     }
+
+    /// The entries of a [`Value::Map`], in the order the server sent them,
+    /// [`None`] for any other variant.
+    #[inline]
+    #[must_use]
+    pub fn as_map(&self) -> Option<&[(Value, Value)]> {
+        match self {
+            Value::Map(entries) => Some(entries),
+            _ => None,
+        }
+    }
+
+    /// The value of the first entry of a [`Value::Map`] whose field equals
+    /// `key`, [`None`] if there is none or if this is not a map.
+    ///
+    /// The scan is linear, because the entries are a sequence: a RESP3 map may
+    /// repeat a field, and this answers the first of them. Callers doing many
+    /// lookups over a large reply should deserialize into their own map.
+    #[inline]
+    #[must_use]
+    pub fn get(&self, key: &Value) -> Option<&Value> {
+        self.as_map()?
+            .iter()
+            .find(|(field, _)| field == key)
+            .map(|(_, value)| value)
+    }
 }
 
-/// Canonical bit pattern a [`Value::Double`] is compared and hashed on.
+/// Canonical bit pattern a [`Value::Double`] is compared on.
 ///
 /// `Value` asserts `Eq`, which demands a reflexive equality, so the IEEE-754
 /// rules are not usable as they stand: every NaN collapses onto a single
 /// pattern, and the two zeros — equal under `==` — onto the positive one.
-/// `Hash` and `PartialEq` share this function so they cannot drift apart.
 fn canonical_double_bits(d: f64) -> u64 {
     if d.is_nan() {
         f64::NAN.to_bits()
@@ -68,39 +94,6 @@ fn canonical_double_bits(d: f64) -> u64 {
         0.0f64.to_bits()
     } else {
         d.to_bits()
-    }
-}
-
-impl Hash for Value {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        // A RESP3 map is `HashMap<Value, Value>`, so any variant can appear as a
-        // key and gets hashed — including Boolean/Array/Map/Set/Push reached from
-        // server data. Missing arms used to `unimplemented!()` and panic the
-        // decoding task, so every variant must hash. Mixing the discriminant in
-        // keeps values of different variants from colliding.
-        core::mem::discriminant(self).hash(state);
-        match self {
-            Value::SimpleString(s) => s.hash(state),
-            Value::Integer(i) => i.hash(state),
-            Value::Double(d) => canonical_double_bits(*d).hash(state),
-            Value::BulkString(bs) => bs.hash(state),
-            Value::Boolean(b) => b.hash(state),
-            Value::Array(v) | Value::Set(v) | Value::Push(v) => v.hash(state),
-            Value::Map(m) => {
-                // `HashMap` has no `Hash`; fold order-independently so equal maps
-                // hash equally regardless of iteration order.
-                let mut acc: u64 = 0;
-                for (k, val) in m {
-                    let mut h = std::collections::hash_map::DefaultHasher::new();
-                    k.hash(&mut h);
-                    val.hash(&mut h);
-                    acc = acc.wrapping_add(h.finish());
-                }
-                acc.hash(state);
-            }
-            Value::Error(e) => e.hash(state),
-            Value::Null => "_\r\n".hash(state),
-        }
     }
 }
 
@@ -146,10 +139,10 @@ impl Display for Value {
                 }
                 f.write_char(']')
             }
-            Value::Map(m) => {
+            Value::Map(entries) => {
                 f.write_char('{')?;
                 let mut first = true;
-                for (key, value) in m {
+                for (key, value) in entries {
                     if !first {
                         f.write_str(", ")?;
                     }

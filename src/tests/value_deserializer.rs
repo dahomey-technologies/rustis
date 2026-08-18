@@ -265,7 +265,7 @@ fn option() -> Result<()> {
     let result = Option::<Vec<i32>>::deserialize(&Value::Array(vec![]))?;
     assert_eq!(Some(vec![]), result);
 
-    let result = Option::<HashMap<String, i32>>::deserialize(&Value::Map(HashMap::new()))?;
+    let result = Option::<HashMap<String, i32>>::deserialize(&Value::Map(Vec::new()))?;
     assert_eq!(Some(HashMap::new()), result);
 
     let result = Option::<Vec<i32>>::deserialize(&Value::Set(vec![]))?;
@@ -455,7 +455,7 @@ fn tuple_struct() -> Result<()> {
 fn map() -> Result<()> {
     log_try_init();
 
-    let result = HashMap::<i32, i32>::deserialize(&Value::Map(HashMap::from([
+    let result = HashMap::<i32, i32>::deserialize(&Value::Map(Vec::from([
         (Value::Integer(12), Value::Integer(13)),
         (Value::Integer(14), Value::Integer(15)),
     ])))?;
@@ -526,7 +526,7 @@ fn _struct() -> Result<()> {
 
     log_try_init();
 
-    let value = Value::Map(HashMap::from([
+    let value = Value::Map(Vec::from([
         (Value::BulkString(b"id".to_vec()), Value::Integer(12)),
         (
             Value::BulkString(b"name".to_vec()),
@@ -676,7 +676,7 @@ fn _enum() -> Result<()> {
     assert_eq!(E::A, result);
 
     // newtype_variant
-    let result = E::deserialize(&Value::Map(HashMap::from([(
+    let result = E::deserialize(&Value::Map(Vec::from([(
         Value::BulkString(b"B".to_vec()),
         Value::Integer(12),
     )])))?;
@@ -689,7 +689,7 @@ fn _enum() -> Result<()> {
     assert_eq!(E::B(12), result);
 
     // tuple_variant
-    let result = E::deserialize(&Value::Map(HashMap::from([(
+    let result = E::deserialize(&Value::Map(Vec::from([(
         Value::BulkString(b"C".to_vec()),
         Value::Array(vec![Value::Integer(12), Value::Integer(13)]),
     )])))?;
@@ -722,7 +722,7 @@ fn _enum() -> Result<()> {
         result
     );
 
-    let result = E::deserialize(&Value::Map(HashMap::from([(
+    let result = E::deserialize(&Value::Map(Vec::from([(
         Value::BulkString(b"D".to_vec()),
         Value::Array(vec![
             Value::BulkString(b"r".to_vec()),
@@ -742,9 +742,9 @@ fn _enum() -> Result<()> {
         result
     );
 
-    let result = E::deserialize(&Value::Map(HashMap::from([(
+    let result = E::deserialize(&Value::Map(Vec::from([(
         Value::BulkString(b"D".to_vec()),
-        Value::Map(HashMap::from([
+        Value::Map(Vec::from([
             (Value::BulkString(b"r".to_vec()), Value::Integer(12)),
             (Value::BulkString(b"g".to_vec()), Value::Integer(13)),
             (Value::BulkString(b"b".to_vec()), Value::Integer(14)),

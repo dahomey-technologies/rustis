@@ -1,12 +1,10 @@
-use std::collections::HashMap;
-
 use crate::{Result, resp::Value};
 use serde::Deserialize;
 use smallvec::SmallVec;
 
 #[test]
 fn map_to_tuple_vec() -> Result<()> {
-    let value = Value::Map(HashMap::from([
+    let value = Value::Map(Vec::from([
         (
             Value::BulkString(b"field1".to_vec()),
             Value::BulkString(b"hello".to_vec()),
@@ -35,7 +33,7 @@ fn map_to_tuple_vec() -> Result<()> {
 
 #[test]
 fn map_to_tuple_smallvec() -> Result<()> {
-    let value = Value::Map(HashMap::from([
+    let value = Value::Map(Vec::from([
         (
             Value::BulkString(b"field1".to_vec()),
             Value::BulkString(b"hello".to_vec()),

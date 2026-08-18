@@ -24,6 +24,11 @@ The upgrade checklist. Each item is stated in the section it belongs to below.
   until its reply arrives. A configuration sized against the send queue alone may
   shed commands it used to accept.
 
+- **`Value::Map` holds `Vec<(Value, Value)>` instead of `HashMap<Value, Value>`,
+  and `Value` no longer implements `Hash`.** Code that built a map with
+  `HashMap::from([…])` or read it with `get`/`contains_key` on the inner type must
+  change; `Value::get` replaces the lookup.
+
 `cargo semver-checks` reports 11 removed trait methods and 4 removed structs.
 
 ### Added
@@ -40,7 +45,15 @@ The upgrade checklist. Each item is stated in the section it belongs to below.
   touching no slot this client uses was never noticed, and a node added to the
   cluster was never connected to.
 
+- **`Value::as_map` and `Value::get`** read the entries of a map and look a field
+  up in them.
+
 ### Changed
+
+- **`Value::Map` keeps the reply.** Its entries are in the order the server sent
+  them, and a field the server repeats appears twice. A `HashMap` lost both, made
+  `Display`/`Debug` nondeterministic, and was the sole reason `Value` carried a
+  hand-written `Hash` over `f64` and nested maps.
 
 - **A reply nobody awaits is logged at `debug!`, not `warn!`, and names its command.**
   A caller that gives up on its reply — a `command_timeout`, a dropped future — is the

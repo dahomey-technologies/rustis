@@ -1092,20 +1092,16 @@ fn empty_collections_are_not_null() {
     assert_eq!(Value::Null, deserialize::<Value>("*-1\r\n").unwrap());
 }
 
-/// A RESP3 map with a non-string key (boolean, array, …) is protocol-valid and
-/// deserializing it into `Value` hashes the key. Every `Value` variant must hash
-/// rather than `unimplemented!()`-panic the decoding task.
+/// A RESP3 map with a non-string key (boolean, array, …) is protocol-valid, so
+/// `Value` must carry such a key as it stands and let it be looked up.
 #[test]
-fn value_map_with_boolean_key_hashes() -> Result<()> {
+fn value_map_with_boolean_key_is_readable() -> Result<()> {
     use crate::resp::Value;
     log_try_init();
 
     // `%1\r\n#t\r\n:1\r\n`: { true: 1 }.
     let value: Value = deserialize("%1\r\n#t\r\n:1\r\n")?;
-    let Value::Map(map) = value else {
-        panic!("expected a Value::Map");
-    };
-    assert_eq!(Some(&Value::Integer(1)), map.get(&Value::Boolean(true)));
+    assert_eq!(Some(&Value::Integer(1)), value.get(&Value::Boolean(true)));
 
     Ok(())
 }
@@ -1257,4 +1253,30 @@ fn negative_integer_to_u128_errors_instead_of_wrapping() {
 
     let value: u128 = deserialize(":42\r\n").unwrap();
     assert_eq!(42, value);
+}
+
+/// A RESP3 map is an ordered sequence of field/value pairs on the wire, and the
+/// server is free to send the same field twice. `Value` is the untyped fallback:
+/// it must hand back what arrived, in the order it arrived, so a caller reading
+/// a reply whose shape it does not model sees the reply itself.
+#[test]
+fn a_map_keeps_the_reply_order_and_its_duplicate_keys() -> Result<()> {
+    log_try_init();
+
+    // `{ b: 1, a: 2, a: 3 }` — out of sorted order, and `a` twice.
+    let value: Value = deserialize("%3\r\n+b\r\n:1\r\n+a\r\n:2\r\n+a\r\n:3\r\n")?;
+    let Value::Map(entries) = value else {
+        panic!("expected a Value::Map");
+    };
+
+    assert_eq!(
+        vec![
+            (Value::SimpleString("b".to_owned()), Value::Integer(1)),
+            (Value::SimpleString("a".to_owned()), Value::Integer(2)),
+            (Value::SimpleString("a".to_owned()), Value::Integer(3)),
+        ],
+        entries
+    );
+
+    Ok(())
 }

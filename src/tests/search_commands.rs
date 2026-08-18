@@ -1238,11 +1238,17 @@ async fn ft_profile() -> Result<()> {
     // to the profiling report.
     let result = client.ft_profile_search("index", false, "*").await?;
     tracing::debug!("result: {result:?}");
-    let Value::Map(parts) = result else {
-        panic!("expected a map, got {result:?}");
-    };
-    assert!(parts.contains_key(&Value::SimpleString("Profile".to_owned())));
-    assert!(parts.contains_key(&Value::SimpleString("Results".to_owned())));
+    assert!(result.as_map().is_some(), "expected a map, got {result:?}");
+    assert!(
+        result
+            .get(&Value::SimpleString("Profile".to_owned()))
+            .is_some()
+    );
+    assert!(
+        result
+            .get(&Value::SimpleString("Results".to_owned()))
+            .is_some()
+    );
 
     let result = client.ft_profile_search("index", true, "*").await?;
     assert!(matches!(result, Value::Map(_)));

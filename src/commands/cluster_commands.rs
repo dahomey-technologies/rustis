@@ -15,17 +15,6 @@ use serde::{
 /// [Redis Cluster Management commands](https://redis.io/commands/?group=cluster)
 /// [Redis cluster specification](https://redis.io/docs/reference/cluster-spec/)
 pub trait ClusterCommands<'a>: Sized {
-    /// When a cluster client receives an -ASK redirect,
-    /// the ASKING command is sent to the target node followed by the command which was redirected.
-    /// This is normally done automatically by cluster clients.
-    ///
-    /// # See Also
-    /// [<https://redis.io/commands/asking/>](https://redis.io/commands/asking/)
-    #[must_use]
-    fn asking(self) -> PreparedCommand<'a, Self, ()> {
-        prepare_command(self, cmd("ASKING"))
-    }
-
     /// This command is useful in order to modify a node's view of the cluster configuration.
     ///
     /// Specifically it assigns a set of hash slots to the node receiving the command.
@@ -376,17 +365,6 @@ pub trait ClusterCommands<'a>: Sized {
         prepare_command(self, cmd("CLUSTER").arg("SHARDS"))
     }
 
-    /// This command returns details details about which cluster slots map to which Redis instances.
-    ///
-    /// # Return
-    /// A nested list of slot ranges with networking information.
-    ///
-    /// # See Also
-    /// [<https://redis.io/commands/cluster-slots/>](https://redis.io/commands/cluster-slots/)
-    fn cluster_slots<R: Response>(self) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("CLUSTER").arg("SLOTS"))
-    }
-
     /// Returns per-slot usage statistics for the slots assigned to the current node.
     ///
     /// Select the slots with a [`ClusterSlotStatsFilter`]: an inclusive slot range
@@ -485,37 +463,6 @@ pub trait ClusterCommands<'a>: Sized {
             self,
             cmd("CLUSTER").arg("MIGRATION").arg("STATUS").arg(target),
         )
-    }
-
-    /// Enables read queries for a connection to a Redis Cluster replica node.
-    ///
-    /// # Cluster
-    /// A rustis cluster client sends `READONLY` itself on every replica connection
-    /// it opens when [`ClusterConfig::read_preference`](crate::client::ClusterConfig::read_preference)
-    /// asks for reads on replicas, so a caller has nothing to arm. Sent by hand, it
-    /// is routed as an ordinary command and reaches one node — the mode it sets
-    /// there is not the client's routing decision, which stays governed by the
-    /// configured preference.
-    ///
-    /// # See Also
-    /// [<https://redis.io/commands/readonly/>](https://redis.io/commands/readonly/)
-    #[must_use]
-    fn readonly(self) -> PreparedCommand<'a, Self, ()> {
-        prepare_command(self, cmd("READONLY"))
-    }
-
-    /// Disables read queries for a connection to a Redis Cluster replica node.
-    ///
-    /// # Cluster
-    /// See [`readonly`](ClusterCommands::readonly): the client owns the read mode of
-    /// its replica connections, so this command changes nothing for the routing of a
-    /// cluster client.
-    ///
-    /// # See Also
-    /// [<https://redis.io/commands/readwrite/>](https://redis.io/commands/readwrite/)
-    #[must_use]
-    fn readwrite(self) -> PreparedCommand<'a, Self, ()> {
-        prepare_command(self, cmd("READWRITE"))
     }
 }
 
@@ -955,10 +902,10 @@ pub enum ClusterHealthStatus {
     Loading,
 }
 
-/// Result for the [`cluster_slots`](ClusterCommands::cluster_slots) command.
+/// Result for the `CLUSTER SLOTS` command.
 #[derive(Debug)]
 #[non_exhaustive]
-pub struct LegacyClusterShardResult {
+pub(crate) struct LegacyClusterShardResult {
     pub slot: (u16, u16),
     pub nodes: Vec<LegacyClusterNodeResult>,
 }
@@ -1005,10 +952,10 @@ impl<'de> Deserialize<'de> for LegacyClusterShardResult {
     }
 }
 
-/// Cluster node result for the [`cluster_slots`](ClusterCommands::cluster_slots) command.
+/// Cluster node result for the `CLUSTER SLOTS` command.
 #[derive(Debug)]
 #[non_exhaustive]
-pub struct LegacyClusterNodeResult {
+pub(crate) struct LegacyClusterNodeResult {
     /// The node ID
     pub id: String,
 

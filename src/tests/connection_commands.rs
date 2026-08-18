@@ -5,7 +5,7 @@ use crate::{
         ClientCachingMode, ClientInfoAttribute, ClientKillOptions, ClientListOptions,
         ClientPauseMode, ClientReplyMode, ClientTrackingOptions, ClientTrackingStatus, ClientType,
         ClientUnblockMode, ConnectionCommands, FlushingMode, GenericCommands, HelloOptions,
-        ServerCommands, StringCommands,
+        InternalCommands, ServerCommands, StringCommands,
     },
     network::spawn,
     resp::{BulkString, cmd},
@@ -571,19 +571,6 @@ async fn ping() -> Result<()> {
 
     Ok(())
 }
-
-// #[tokio::test]
-// #[serial]
-// async fn quit() -> Result<()> {
-//     let client = Connection::connect(get_default_addr()).await?;
-
-//     client.quit().await?;
-
-//     // reconnection here
-//     client.ping::<String, ()>(None).await?;
-
-//     Ok(())
-// }
 
 #[tokio::test]
 #[serial]

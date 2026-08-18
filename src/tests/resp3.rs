@@ -1,7 +1,7 @@
 use crate::{
     Result,
     commands::{
-        ConnectionCommands, FlushingMode, HelloOptions, ServerCommands, SortedSetCommands,
+        FlushingMode, HelloOptions, InternalCommands, ServerCommands, SortedSetCommands,
         StringCommands,
     },
     tests::get_test_client,

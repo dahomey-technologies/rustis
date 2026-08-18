@@ -8,6 +8,54 @@ Versions up to and including `0.19.3` are documented in the
 
 ## [Unreleased]
 
+### BREAKING CHANGES
+
+The upgrade checklist. Each item is stated fully, with the reason it moved, in the
+section it belongs to below.
+
+- **Six connection-driving commands are gone from the public command traits**:
+  `hello`, `asking`, `readonly`, `readwrite` and `cluster_slots` are now internal,
+  and `quit` is deleted. The client sends all of them itself, at the points where
+  they are correct. The four types that existed only to serve them went with them:
+  `HelloOptions`, `HelloResult`, `LegacyClusterShardResult` and
+  `LegacyClusterNodeResult`.
+
+`cargo semver-checks` reports the six removed trait methods and the four removed
+types.
+
+### Removed
+
+- **The commands that drive the connection are no longer part of the public API.**
+  `hello`, `asking`, `readonly`, `readwrite` and `cluster_slots` moved to an
+  internal trait. A `Client` is clonable and multiplexed, so one connection carries
+  every clone's commands, and each of these either reconfigures that shared
+  connection underneath the others or contradicts a decision the client has already
+  made. `HELLO` is the sharpest: the handshake fixes the protocol at RESP3 and every
+  deserializer is written against RESP3 -- push frames for pub/sub, maps, doubles,
+  `_` for nil -- so a caller switching to RESP2 mid-session left the decoder reading
+  a protocol the server had stopped speaking, and because the switch was not
+  connection state the client records, a reconnection silently returned to RESP3.
+  `READONLY`/`READWRITE` are the mechanism behind `ClusterConfig::read_preference`,
+  and their own documentation already told the caller there was nothing to arm.
+  `ASKING` is only correct immediately before the redirected command, on the node it
+  redirects to. Nothing is lost: the client sends all five itself, at the points
+  where they are correct. `CLUSTER SLOTS` callers want `cluster_shards`, which Redis
+  has replaced it with since 7.0. Refusing them at run time was the alternative and
+  was rejected -- the caller learns from the compiler instead of from an incident.
+  The generic command API can still send any of them, which stays the caller's
+  responsibility.
+
+  `HelloOptions`, `HelloResult`, `LegacyClusterShardResult` and
+  `LegacyClusterNodeResult` are `pub(crate)` for the same reason. The first two are
+  the argument and the reply of `HELLO`; the last two are what `CLUSTER SLOTS` is
+  deserialized into. With no public command naming them, they were surface a caller
+  could read about and not use.
+
+  `quit` is deleted outright rather than moved: nothing in the crate called it, its
+  only test was commented out, and on a multiplexed client it closed the connection
+  every other clone was using. Redis deprecated it in 7.2.0 in favour of simply
+  closing the connection, which is what `Client::close` does.
+
 ### Fixed
 
 - **Enabling both TLS backends reports one error that says so.** `rustls` and

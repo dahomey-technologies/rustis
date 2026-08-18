@@ -399,17 +399,6 @@ pub trait ConnectionCommands<'a>: Sized {
         prepare_command(self, cmd("ECHO").arg(message))
     }
 
-    /// Switch to a different protocol,
-    /// optionally authenticating and setting the connection's name,
-    /// or provide a contextual client report.
-    ///
-    /// # See Also
-    /// [<https://redis.io/commands/hello/>](https://redis.io/commands/hello/)
-    #[must_use]
-    fn hello(self, options: HelloOptions) -> PreparedCommand<'a, Self, HelloResult> {
-        prepare_command(self, cmd("HELLO").arg(options))
-    }
-
     /// Returns PONG if no argument is provided, otherwise return a copy of the argument as a bulk.
     ///
     /// * `message` - if the argument is provided, the command returns a copy of the argument.
@@ -427,15 +416,6 @@ pub trait ConnectionCommands<'a>: Sized {
                 1,
             ),
         )
-    }
-
-    /// Ask the server to close the connection.
-    ///
-    /// # See Also
-    /// [<https://redis.io/commands/quit/>](https://redis.io/commands/quit/)
-    #[must_use]
-    fn quit(self) -> PreparedCommand<'a, Self, ()> {
-        prepare_command(self, cmd("QUIT"))
     }
 
     /// This command performs a full reset of the connection's server-side context,
@@ -970,10 +950,10 @@ pub enum ClientUnblockMode {
     Error,
 }
 
-/// Options for the [`hello`](ConnectionCommands::hello) command.
+/// Options for the `HELLO` command.
 #[derive(Default, Serialize)]
 #[serde(rename_all = "UPPERCASE")]
-pub struct HelloOptions<'a> {
+pub(crate) struct HelloOptions<'a> {
     #[serde(rename = "", skip_serializing_if = "Option::is_none")]
     protover: Option<u32>,
 
@@ -986,7 +966,7 @@ pub struct HelloOptions<'a> {
 
 impl<'a> HelloOptions<'a> {
     #[must_use]
-    pub fn new(protover: u32) -> Self {
+    pub(crate) fn new(protover: u32) -> Self {
         Self {
             protover: Some(protover),
             ..Default::default()
@@ -994,22 +974,35 @@ impl<'a> HelloOptions<'a> {
     }
 
     #[must_use]
-    pub fn auth(mut self, username: &'a str, password: &'a str) -> Self {
+    pub(crate) fn auth(mut self, username: &'a str, password: &'a str) -> Self {
         self.auth = Some((username, password));
         self
     }
 
     #[must_use]
-    pub fn set_name(mut self, client_name: &'a str) -> Self {
+    pub(crate) fn set_name(mut self, client_name: &'a str) -> Self {
         self.setname = Some(client_name);
         self
     }
 }
 
-/// Result for the [`hello`](ConnectionCommands::hello) command
+/// Result for the `HELLO` command
+///
+/// Every field the reply carries is kept, rather than only the one the handshake
+/// reads: the struct is the shape of the reply, and serde needs a field to consume
+/// each entry of the map.
 #[derive(Deserialize)]
-#[non_exhaustive]
-pub struct HelloResult {
+// The handshake reads `version` and nothing else, so the other fields are dead in
+// the library. They are not dead in the suite, which asserts on them, hence the
+// `not(test)`: an unconditional `expect` would itself go unfulfilled under `cfg(test)`.
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "the handshake reads `version`; the rest mirror the HELLO reply"
+    )
+)]
+pub(crate) struct HelloResult {
     pub server: String,
     pub version: String,
     pub proto: usize,

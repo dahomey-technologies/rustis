@@ -84,8 +84,8 @@ macro_rules! impl_families_for_mut_ref {
 ///
 /// Over the data families a client adds four: cluster and connection management,
 /// the internal pub/sub commands the subscription API is built on, and the
-/// sentinel ones. `DebugCommands` is a test-only family and is not part of the
-/// published surface.
+/// sentinel ones. `DebugCommands` and `InternalCommands` are test-only here and
+/// are not part of the published surface.
 macro_rules! impl_shared_command_traits {
     ($ty:ty) => {
         $crate::client::command_traits::data_command_families!(
@@ -99,6 +99,13 @@ macro_rules! impl_shared_command_traits {
 
         #[cfg(test)]
         impl<'a> $crate::commands::DebugCommands<'a> for &'a $ty {}
+
+        // The connection-mechanism commands, reachable from the suite and from
+        // nowhere else. `InternalCommands` documents why they are not a public
+        // family; the tests that cover them talk to a client like any caller
+        // would, which is what makes them worth running.
+        #[cfg(test)]
+        impl<'a> $crate::commands::InternalCommands<'a> for &'a $ty {}
     };
 }
 
@@ -132,7 +139,7 @@ macro_rules! impl_pipeline_command_traits {
 /// on a pipeline, means nothing inside `MULTI`: every reply is delivered at once
 /// in `EXEC`'s array, so there is no per-command reply to suppress. The rest of
 /// that family either discards the block outright (`RESET`) or changes the state
-/// the queued commands were written against (`SELECT`, `HELLO`).
+/// the queued commands were written against (`SELECT`, `AUTH`).
 macro_rules! impl_transaction_command_traits {
     ($ty:ty) => {
         $crate::client::command_traits::data_command_families!(impl_families_for_mut_ref, $ty,);

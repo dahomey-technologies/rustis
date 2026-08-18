@@ -4,7 +4,8 @@ use crate::{
         BufferConfig, Config, CustomTransport, PreparedCommand, TransportReader, TransportWriter,
     },
     commands::{
-        ClusterCommands, ConnectionCommands, HelloOptions, SentinelCommands, ServerCommands,
+        ClusterCommands, ConnectionCommands, HelloOptions, InternalCommands, SentinelCommands,
+        ServerCommands,
     },
     resp::{BufferDecoder, Command, CommandEncoder, RespResponse, StateSlot},
     tcp_connect,
@@ -631,6 +632,7 @@ where
 }
 
 impl<'a> ClusterCommands<'a> for &'a mut StandaloneConnection {}
+impl<'a> InternalCommands<'a> for &'a mut StandaloneConnection {}
 impl<'a> ConnectionCommands<'a> for &'a mut StandaloneConnection {}
 impl<'a> SentinelCommands<'a> for &'a mut StandaloneConnection {}
 impl<'a> ServerCommands<'a> for &'a mut StandaloneConnection {}

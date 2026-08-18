@@ -4,8 +4,8 @@ use crate::{
     commands::{
         ClusterCommands, ClusterFailoverOption, ClusterLinkDirection, ClusterLinkInfo,
         ClusterMigrationTarget, ClusterResetType, ClusterShardResult, ClusterSlotStatMetric,
-        ClusterSlotStatsFilter, ClusterState, GenericCommands, LegacyClusterShardResult, SortOrder,
-        StringCommands,
+        ClusterSlotStatsFilter, ClusterState, GenericCommands, InternalCommands,
+        LegacyClusterShardResult, SortOrder, StringCommands,
     },
     resp::Value,
     tests::{TestClient, get_spare_cluster_node_client, log_try_init, reset_spare_cluster_node},

@@ -2,7 +2,7 @@ use crate::{
     Result,
     client::{Client, IntoConfig, ReconnectionConfig},
     commands::{
-        ConnectionCommands, GenericCommands, ReplicaOfOptions, SentinelCommands,
+        ConnectionCommands, GenericCommands, InternalCommands, ReplicaOfOptions, SentinelCommands,
         SentinelSimulateFailureMode, ServerCommands, StringCommands,
     },
     resp::cmd,

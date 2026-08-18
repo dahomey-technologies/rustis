@@ -5,7 +5,7 @@ use crate::{
     client::{ClusterConfig, Config, ReadPreference},
     commands::{
         ClusterCommands, ClusterHealthStatus, ClusterNodeResult, ClusterShardResult,
-        LegacyClusterShardResult, RequestPolicy, ResponsePolicy,
+        InternalCommands, LegacyClusterShardResult, RequestPolicy, ResponsePolicy,
     },
     network::{Version, sleep},
     resp::{

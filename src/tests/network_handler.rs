@@ -495,3 +495,50 @@ async fn a_default_command_is_failed_by_a_lost_connection_rather_than_replayed()
 
     Ok(())
 }
+
+/// Neither branch of the network loop may drain without bound.
+///
+/// The `select!` gives the two directions one task between them, so a side that
+/// keeps consuming until its source runs dry starves the other: a caller flooding
+/// the channel delays every reply, and a firehose of replies delays every send.
+/// Both waves are cut at `max_messages_per_wave`, which returns control to the
+/// `select!` rather than to nothing in particular.
+#[tokio::test]
+#[serial]
+async fn neither_side_of_the_loop_drains_without_bound() -> Result<()> {
+    log_try_init();
+
+    let hook = QueueMetricsTestHook::new();
+    let mut config = get_default_config()?;
+    config.queue_metrics_test_hook = Some(hook.clone());
+    let cap = config.max_messages_per_wave;
+    let client = get_test_client_with_config(config).await?;
+
+    // Flood the channel synchronously, so the whole burst is waiting when the
+    // network task next polls it.
+    const BURST: usize = 2_000;
+    assert!(
+        BURST > cap * 4,
+        "the burst must be large enough to be cut several times"
+    );
+    for i in 0..BURST {
+        client.send_and_forget(cmd("PING").arg(i.to_string()), None)?;
+    }
+
+    // A round trip that only completes once the burst has been written and
+    // answered, so both waves have been exercised by the time it returns.
+    let _: String = timeout(Duration::from_secs(30), client.send(cmd("PING"), None)).await??;
+
+    assert!(
+        hook.write_wave_high_water() <= cap,
+        "a send wave took {} messages, above the {cap} cap",
+        hook.write_wave_high_water()
+    );
+    assert!(
+        hook.read_wave_high_water() <= cap,
+        "a read wave took {} replies, above the {cap} cap",
+        hook.read_wave_high_water()
+    );
+
+    Ok(())
+}

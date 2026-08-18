@@ -7,7 +7,7 @@ use crate::{
     resp::{
         ClientReplyMode, CommandKind, RespResponse, RespView, StateSlot, SubscriptionType, cmd,
     },
-    spawn, timeout,
+    sleep, spawn, timeout,
 };
 use bytes::Bytes;
 use futures_util::{FutureExt, select};
@@ -29,10 +29,13 @@ use tracing::{Instrument, debug, error, info, info_span, trace, warn};
 // place that can grow sheds in the way that suits what it carries.
 //
 // - `messages_to_send` grows while the connection is down and every reconnection
-//   fails. It is capped by `BackpressureConfig::max_queued_bytes`, enforced on
-//   *incoming* messages only: anything replayed or retried was already accepted
-//   and must not be dropped. Left uncapped it was measured retaining 100 000
-//   commands and 229 MiB.
+//   fails. `messages_to_receive` grows while the connection accepts bytes and
+//   answers none. Both are capped by one `BackpressureConfig::max_queued_bytes`:
+//   a message is charged when it is queued and released when its reply arrives,
+//   writing it being no reason to free the memory it holds. The budget is
+//   enforced on *incoming* messages only, anything replayed or retried having
+//   already been accepted. Left uncapped the send queue was measured retaining
+//   100 000 commands and 229 MiB.
 // - Pub/sub streams and the push sinks are bounded channels that discard their
 //   oldest messages, so a consumer that resumes sees current data. A paused
 //   subscriber was measured absorbing 113 MiB/s and 221 MiB before this existed.
@@ -192,6 +195,8 @@ pub(crate) struct QueueMetricsTestHook {
     push_delivered: Arc<std::sync::atomic::AtomicUsize>,
     push_delivery_failed: Arc<std::sync::atomic::AtomicUsize>,
     push_delivered_bytes: Arc<std::sync::atomic::AtomicUsize>,
+    read_wave_high_water: Arc<std::sync::atomic::AtomicUsize>,
+    write_wave_high_water: Arc<std::sync::atomic::AtomicUsize>,
 }
 
 #[cfg(test)]
@@ -255,6 +260,28 @@ impl QueueMetricsTestHook {
             .load(std::sync::atomic::Ordering::Relaxed)
     }
 
+    /// Most replies handled without returning to the `select!`.
+    pub(crate) fn read_wave_high_water(&self) -> usize {
+        self.read_wave_high_water
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Most messages taken from the channel without returning to the `select!`.
+    pub(crate) fn write_wave_high_water(&self) -> usize {
+        self.write_wave_high_water
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    fn record_read_wave(&self, handled: usize) {
+        self.read_wave_high_water
+            .fetch_max(handled, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    fn record_write_wave(&self, handled: usize) {
+        self.write_wave_high_water
+            .fetch_max(handled, std::sync::atomic::Ordering::Relaxed);
+    }
+
     fn record_queue_depths(&self, to_send: usize, to_receive: usize) {
         self.messages_to_send_high_water
             .fetch_max(to_send, std::sync::atomic::Ordering::Relaxed);
@@ -295,6 +322,10 @@ impl QueueMetricsTestHook {
 // written *and* answered. Capping the wave keeps a batch in flight at the server
 // while the next one is being collected.
 //
+// It bounds both directions, not only the write size: the `select!` gives the
+// two one task between them, so each wave hands control back after this many
+// messages rather than running its source dry.
+//
 // The default (48) was calibrated against a live Redis over concurrency levels
 // 64 → 1024 (see `RUSTIS_VS_REDIS_RS.md`, H13): the optimum is flat between 32
 // and 128, 48 is within ~12% of the per-level optimum everywhere, and below 48
@@ -325,16 +356,22 @@ struct MessageToReceive {
     pub message: Message,
     pub num_commands: usize,
     pub pending_responses: Vec<RespResponse>,
+    /// What this message still holds of the queue budget.
+    ///
+    /// It is carried rather than recomputed on removal, so the amount released
+    /// is exactly the amount charged whatever the message has been through since.
+    pub queued_bytes: usize,
 }
 
 impl MessageToReceive {
-    pub(crate) fn new(message: Message, num_commands: usize) -> Self {
+    pub(crate) fn new(message: Message, num_commands: usize, queued_bytes: usize) -> Self {
         Self {
             message,
             num_commands,
             // A batch collects exactly `num_commands` responses; size the buffer
             // once instead of letting it grow.
             pending_responses: Vec::with_capacity(num_commands),
+            queued_bytes,
         }
     }
 }
@@ -392,7 +429,8 @@ pub(crate) struct NetworkHandler {
     /// Memory budget for `messages_to_send`, from
     /// `Config::backpressure.max_queued_bytes` (`0` = unlimited).
     max_queued_bytes: usize,
-    /// Running total of `Message::queued_bytes` over `messages_to_send`.
+    /// Running total of `Message::queued_bytes` over both queues: a message is
+    /// charged when it is queued and released when its reply arrives.
     ///
     /// Maintained incrementally at every push and pop rather than recomputed:
     /// the queue is walked often enough that summing it per message would be
@@ -488,12 +526,25 @@ impl NetworkHandler {
 
     async fn network_loop(&mut self) -> Result<()> {
         loop {
+            // The connection owns what its upkeep is and when it is due; the
+            // loop owns only the fact that it must not run on a branch the
+            // `select!` can cancel halfway.
+            let until_maintenance = self
+                .connection
+                .next_maintenance()
+                .map_or(NO_MAINTENANCE_DELAY, |due| {
+                    due.saturating_duration_since(Instant::now())
+                });
+
             select! {
                 msg = poll_fn(|cx| self.msg_receiver.poll_recv(cx)).fuse() => {
                     if !self.try_handle_message(msg).await { break; }
                 },
                 result = self.connection.read().fuse() => {
                     if !self.try_handle_result(result).await { break; }
+                },
+                () = sleep(until_maintenance).fuse() => {
+                    self.connection.run_maintenance().await;
                 }
             }
         }
@@ -511,11 +562,14 @@ impl NetworkHandler {
         let mut is_channel_closed = false;
         // Messages queued since the last flush, for the wave cap below.
         let mut queued: usize = 0;
+        // Messages taken from the channel without returning to the `select!`.
+        let mut handled: usize = 0;
 
         loop {
             if let Some(msg) = msg {
                 self.handle_message(msg);
                 queued += 1;
+                handled += 1;
             } else {
                 is_channel_closed = true;
                 break;
@@ -530,6 +584,14 @@ impl NetworkHandler {
                 queued = 0;
             }
 
+            // Hand the loop back to the `select!`, so a caller flooding the
+            // channel cannot hold the one task the two directions share and
+            // starve every reply. The channel keeps whatever is left; the next
+            // poll takes the next wave.
+            if handled >= self.max_messages_per_wave {
+                break;
+            }
+
             match self.msg_receiver.try_recv() {
                 Ok(m) => msg = Some(m),
                 Err(_) => {
@@ -541,6 +603,11 @@ impl NetworkHandler {
 
         if self.status != Status::Disconnected {
             self.send_messages().await
+        }
+
+        #[cfg(test)]
+        if let Some(hook) = &self.queue_metrics_test_hook {
+            hook.record_write_wave(handled);
         }
 
         !is_channel_closed
@@ -557,18 +624,23 @@ impl NetworkHandler {
         }
     }
 
-    /// Whether queuing `cost` more bytes would breach the send-queue budget.
+    /// Whether queuing `cost` more bytes would breach the queue budget.
     ///
-    /// An empty queue always admits, whatever the size: refusing a command
-    /// larger than the whole budget would make it permanently unsendable rather
-    /// than merely delayed. The queue is therefore bounded by the budget plus at
-    /// most one message.
+    /// The budget covers both queues: what is waiting to be written and what is
+    /// waiting for a reply. Writing a command frees nothing, so releasing its
+    /// charge there left a connection that answers nothing bounded by no one.
+    ///
+    /// With nothing outstanding a command is always admitted, whatever its size:
+    /// refusing one larger than the whole budget would make it permanently
+    /// unsendable rather than merely delayed. What is held is therefore the
+    /// budget plus at most one message.
     fn would_exceed_queue_budget(&self, cost: usize) -> bool {
+        let outstanding = self.queued_bytes;
         self.max_queued_bytes != 0
-            && self.queued_bytes != 0
+            && outstanding != 0
             // A saturated sum is still above any budget, so saturating here gives
             // the same answer without an overflow to reason about.
-            && self.queued_bytes.saturating_add(cost) > self.max_queued_bytes
+            && outstanding.saturating_add(cost) > self.max_queued_bytes
     }
 
     /// Queues a message for sending, keeping the byte accounting in step.
@@ -762,7 +834,10 @@ impl NetworkHandler {
 
         while let Some(message_to_send) = self.messages_to_send.pop_front() {
             let mut msg = message_to_send.message;
-            self.queued_bytes = self.queued_bytes.saturating_sub(msg.queued_bytes());
+            // The charge follows the message: writing it does not free the memory
+            // it holds, only receiving its reply does. A message that awaits no
+            // reply is released here, having nowhere else to be released.
+            let cost = msg.queued_bytes();
 
             // Scope the retry reasons to the current message: they must not
             // leak onto the other messages sharing this send batch.
@@ -870,8 +945,13 @@ impl NetworkHandler {
             }
 
             if num_commands_to_receive > 0 {
-                self.messages_to_receive
-                    .push_back(MessageToReceive::new(msg, num_commands_to_receive));
+                self.messages_to_receive.push_back(MessageToReceive::new(
+                    msg,
+                    num_commands_to_receive,
+                    cost,
+                ));
+            } else {
+                self.queued_bytes = self.queued_bytes.saturating_sub(cost);
             }
         }
 
@@ -880,12 +960,20 @@ impl NetworkHandler {
 
             while self.messages_to_receive.len() > start_idx {
                 if let Some(msg_to_receive) = self.messages_to_receive.pop_back() {
+                    self.queued_bytes = self
+                        .queued_bytes
+                        .saturating_sub(msg_to_receive.queued_bytes);
                     msg_to_receive.message.send_error(e.clone());
                 }
             }
         }
     }
 
+    #[expect(
+        clippy::arithmetic_side_effects,
+        reason = "the drain loop runs only while `handled` is below \
+                  `max_messages_per_wave`, so the counter is bounded by it."
+    )]
     async fn try_handle_result(&mut self, result: Option<Result<RespResponse>>) -> bool {
         let Some(result) = result else {
             return self.reconnect().await;
@@ -907,9 +995,18 @@ impl NetworkHandler {
         // reconnection rather than one each.
         let mut master_demoted = self.master_demoted(&result);
         self.handle_result(result);
+        // Replies handled without returning to the `select!`.
+        let mut handled: usize = 1;
 
-        // OPTIMIZATION : Drain the next available results in the buffer
-        while let Poll::Ready(result) = self.connection.try_read() {
+        // OPTIMIZATION : Drain the next available results in the buffer, up to
+        // the same wave cap the send side obeys: a firehose — a `MONITOR` feed, a
+        // busy subscription — would otherwise hold the task and starve every
+        // send. The frames left are still in the decoder's buffer, so the next
+        // `read` returns them without waiting on the socket.
+        while handled < self.max_messages_per_wave
+            && let Poll::Ready(result) = self.connection.try_read()
+        {
+            handled += 1;
             let Some(result) = result else {
                 return self.reconnect().await;
             };
@@ -921,6 +1018,11 @@ impl NetworkHandler {
             }
             master_demoted |= self.master_demoted(&result);
             self.handle_result(result);
+        }
+
+        #[cfg(test)]
+        if let Some(hook) = &self.queue_metrics_test_hook {
+            hook.record_read_wave(handled);
         }
 
         if master_demoted {
@@ -1089,6 +1191,9 @@ impl NetworkHandler {
 
                 if message_to_receive.num_commands == 1 || result.is_err() {
                     if let Some(mut message_to_receive) = self.messages_to_receive.pop_front() {
+                        self.queued_bytes = self
+                            .queued_bytes
+                            .saturating_sub(message_to_receive.queued_bytes);
                         // A batch message is sent as several independent
                         // commands, each awaiting its own response. Resolving
                         // the whole message on the error of one of them leaves
@@ -1535,9 +1640,14 @@ impl NetworkHandler {
         self.messages_to_receive = retained_to_receive;
 
         let mut retained_to_send = VecDeque::with_capacity(self.messages_to_send.len());
-        // The queue is rebuilt below, so the byte total is rebuilt with it
-        // rather than adjusted message by message.
-        self.queued_bytes = 0;
+        // Both queues are rebuilt below, so the byte total is rebuilt with them
+        // rather than adjusted message by message. The retained replies keep
+        // holding their share until the replay charges them again.
+        self.queued_bytes = self
+            .messages_to_receive
+            .iter()
+            .map(|message_to_receive| message_to_receive.queued_bytes)
+            .sum();
         while let Some(mut message_to_send) = self.messages_to_send.pop_front() {
             if !message_to_send.message.retry_on_error {
                 message_to_send
@@ -1589,6 +1699,7 @@ impl NetworkHandler {
                         .message
                         .send_error(Error::from(ErrorKind::DisconnectedByPeer));
                 }
+                // Both queues are emptied below, so the total goes with them.
                 while let Some(message_to_send) = self.messages_to_send.pop_front() {
                     message_to_send
                         .message
@@ -1790,6 +1901,10 @@ fn indicates_demoted_master(result: &Result<RespResponse>) -> bool {
         }
     }
 }
+
+/// Stands in for "never" on a connection with no upkeep of its own, so its
+/// `select!` branch never wins and the loop stays one shape for every server kind.
+const NO_MAINTENANCE_DELAY: Duration = Duration::from_secs(3600);
 
 /// Whether a message that has been attempted `attempts` times has reached the
 /// configured per-message cap. `cap == 0` means unlimited (the default), matching

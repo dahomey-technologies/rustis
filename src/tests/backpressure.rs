@@ -143,8 +143,9 @@ async fn the_send_queue_stops_growing_at_its_memory_budget() -> Result<()> {
 async fn a_command_refused_by_a_full_send_queue_reports_it() -> Result<()> {
     log_try_init();
 
-    // One filler is larger than the whole budget, so the queue is over budget
-    // from the first one and every later command is refused whatever its size.
+    // One filler is larger than the whole budget, and the killed `PING` is still
+    // awaiting a reply, so nothing is outstanding-free: the first filler is
+    // already refused.
     const BUDGET: usize = 4 * 1024;
     const FILLER_BYTES: usize = 8 * 1024;
 
@@ -159,23 +160,18 @@ async fn a_command_refused_by_a_full_send_queue_reports_it() -> Result<()> {
         while proxy.connections_accepted() < 3 {
             tokio::task::yield_now().await;
         }
-        let value = "v".repeat(FILLER_BYTES);
-        for _ in 0..10 {
-            client.send_and_forget(
-                cmd("SET").arg("refused_filler").arg(value.as_str()),
-                Some(true),
-            )?;
-        }
-        for _ in 0..100 {
-            tokio::task::yield_now().await;
-        }
-
         // A retryable command would normally be queued and wait for the link to
         // come back; over budget it must be refused instead, and say why.
-        let result: Result<String> = client.send(cmd("PING"), Some(true)).await;
+        let value = "v".repeat(FILLER_BYTES);
+        let result: Result<()> = client
+            .send(
+                cmd("SET").arg("refused_filler").arg(value.as_str()),
+                Some(true),
+            )
+            .await;
         match result {
             Err(e) => Ok::<Error, Error>(e),
-            Ok(_) => panic!("a command offered to a full send queue must not succeed"),
+            Ok(()) => panic!("a command offered to a full send queue must not succeed"),
         }
     })
     .await??;
@@ -185,7 +181,7 @@ async fn a_command_refused_by_a_full_send_queue_reports_it() -> Result<()> {
         "a command shed by a full queue must report SendQueueFull, got {error:?}"
     );
     assert_eq!(
-        Some("PING"),
+        Some("SET"),
         error.command(),
         "a shed command must say what was shed, got {error:?}"
     );
@@ -544,5 +540,79 @@ async fn a_paused_invalidation_reader_is_bounded_by_its_memory_budget() -> Resul
     tracked
         .client_tracking(ClientTrackingStatus::Off, ClientTrackingOptions::default())
         .await?;
+    Ok(())
+}
+
+/// The budget must bound what is *in flight*, not only what is waiting to be
+/// written. A connection that accepts every byte and answers none leaves each
+/// message in `messages_to_receive`, where the charge used to be released the
+/// moment the command was written — so the documented "bound memory with
+/// `BackpressureConfig`" story had a hole exactly the size of one keep-alive
+/// interval.
+#[tokio::test]
+#[serial]
+async fn the_budget_bounds_the_replies_still_awaited() -> Result<()> {
+    use crate::tests::fake_server::HELLO_REPLY;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    log_try_init();
+
+    const VALUE_BYTES: usize = 1024;
+    const BUDGET: usize = 64 * 1024;
+
+    // Answers the handshake, then reads everything and replies to none of it.
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
+    let addr = listener.local_addr()?;
+    let server = tokio::spawn(async move {
+        let Ok((mut stream, _)) = listener.accept().await else {
+            return;
+        };
+        let mut chunk = [0u8; 4096];
+        if stream.read(&mut chunk).await.is_err() {
+            return;
+        }
+        if stream.write_all(HELLO_REPLY).await.is_err() {
+            return;
+        }
+        while stream.read(&mut chunk).await.is_ok_and(|n| n > 0) {}
+    });
+
+    let mut config = storm_config(addr, BUDGET)?;
+    // The keep-alive would eventually break the socket and end the scenario; the
+    // point is what the budget does before that.
+    config.keep_alive = None;
+    let client = Client::connect(config).await?;
+
+    // Enough to pass the budget several times over, all of it awaiting a reply
+    // that never comes. The fill is fire-and-forget because awaiting would park
+    // on a server that never answers; a shed fire-and-forget has no caller to
+    // report to, so the refusal is read on the awaited command that follows.
+    let value = "v".repeat(VALUE_BYTES);
+    let fill = (BUDGET / (VALUE_BYTES + MESSAGE_OVERHEAD)) * 4;
+    for i in 0..fill {
+        client.send_and_forget(
+            cmd("SET").arg(format!("budget_{i}")).arg(value.as_str()),
+            None,
+        )?;
+    }
+
+    // Let the network task write them all, which is what used to release their
+    // charge.
+    crate::network::sleep(Duration::from_millis(200)).await;
+
+    let refused: Result<()> = timeout(
+        Duration::from_secs(2),
+        client.send(cmd("SET").arg("budget_probe").arg(value.as_str()), None),
+    )
+    .await?;
+
+    server.abort();
+
+    let error = refused.unwrap_err();
+    assert!(
+        matches!(error.kind(), ErrorKind::Client(ClientError::SendQueueFull)),
+        "a reply still awaited must keep holding its share of the budget, got {error:?}"
+    );
+
     Ok(())
 }

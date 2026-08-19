@@ -1,6 +1,6 @@
 use crate::{
     Error, ErrorKind, Result, TimeoutKind,
-    client::Client,
+    client::{Client, CommandInterceptor},
     network::{ResultReceiver, TimeoutFuture},
     resp::{Command, RespResponse},
 };
@@ -11,7 +11,9 @@ use std::{
     future::Future,
     marker::PhantomData,
     pin::Pin,
+    sync::Arc,
     task::{Context, Poll},
+    time::Instant,
 };
 
 /// What the probe needs to identify a command, outside a test build: nothing.
@@ -61,6 +63,12 @@ pin_project! {
         // produces, wherever it is born.
         command_name: Option<Bytes>,
         probe_label: Option<ProbeLabel>,
+        // Both `None` unless an interceptor is installed, which is what keeps
+        // the clock unread on the path that has nobody to report to. Taken at
+        // the first poll rather than at construction: a future built and never
+        // polled sends nothing, so it lasted no time.
+        interceptor: Option<Arc<dyn CommandInterceptor>>,
+        started_at: Option<Instant>,
         phantom: PhantomData<fn() -> R>,
     }
 }
@@ -102,6 +110,8 @@ impl<'a, R> CommandFuture<'a, R> {
             },
             command_name: None,
             probe_label: None,
+            interceptor: None,
+            started_at: None,
             phantom: PhantomData,
         }
     }
@@ -132,6 +142,8 @@ impl<R: DeserializeOwned> Future for CommandFuture<'_, R> {
         };
 
         if let Some((client, command, retry_on_error)) = unsent {
+            *this.interceptor = client.interceptor().cloned();
+            *this.started_at = this.interceptor.as_ref().map(|_| Instant::now());
             let (state, command_name, probe_label) = client.start_send(command, retry_on_error);
             *this.command_name = command_name;
             *this.probe_label = Some(probe_label);
@@ -166,11 +178,25 @@ impl<R: DeserializeOwned> Future for CommandFuture<'_, R> {
             unreachable!("`CommandFuture` polled after it completed")
         };
 
-        Poll::Ready(match response {
+        let command_name = this.command_name.take();
+        let result = match response {
             Err(e) => Err(e),
-            Ok(response) => {
-                Client::finish_send::<R>(&response, this.command_name.take(), probe_label)
-            }
-        })
+            Ok(response) => Client::finish_send::<R>(&response, command_name.clone(), probe_label),
+        };
+
+        // Announced here rather than at the reply: a server error and a decode
+        // mismatch are both born above, and an interceptor that missed them
+        // would report a command as successful that its caller sees fail.
+        if let Some(interceptor) = this.interceptor.take()
+            && let Some(started_at) = this.started_at.take()
+        {
+            interceptor.on_complete(
+                command_name.as_ref().map_or(&[][..], Bytes::as_ref),
+                started_at.elapsed(),
+                result.as_ref().err(),
+            );
+        }
+
+        Poll::Ready(result)
     }
 }

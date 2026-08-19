@@ -92,6 +92,13 @@ async fn on_reconnect() -> Result<()> {
     let result = receiver.try_recv();
     assert!(result.is_ok());
 
+    // A connection that recovers on its own leaves no other trace: the notification
+    // is edge-triggered, so a client that was not listening at the time has only
+    // this counter.
+    let stats = client1.stats();
+    assert_eq!(1, stats.reconnections, "{stats:?}");
+    assert!(client1.is_connected(), "{stats:?}");
+
     client1.close().await?;
     client2.close().await?;
 
@@ -298,5 +305,126 @@ async fn a_client_out_of_reconnection_budget_is_terminated_and_says_so() -> Resu
         );
     }
 
+    Ok(())
+}
+
+/// An interceptor must see every command on both the ergonomic and the generic
+/// path, must be able to rewrite one, and must be told how each resolved.
+#[tokio::test]
+#[serial]
+async fn an_interceptor_sees_and_can_rewrite_every_command() -> Result<()> {
+    use crate::{
+        Error,
+        client::{CommandInterceptor, CustomInterceptor},
+        resp::Command,
+    };
+    use std::sync::{
+        Arc, Mutex,
+        atomic::{AtomicUsize, Ordering},
+    };
+
+    #[derive(Default)]
+    struct Recorder {
+        sent: Mutex<Vec<String>>,
+        completed: AtomicUsize,
+        failed: AtomicUsize,
+    }
+
+    impl CommandInterceptor for Arc<Recorder> {
+        fn on_command(&self, command: &mut Command) {
+            if let Ok(mut sent) = self.sent.lock() {
+                sent.push(String::from_utf8_lossy(&command.name_bytes()).into_owned());
+            }
+        }
+
+        fn on_complete(&self, _command_name: &[u8], _elapsed: Duration, error: Option<&Error>) {
+            self.completed.fetch_add(1, Ordering::SeqCst);
+            if error.is_some() {
+                self.failed.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+    }
+
+    log_try_init();
+    let recorder = Arc::new(Recorder::default());
+    let mut config = crate::tests::get_default_config()?;
+    config.interceptor = Some(CustomInterceptor::new(Arc::clone(&recorder)));
+    let client = Client::connect(config).await?;
+
+    // The ergonomic path, `client.set(..).await`.
+    client.set("interceptor_key", "value").await?;
+    // The generic path, `client.send(..)`.
+    client.send::<()>(cmd("PING"), None).await?;
+    // A command that fails: the interceptor must be told, not only the caller.
+    let failed: Result<()> = client.send(cmd("NOTACOMMAND"), None).await;
+    assert!(failed.is_err());
+
+    let sent = recorder.sent.lock().expect("poisoned").clone();
+    assert!(sent.contains(&"SET".to_owned()), "{sent:?}");
+    assert!(sent.contains(&"PING".to_owned()), "{sent:?}");
+    assert!(sent.contains(&"NOTACOMMAND".to_owned()), "{sent:?}");
+    assert_eq!(3, recorder.completed.load(Ordering::SeqCst));
+    assert_eq!(1, recorder.failed.load(Ordering::SeqCst));
+
+    client.close().await?;
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn a_client_reports_what_it_is_connected_to() -> Result<()> {
+    log_try_init();
+    let client = get_test_client().await?;
+
+    // A health endpoint has to answer without sending a command of its own.
+    assert!(client.is_connected());
+    let version = client
+        .server_version()
+        .expect("a standalone connection knows its server version");
+    assert!(
+        version.split('.').count() == 3,
+        "expected a three-part version, got {version}"
+    );
+
+    // The config a client was built from stays readable: a pool wrapper or a
+    // telemetry exporter cannot ask the server what it was configured with.
+    assert!(matches!(
+        client.config().server,
+        crate::client::ServerConfig::Standalone { .. }
+    ));
+    assert_eq!(
+        crate::tests::get_default_port(),
+        match &client.config().server {
+            crate::client::ServerConfig::Standalone { port, .. } => *port,
+            _ => unreachable!(),
+        }
+    );
+
+    let stats = client.stats();
+    assert_eq!(0, stats.shed_commands);
+    assert_eq!(0, stats.reconnections);
+
+    client.close().await?;
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn the_send_queue_depth_is_readable_at_runtime() -> Result<()> {
+    log_try_init();
+    let client = get_test_client().await?;
+
+    client.send::<()>(cmd("PING"), None).await?;
+    let stats = client.stats();
+    assert_eq!(
+        0, stats.queued_commands,
+        "an idle connection holds nothing: {stats:?}"
+    );
+    assert!(
+        stats.queued_bytes_high_water > 0,
+        "a command that went out must have been charged: {stats:?}"
+    );
+
+    client.close().await?;
     Ok(())
 }

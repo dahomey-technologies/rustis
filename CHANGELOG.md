@@ -50,6 +50,47 @@ The upgrade checklist. Each item is stated in the section it belongs to below.
 
 ### Added
 
+- **`Client::stats`** returns a `ClientStats` snapshot: queued commands and bytes,
+  the bytes high-water mark, shed commands and reconnections. The numbers existed
+  as `#[cfg(test)]` hooks, so an operator was told to size
+  `BackpressureConfig::max_queued_bytes` with no way to see whether it was hit.
+
+- **`Client::config`, `Client::is_connected` and `Client::server_version`** report
+  what a client is connected to. A readiness probe needed a `PING`, and branching on
+  the server version needed a second `HELLO`. `server_version` is `None` on a
+  cluster, whose nodes have versions of their own. `ExclusiveClient` has all four.
+
+- **`Config` is `Serialize` and `Deserialize`**, so a service maps a TOML/YAML/JSON
+  section onto it. `buffers`, `backpressure`, `limits` and `reconnection` had no URI
+  spelling and were reachable from Rust only. Missing fields take their defaults;
+  `credentials_provider`, `tls_config` and `ServerConfig::Custom` carry Rust code and
+  are skipped.
+
+- **`TlsConfig::new`** (rustls) wraps a `rustls::ClientConfig` built elsewhere. The type
+  is `#[non_exhaustive]` and had no constructor, so a private CA, a client certificate
+  or a pinned issuer could not be supplied from outside the crate at all.
+
+- **Seven examples**: `cluster`, `sentinel`, `tls`, `transaction`, `pipelining`,
+  `scripting` and `client_side_caching`. `wakeup_cost_probe` and `cache_stampede_probe`
+  now need the `bench` feature, like the nine other profiling harnesses.
+
+- **`Config::interceptor`** takes a `CommandInterceptor`, called on every command the
+  client sends and on every command that resolves, with its elapsed time and its
+  error. Per-command metrics, a request identifier or an audit trail had no hook at
+  all. It may rewrite the command before it goes out.
+
+- **`Cache::with_store`** takes a `CacheStore`, so the client-side cache can be backed
+  by a store shared between clients, one with an eviction policy of its own, or one
+  that counts what it serves. `Cache` is generic over it and defaults to `MokaStore`,
+  so `Cache` alone still means what it did and a hit allocates nothing. An entry is an
+  opaque `CachedValue`: handing the bytes out would pin a recycled network buffer for
+  as long as the cache holds it, so a store cannot persist an entry.
+
+- **`ReconnectionConfig::Custom`** takes a `ReconnectionPolicy`, so a delay can depend
+  on more than the attempt number: a circuit breaker, an external health signal, a
+  backoff coordinated across a pool. Implemented for any `Fn(u32) -> Option<Duration>`,
+  so a closure is enough. The three built-in shapes are unchanged.
+
 - **`prepare_command` is public**, with the extension pattern on the crate's front
   page. A missing command is added in the crate's own idiom, `client.myget("key").await`,
   instead of `client.send(cmd("MYGET")…)`. Every built-in command trait is written this

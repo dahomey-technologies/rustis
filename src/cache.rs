@@ -28,9 +28,7 @@ use std::{
 /// Re-export the moka cache builder.
 pub use moka::future::CacheBuilder;
 
-type SubCache = DashMap<Bytes, RespResponse>;
-type MokaCache = moka::future::Cache<BulkString, Arc<SubCache>>;
-type MokaCacheBuilder = moka::future::CacheBuilder<BulkString, Arc<SubCache>, MokaCache>;
+pub use crate::cache_store::{CacheStore, CachedValue, MokaStore, MokaStoreBuilder};
 
 /// A local client-side Redis cache with RESP3 tracking-based invalidation.
 ///
@@ -74,8 +72,13 @@ type MokaCacheBuilder = moka::future::CacheBuilder<BulkString, Arc<SubCache>, Mo
 /// # See also
 /// - [`CLIENT TRACKING`](https://redis.io/docs/latest/develop/client-side-caching/)
 /// - [`moka`](https://docs.rs/moka)
-pub struct Cache {
-    cache: Arc<MokaCache>,
+///
+/// # The store type parameter
+///
+/// The store is a type parameter rather than a `dyn CacheStore`, so a hit costs
+/// no boxed future. `Cache` alone still names the default store.
+pub struct Cache<S: CacheStore = MokaStore> {
+    cache: Arc<S>,
     client: Client,
     /// Monotonic counter bumped once per received invalidation. A fetch samples
     /// it before sending; the sampled value is compared at insert time to detect
@@ -99,8 +102,24 @@ pub struct Cache {
     reconnection_task: JoinHandle<()>,
 }
 
-impl Cache {
-    /// Create cache from a moka CacheBuilder and activates Redis client tracking invalidations
+impl Cache<MokaStore> {
+    /// Creates a cache over the default [`MokaStore`], holding at most 10 000
+    /// keys for `ttl_secs`, and activates Redis client-tracking invalidations.
+    pub async fn new(
+        client: Client,
+        ttl_secs: u64,
+        tracking_opts: ClientTrackingOptions,
+    ) -> Result<Arc<Self>> {
+        let store = MokaStore::new(Duration::from_secs(ttl_secs), 10_000);
+        Self::with_store(client, store, tracking_opts).await
+    }
+}
+
+impl<S: CacheStore> Cache<S> {
+    /// Creates a cache over a [`CacheStore`] of your own and activates Redis
+    /// client-tracking invalidations.
+    ///
+    /// [`new`](Self::new) is this over the default [`MokaStore`].
     #[allow(clippy::type_complexity)]
     #[expect(
         clippy::arithmetic_side_effects,
@@ -109,9 +128,9 @@ impl Cache {
                   generation counter counts cache flushes over the life of a \
                   client."
     )]
-    pub(crate) async fn from_builder(
+    pub async fn with_store(
         client: Client,
-        builder: MokaCacheBuilder,
+        store: S,
         tracking_opts: ClientTrackingOptions,
     ) -> Result<Arc<Self>> {
         client
@@ -120,7 +139,7 @@ impl Cache {
 
         let stream = client.create_client_tracking_invalidation_stream()?;
 
-        let cache = Arc::new(builder.build());
+        let cache = Arc::new(store);
         let cache_clone = cache.clone();
 
         let generation_counter = Arc::new(AtomicU64::new(0));
@@ -224,17 +243,6 @@ impl Cache {
         }))
     }
 
-    pub async fn new(
-        client: Client,
-        ttl_secs: u64,
-        tracking_opts: ClientTrackingOptions,
-    ) -> Result<Arc<Self>> {
-        let builder = MokaCache::builder()
-            .time_to_live(Duration::from_secs(ttl_secs))
-            .max_capacity(10_000);
-        Self::from_builder(client, builder, tracking_opts).await
-    }
-
     /// Generation of the last whole-cache flush, `0` if none happened.
     ///
     /// A test needs this to wait for the flush instead of sleeping: the `Cache`
@@ -266,14 +274,12 @@ impl Cache {
             let key = BulkString::from(arg.clone());
             let subcache_key = get_subcache_key(&key);
 
-            if let Some(values) = self.cache.get(&key).await
-                && let Some(response) = values.get(&subcache_key)
-            {
+            if let Some(response) = self.cache.get(&key, &subcache_key).await {
                 tracing::debug!(
                     tag = %self.client.connection_tag(),
                     "Cache hit on key `{key}`"
                 );
-                responses.push(response.clone());
+                responses.push(response.into_response());
             } else {
                 tracing::debug!(
                     tag = %self.client.connection_tag(),
@@ -313,14 +319,12 @@ impl Cache {
                 // only its own bytes instead of pinning the whole MGET reply
                 // block every element still shares.
                 self.cache
-                    .entry(key)
-                    .or_insert_with(async { Arc::new(DashMap::new()) })
-                    .await
-                    .value()
                     .insert(
+                        key,
                         missing_subcache_keys[idx_in_missing].clone(),
-                        response.compact(),
-                    );
+                        CachedValue::new(response.compact()),
+                    )
+                    .await;
 
                 responses[original_idx] = response;
             }
@@ -585,13 +589,12 @@ impl Cache {
     where
         R: Response + DeserializeOwned,
     {
-        if let Some(values) = self.cache.get(&key).await
-            && let Some(response) = values.get(command.bytes())
-        {
+        if let Some(response) = self.cache.get(&key, command.bytes()).await {
             tracing::debug!(
                 tag = %self.client.connection_tag(),
                 "Cache hit on key `{key}`"
             );
+            let response = response.into_response();
             let deserializer = RespDeserializer::new(response.view()?);
             return R::deserialize(deserializer);
         }
@@ -617,11 +620,8 @@ impl Cache {
         // decoded from.
         let key_for_check = key.clone();
         self.cache
-            .entry(key)
-            .or_insert_with(async { Arc::new(DashMap::new()) })
-            .await
-            .value()
-            .insert(command_bytes, response.compact());
+            .insert(key, command_bytes, CachedValue::new(response.compact()))
+            .await;
 
         // If an invalidation for this key landed while the response was in flight,
         // drop what we just inserted rather than pinning a stale entry until TTL.

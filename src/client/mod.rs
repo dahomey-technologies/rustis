@@ -582,12 +582,14 @@ async fn main() -> Result<()> {
 mod bounded_channel;
 #[allow(clippy::module_inception)]
 mod client;
+mod client_stats;
 mod client_tracking_invalidation_stream;
 mod command_future;
 mod command_traits;
 mod config;
 mod credentials_provider;
 mod exclusive_client;
+mod interceptor;
 mod message;
 mod monitor_stream;
 mod pipeline;
@@ -596,17 +598,20 @@ mod pipeline;
 mod pooled_client_manager;
 mod prepared_command;
 mod pub_sub_stream;
+mod reconnection_policy;
 mod transaction;
 mod transport_factory;
 
 pub(crate) use bounded_channel::*;
 
 pub use client::*;
+pub use client_stats::*;
 pub use client_tracking_invalidation_stream::*;
 pub use command_future::*;
 pub use config::*;
 pub use credentials_provider::*;
 pub use exclusive_client::*;
+pub use interceptor::*;
 pub(crate) use message::*;
 pub use monitor_stream::*;
 pub use pipeline::*;
@@ -615,5 +620,6 @@ pub use pipeline::*;
 pub use pooled_client_manager::*;
 pub use prepared_command::*;
 pub use pub_sub_stream::*;
+pub use reconnection_policy::*;
 pub use transaction::*;
 pub use transport_factory::*;

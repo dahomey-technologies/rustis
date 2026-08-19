@@ -238,7 +238,7 @@ required-features = ["tokio-runtime", "bench"]
 
 [[example]]
 name = "wakeup_cost_probe"
-required-features = ["tokio-runtime"]
+required-features = ["tokio-runtime", "bench"]
 
 [[example]]
 name = "strace_workload"
@@ -246,11 +246,39 @@ required-features = ["tokio-runtime", "bench"]
 
 [[example]]
 name = "cache_stampede_probe"
-required-features = ["tokio-runtime", "client-cache"]
+required-features = ["tokio-runtime", "client-cache", "bench"]
 
 [[example]]
 name = "simple"
 required-features = ["tokio-runtime"]
+
+[[example]]
+name = "pipelining"
+required-features = ["tokio-runtime"]
+
+[[example]]
+name = "transaction"
+required-features = ["tokio-runtime"]
+
+[[example]]
+name = "scripting"
+required-features = ["tokio-runtime"]
+
+[[example]]
+name = "cluster"
+required-features = ["tokio-runtime"]
+
+[[example]]
+name = "sentinel"
+required-features = ["tokio-runtime"]
+
+[[example]]
+name = "tls"
+required-features = ["tokio-runtime", "tokio-rustls"]
+
+[[example]]
+name = "client_side_caching"
+required-features = ["tokio-runtime", "client-cache"]
 
 [profile.dev]
 opt-level = 0

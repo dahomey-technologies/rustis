@@ -357,3 +357,107 @@ async fn a_lost_invalidation_flushes_the_cache_instead_of_serving_stale_data() -
         .await?;
     Ok(())
 }
+
+/// A store of the caller's own serves the hits and receives the invalidations —
+/// the two things a cache backed by anything other than `moka` has to prove.
+#[tokio::test]
+#[serial]
+async fn a_cache_store_of_your_own_serves_the_hits_and_takes_the_invalidations() -> Result<()> {
+    use crate::{
+        cache::{CacheStore, CachedValue},
+        resp::BulkString,
+    };
+    use bytes::Bytes;
+    use std::{
+        collections::HashMap,
+        sync::{
+            Mutex,
+            atomic::{AtomicUsize, Ordering},
+        },
+    };
+
+    #[derive(Default)]
+    struct CountingStore {
+        entries: Mutex<HashMap<(BulkString, Bytes), CachedValue>>,
+        hits: AtomicUsize,
+        invalidations: AtomicUsize,
+    }
+
+    impl CacheStore for std::sync::Arc<CountingStore> {
+        async fn get(&self, key: &BulkString, subkey: &Bytes) -> Option<CachedValue> {
+            let found = self
+                .entries
+                .lock()
+                .ok()?
+                .get(&(key.clone(), subkey.clone()))
+                .cloned();
+            if found.is_some() {
+                self.hits.fetch_add(1, Ordering::SeqCst);
+            }
+            found
+        }
+
+        async fn insert(&self, key: BulkString, subkey: Bytes, response: CachedValue) {
+            if let Ok(mut entries) = self.entries.lock() {
+                entries.insert((key, subkey), response);
+            }
+        }
+
+        async fn invalidate(&self, key: &BulkString) {
+            self.invalidations.fetch_add(1, Ordering::SeqCst);
+            if let Ok(mut entries) = self.entries.lock() {
+                entries.retain(|(entry_key, _), _| entry_key != key);
+            }
+        }
+
+        fn invalidate_all(&self) {
+            if let Ok(mut entries) = self.entries.lock() {
+                entries.clear();
+            }
+        }
+    }
+
+    log_try_init();
+    let client1 = Client::connect("redis://127.0.0.1?connection_name=custom_store").await?;
+    let client2 = Client::connect("redis://127.0.0.1?connection_name=custom_store_writer").await?;
+    client2.flushall(FlushingMode::Sync).await?;
+    client1
+        .client_tracking(ClientTrackingStatus::Off, ClientTrackingOptions::default())
+        .await?;
+    client2.set("store_key", "value").await?;
+
+    let store = std::sync::Arc::new(CountingStore::default());
+    let cache = Cache::with_store(
+        client1.clone(),
+        std::sync::Arc::clone(&store),
+        ClientTrackingOptions::default(),
+    )
+    .await?;
+
+    // Miss, then a hit that can only have come from the store.
+    let value: String = cache.get("store_key").await?;
+    assert_eq!("value", value);
+    assert_eq!(0, store.hits.load(Ordering::SeqCst));
+    let value: String = cache.get("store_key").await?;
+    assert_eq!("value", value);
+    assert_eq!(1, store.hits.load(Ordering::SeqCst));
+
+    // The server's invalidation must reach the store, not a moka cache behind it.
+    client2.set("store_key", "new_value").await?;
+    sleep(Duration::from_millis(100)).await;
+    assert!(store.invalidations.load(Ordering::SeqCst) >= 1);
+    let value: String = cache.get("store_key").await?;
+    assert_eq!("new_value", value);
+
+    // A read must stay spawnable. `CacheStore` declares `-> impl Future + Send`
+    // rather than a bare `async fn` for exactly this: a bare one makes no
+    // Send promise, and the whole `Cache::get` future would stop being Send —
+    // a compile error at every `tokio::spawn`, in the user's code, not here.
+    let spawned = tokio::spawn(async move {
+        let value: String = cache.get("store_key").await?;
+        Ok::<String, Error>(value)
+    });
+    assert_eq!("new_value", spawned.await.expect("task panicked")?);
+
+    Ok(())
+}

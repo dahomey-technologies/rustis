@@ -2,7 +2,7 @@ use super::pub_sub_push::PubSubPush;
 use crate::{
     ClientError, Connection, ConnectionState, Error, ErrorKind, JoinHandle, ReconnectionState,
     RedisError, RedisErrorKind, Result, RetryReason,
-    client::{Config, Message, MessageKind, PreparedCommand},
+    client::{Config, Message, MessageKind, PreparedCommand, StatsRecorder},
     commands::InternalPubSubCommands,
     resp::{
         ClientReplyMode, CommandKind, RespResponse, RespView, StateSlot, SubscriptionType, cmd,
@@ -465,6 +465,11 @@ pub(crate) struct NetworkHandler {
     /// queue costs an O(queue-depth) walk in shipped builds. The charge is
     /// released on write, not on reply: this counts what still waits to go out.
     queued_commands: usize,
+    /// Counters the client handles read to report what the connection is doing.
+    ///
+    /// Written only here, from the single network task, and only with `Relaxed`
+    /// stores: an observability counter must never order anything.
+    stats: Arc<StatsRecorder>,
     /// Number of incoming results belonging to a message that has already been
     /// resolved, and which must therefore be dropped instead of matched.
     results_to_discard: usize,
@@ -477,7 +482,13 @@ pub(crate) struct NetworkHandler {
 impl NetworkHandler {
     pub(crate) async fn connect(
         config: Config,
-    ) -> Result<(MsgSender, JoinHandle<()>, ReconnectSender, Arc<str>)> {
+    ) -> Result<(
+        MsgSender,
+        JoinHandle<()>,
+        ReconnectSender,
+        Arc<str>,
+        Arc<StatsRecorder>,
+    )> {
         // Reject an incoherent config here rather than letting a zeroed knob
         // surface later as a stall or a rejected reply.
         config.validate()?;
@@ -504,6 +515,9 @@ impl NetworkHandler {
             tokio::sync::mpsc::unbounded_channel();
         let (reconnect_sender, _): (ReconnectSender, ReconnectReceiver) = broadcast::channel(32);
         let tag = connection.tag().to_owned();
+        let stats = StatsRecorder::new();
+        stats.set_connected(true);
+        stats.set_server_version(connection.server_version());
 
         let mut network_handler = NetworkHandler {
             status: Status::Connected,
@@ -530,6 +544,7 @@ impl NetworkHandler {
             max_queued_bytes,
             queued_bytes: 0,
             queued_commands: 0,
+            stats: Arc::clone(&stats),
             results_to_discard: 0,
             #[cfg(test)]
             send_batch_test_hook,
@@ -551,7 +566,7 @@ impl NetworkHandler {
             .instrument(span),
         );
 
-        Ok((msg_sender, join_handle, reconnect_sender, tag))
+        Ok((msg_sender, join_handle, reconnect_sender, tag, stats))
     }
 
     async fn network_loop(&mut self) -> Result<()> {
@@ -577,6 +592,12 @@ impl NetworkHandler {
                     self.connection.run_maintenance().await;
                 }
             }
+
+            // One publication per iteration rather than one per site that moves
+            // the totals: the fields only change inside this body, so no reader
+            // can tell the difference and the accounting keeps a single owner.
+            self.stats
+                .set_queued(self.queued_commands, self.queued_bytes);
         }
 
         debug!("end of network loop");
@@ -717,6 +738,7 @@ impl NetworkHandler {
                 self.queued_bytes,
                 msg.commands()
             );
+            self.stats.record_shed();
             msg.send_error(Error::from(ClientError::SendQueueFull));
             return;
         }
@@ -1631,6 +1653,7 @@ impl NetworkHandler {
         debug!("reconnecting...");
         let old_status = self.status;
         self.status = Status::Disconnected;
+        self.stats.set_connected(false);
 
         // The responses we were waiting to discard died with the connection;
         // keeping the count would discard legitimate responses afterwards.
@@ -1749,6 +1772,7 @@ impl NetworkHandler {
                 }
                 self.queued_bytes = 0;
                 self.queued_commands = 0;
+                self.stats.set_queued(0, 0);
                 return false;
             }
 
@@ -1824,6 +1848,10 @@ impl NetworkHandler {
             self.send_messages().await;
 
             info!("reconnected!");
+            self.stats.set_connected(true);
+            self.stats
+                .set_server_version(self.connection.server_version());
+            self.stats.record_reconnection();
             self.reconnection_state.reset_attempts();
             return true;
         }

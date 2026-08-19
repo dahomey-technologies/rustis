@@ -17,6 +17,12 @@ impl ReconnectionState {
 
     /// Reset the number of reconnection attempts.
     pub(crate) fn reset_attempts(&mut self) {
+        // A custom policy is told before the counter moves: that is where an
+        // adaptive one closes its circuit, and it can only relate the call to
+        // the outage it just ended if the count is still the outage's.
+        if let ReconnectionConfig::Custom(custom) = &self.config {
+            custom.policy().reset();
+        }
         self.attempts = 0;
     }
 
@@ -60,6 +66,15 @@ impl ReconnectionState {
                     .saturating_mul(u64::from(*min_delay));
 
                 Some(add_jitter(cmp::min(u64::from(*max_delay), delay), *jitter))
+            }
+            ReconnectionConfig::Custom(custom) => {
+                // No `max_attempts` and no jitter: both are the policy's own
+                // decision, and adding either would silently override it.
+                self.attempts = self.attempts.saturating_add(1);
+                custom
+                    .policy()
+                    .next_delay(self.attempts)
+                    .map(|delay| u64::try_from(delay.as_millis()).unwrap_or(u64::MAX))
             }
         }
     }

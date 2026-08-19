@@ -629,3 +629,63 @@ fn validate_names_the_offending_knob() {
         "message did not name the knob: {message}"
     );
 }
+
+#[cfg(feature = "json")]
+#[test]
+fn a_config_file_sets_the_knobs_no_uri_can_express() {
+    // `backpressure`, `buffers`, `limits` and `reconnection` have no URI spelling,
+    // so deserialization is the only way to configure them from a file.
+    let config: Config = serde_json::from_str(
+        r#"{
+            "server": { "Standalone": { "host": "example.com", "port": 6380 } },
+            "database": 3,
+            "backpressure": { "max_queued_bytes": 4096 },
+            "reconnection": { "Constant": { "max_attempts": 7, "delay": 250, "jitter": 10 } }
+        }"#,
+    )
+    .unwrap();
+
+    assert!(matches!(
+        &config.server,
+        ServerConfig::Standalone { host, port } if host == "example.com" && *port == 6380
+    ));
+    assert_eq!(3, config.database);
+    assert_eq!(4096, config.backpressure.max_queued_bytes);
+    assert!(matches!(
+        config.reconnection,
+        ReconnectionConfig::Constant {
+            max_attempts: 7,
+            delay: 250,
+            jitter: 10
+        }
+    ));
+    // An absent field keeps its default rather than failing the whole file.
+    assert_eq!(
+        Config::default().max_messages_per_wave,
+        config.max_messages_per_wave
+    );
+}
+
+#[cfg(feature = "json")]
+#[test]
+fn a_serialized_config_round_trips() {
+    let config = Config {
+        connection_name: "round-trip".to_owned(),
+        limits: crate::client::RespLimits {
+            max_bulk_length: 1234,
+            ..Default::default()
+        },
+        server: ServerConfig::Cluster(crate::client::ClusterConfig {
+            nodes: vec![("node".to_owned(), 7000)],
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+
+    let json = serde_json::to_string(&config).unwrap();
+    let back: Config = serde_json::from_str(&json).unwrap();
+
+    assert_eq!(config.connection_name, back.connection_name);
+    assert_eq!(config.limits.max_bulk_length, back.limits.max_bulk_length);
+    assert_eq!(format!("{:?}", config.server), format!("{:?}", back.server));
+}

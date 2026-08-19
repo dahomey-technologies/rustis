@@ -241,6 +241,10 @@ impl SentinelConnection {
         ))
     }
 
+    pub(crate) fn get_version(&self) -> &str {
+        self.inner_connection.get_version()
+    }
+
     pub(crate) fn tag(&self) -> Arc<str> {
         self.inner_connection.tag()
     }

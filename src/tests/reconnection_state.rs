@@ -95,3 +95,72 @@ fn the_ceiling_bounds_the_delay_before_the_jitter() {
 
     assert_eq!(vec![1_000; 5], delays);
 }
+
+/// A policy the three built-in shapes cannot express: it opens a circuit after
+/// three failures and reads a signal only its owner has.
+#[test]
+fn a_custom_policy_decides_the_delay_and_when_to_give_up() {
+    use crate::client::{CustomReconnectionPolicy, ReconnectionPolicy};
+    use std::sync::{
+        Arc,
+        atomic::{AtomicU32, AtomicUsize, Ordering},
+    };
+
+    struct CircuitBreaker {
+        healthy: Arc<AtomicU32>,
+        resets: Arc<AtomicUsize>,
+    }
+
+    impl ReconnectionPolicy for CircuitBreaker {
+        fn next_delay(&self, attempt: u32) -> Option<std::time::Duration> {
+            if self.healthy.load(Ordering::Relaxed) == 0 {
+                // The circuit is open: stop reconnecting rather than hammer a
+                // backend an external signal says is down.
+                return None;
+            }
+            Some(std::time::Duration::from_millis(u64::from(attempt) * 7))
+        }
+
+        fn reset(&self) {
+            self.resets.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    let healthy = Arc::new(AtomicU32::new(1));
+    let resets = Arc::new(AtomicUsize::new(0));
+    let mut state = ReconnectionState::new(ReconnectionConfig::Custom(
+        CustomReconnectionPolicy::new(CircuitBreaker {
+            healthy: Arc::clone(&healthy),
+            resets: Arc::clone(&resets),
+        }),
+    ));
+
+    // The attempt number is handed in, so a stateless policy stays stateless.
+    assert_eq!(Some(7), state.next_delay());
+    assert_eq!(Some(14), state.next_delay());
+
+    // A successful reconnection tells the policy, which is what lets an adaptive
+    // one close its own circuit.
+    state.reset_attempts();
+    assert_eq!(1, resets.load(Ordering::Relaxed));
+    assert_eq!(Some(7), state.next_delay());
+
+    healthy.store(0, Ordering::Relaxed);
+    assert_eq!(None, state.next_delay(), "an open circuit gives up");
+}
+
+/// A closure is enough for a policy that only shapes the delay.
+#[test]
+fn a_closure_is_a_reconnection_policy() {
+    use crate::client::CustomReconnectionPolicy;
+    use std::time::Duration;
+
+    let mut state =
+        ReconnectionState::new(ReconnectionConfig::Custom(CustomReconnectionPolicy::new(
+            |attempt: u32| (attempt <= 2).then(|| Duration::from_millis(100)),
+        )));
+
+    assert_eq!(Some(100), state.next_delay());
+    assert_eq!(Some(100), state.next_delay());
+    assert_eq!(None, state.next_delay());
+}

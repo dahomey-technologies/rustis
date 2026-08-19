@@ -120,6 +120,30 @@ impl ExclusiveClient {
         self.inner.is_terminated()
     }
 
+    /// See [`Client::config`].
+    #[inline]
+    pub fn config(&self) -> &crate::client::Config {
+        self.inner.config()
+    }
+
+    /// See [`Client::stats`].
+    #[inline]
+    pub fn stats(&self) -> crate::client::ClientStats {
+        self.inner.stats()
+    }
+
+    /// See [`Client::is_connected`].
+    #[inline]
+    pub fn is_connected(&self) -> bool {
+        self.inner.is_connected()
+    }
+
+    /// See [`Client::server_version`].
+    #[inline]
+    pub fn server_version(&self) -> Option<std::sync::Arc<str>> {
+        self.inner.server_version()
+    }
+
     /// See [`Client::on_reconnect`].
     #[inline]
     pub fn on_reconnect(&self) -> ReconnectReceiver {

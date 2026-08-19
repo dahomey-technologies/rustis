@@ -186,6 +186,11 @@ async fn a_command_refused_by_a_full_send_queue_reports_it() -> Result<()> {
         error.command(),
         "a shed command must say what was shed, got {error:?}"
     );
+    // The caller is told per command; the counter is what makes the *rate*
+    // visible to an operator sizing the budget.
+    let stats = client.stats();
+    assert_eq!(1, stats.shed_commands, "{stats:?}");
+    assert!(stats.queued_bytes_high_water > 0, "{stats:?}");
 
     Ok(())
 }

@@ -1,9 +1,13 @@
 use crate::{
     ClientError, Error, Result,
-    client::{Credentials, CredentialsProvider, CustomTransport},
+    client::{
+        Credentials, CredentialsProvider, CustomInterceptor, CustomReconnectionPolicy,
+        CustomTransport,
+    },
 };
 #[cfg(feature = "native-tls")]
 use native_tls::{Certificate, Identity, Protocol, TlsConnector, TlsConnectorBuilder};
+use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     fmt::{self, Display, Write},
@@ -38,7 +42,8 @@ const DEFAULT_MAX_DISCOVERY_ROUNDS: usize = 10;
 ///
 /// Both buffers deliberately share one shrink policy — they grow for the same
 /// reason (one oversized reply) and should reclaim on the same terms.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 #[non_exhaustive]
 pub struct BufferConfig {
     /// Initial capacity of the read framing buffer, and the target both the read
@@ -133,7 +138,8 @@ impl Default for BufferConfig {
 /// *incoming* command and a delivery channel discards its *oldest* message
 /// instead. Bounding memory this way is what lets [`ReconnectionConfig`] keep
 /// retrying forever, which is the safe posture for a long-lived service.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 #[non_exhaustive]
 pub struct BackpressureConfig {
     /// Memory budget for commands waiting to be written, which is what grows
@@ -228,7 +234,8 @@ impl Default for BackpressureConfig {
 /// A frame breaching any limit fails the connection with the matching
 /// [`ClientError`](crate::ClientError) rather than being reported as a truncated
 /// read, so the streaming decoder never waits for bytes that will never come.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 #[non_exhaustive]
 pub struct RespLimits {
     /// Maximum collection-nesting depth accepted before a frame is rejected with
@@ -317,7 +324,20 @@ type Uri<'a> = (
 
 /// Configuration options for a [`client`](crate::client::Client)
 /// or a [`pooled client`](crate::client::PooledClientManager)
-#[derive(Clone)]
+///
+/// # Loading from a configuration file
+///
+/// `Config` is [`Serialize`] and [`Deserialize`], which is the only way to set
+/// [`buffers`](Self::buffers), [`backpressure`](Self::backpressure),
+/// [`limits`](Self::limits) and [`reconnection`](Self::reconnection): a URI
+/// cannot express them. An absent field takes its default, so a file names only
+/// what it changes. [`Duration`] follows serde's own form, a `secs`/`nanos` pair.
+///
+/// Three fields carry Rust code and are skipped both ways:
+/// [`credentials_provider`](Self::credentials_provider), `tls_config` and
+/// [`ServerConfig::Custom`]. Set them on the deserialized `Config`.
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(default)]
 #[non_exhaustive]
 pub struct Config {
     /// Connection server configuration (standalone, sentinel, or cluster)
@@ -346,6 +366,7 @@ pub struct Config {
     /// the static [`SentinelConfig::username`] / [`SentinelConfig::password`].
     ///
     /// See [`CredentialsProvider`].
+    #[serde(skip)]
     pub credentials_provider: Option<Arc<dyn CredentialsProvider>>,
     /// The default database for this connection.
     ///
@@ -355,6 +376,7 @@ pub struct Config {
     /// An optional TLS configuration.
     #[cfg_attr(docsrs, doc(cfg(any(feature = "native-tls", feature = "rustls"))))]
     #[cfg(any(feature = "native-tls", feature = "rustls"))]
+    #[serde(skip)]
     pub tls_config: Option<TlsConfig>,
     /// The time to attempt a connection before timing out. The default is 10 seconds
     pub connect_timeout: Duration,
@@ -488,22 +510,35 @@ pub struct Config {
     ///
     /// The default is `48`.
     pub max_messages_per_wave: usize,
+    /// An optional hook called on every command the client sends and on every
+    /// command that resolves.
+    ///
+    /// This is where per-command metrics, a request identifier or an audit trail
+    /// go; the crate adds none of its own. It carries Rust code, so it has no URI
+    /// or serialized form.
+    ///
+    /// See [`CommandInterceptor`](crate::client::CommandInterceptor).
+    #[serde(skip)]
+    pub interceptor: Option<CustomInterceptor>,
     /// Test-only hook to observe and inject retry reasons in the send batch.
     ///
     /// Only present in debug builds; it carries no cost in release builds.
     #[cfg(test)]
+    #[serde(skip)]
     pub(crate) send_batch_test_hook: Option<crate::network::SendBatchTestHook>,
     /// Test-only hook to make the cluster topology-refresh failure path
     /// observable (simulate a node vanishing while requests are in flight).
     ///
     /// Only present in test builds; it carries no cost in release builds.
     #[cfg(test)]
+    #[serde(skip)]
     pub(crate) cluster_test_hook: Option<crate::network::ClusterTestHook>,
     /// Test-only hook to observe the depth the network task's internal queues
     /// reach and how much traffic its pub/sub and push sinks absorb.
     ///
     /// Only present in test builds; it carries no cost in release builds.
     #[cfg(test)]
+    #[serde(skip)]
     pub(crate) queue_metrics_test_hook: Option<crate::network::QueueMetricsTestHook>,
 }
 
@@ -563,6 +598,7 @@ impl Default for Config {
             backpressure: Default::default(),
             limits: Default::default(),
             max_messages_per_wave: DEFAULT_MAX_MESSAGES_PER_WAVE,
+            interceptor: None,
             #[cfg(test)]
             send_batch_test_hook: None,
             #[cfg(test)]
@@ -1327,7 +1363,7 @@ impl Display for Config {
 }
 
 /// Configuration for connecting to a Redis server
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[non_exhaustive]
 pub enum ServerConfig {
     /// Configuration for connecting to a standalone server (no master-replica, no cluster)
@@ -1356,6 +1392,10 @@ pub enum ServerConfig {
     /// A byte stream supplied by the caller instead of one the client opens.
     ///
     /// See [`TransportFactory`](crate::client::TransportFactory).
+    ///
+    /// A factory is Rust code, so this variant has no serialized form: it is
+    /// skipped on the way out and unreachable on the way in.
+    #[serde(skip)]
     Custom(CustomTransport),
 }
 
@@ -1369,7 +1409,8 @@ impl Default for ServerConfig {
 }
 
 /// Configuration for connecting to a Redis server via [`Sentinel`](https://redis.io/docs/management/sentinel/)
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(default)]
 #[non_exhaustive]
 pub struct SentinelConfig {
     /// An array of `(host, port)` tuples for each known sentinel instance.
@@ -1408,6 +1449,7 @@ pub struct SentinelConfig {
     /// versa. Like its master counterpart, it has no URI representation.
     ///
     /// See [`CredentialsProvider`].
+    #[serde(skip)]
     pub credentials_provider: Option<Arc<dyn CredentialsProvider>>,
 }
 
@@ -1449,7 +1491,7 @@ impl Default for SentinelConfig {
 /// routed to a replica may not see a write the client has just acknowledged.
 /// Reading from replicas trades that consistency for read throughput, which is
 /// why the default keeps every read on the master.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ReadPreference {
     /// Every command goes to the master of its shard.
     #[default]
@@ -1491,7 +1533,8 @@ impl FromStr for ReadPreference {
 const DEFAULT_TOPOLOGY_REFRESH_INTERVAL: Duration = Duration::from_secs(60);
 
 /// Configuration for connecting to a Redis [`Cluster`](https://redis.io/docs/management/scaling/)
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 #[non_exhaustive]
 pub struct ClusterConfig {
     /// An array of `(host, port)` tuples for each known cluster node.
@@ -1535,6 +1578,20 @@ impl Default for ClusterConfig {
 #[non_exhaustive]
 pub struct TlsConfig {
     pub rustls_config: Arc<rustls::ClientConfig>,
+}
+
+#[cfg(feature = "rustls")]
+impl TlsConfig {
+    /// Wraps a [`rustls::ClientConfig`] built elsewhere.
+    ///
+    /// [`default`](Self::default) trusts the platform's roots, which is what a
+    /// publicly-signed certificate needs. This is the way in for anything else:
+    /// a private CA, a client certificate, a pinned issuer. The struct is
+    /// `#[non_exhaustive]`, so this is also the only way to build one from
+    /// outside the crate.
+    pub fn new(rustls_config: Arc<rustls::ClientConfig>) -> Self {
+        Self { rustls_config }
+    }
 }
 
 #[cfg(feature = "rustls")]
@@ -1740,7 +1797,7 @@ impl IntoConfig for Url {
 /// memory with
 /// [`BackpressureConfig`] instead, which sheds load without ending the
 /// connection.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[non_exhaustive]
 pub enum ReconnectionConfig {
     /// Wait a constant amount of time between reconnection attempts, in ms.
@@ -1787,6 +1844,15 @@ pub enum ReconnectionConfig {
         /// Add jitter in ms to each delay
         jitter: u32,
     },
+    /// A policy supplied by the caller, for a delay that depends on more than
+    /// the attempt number.
+    ///
+    /// See [`ReconnectionPolicy`](crate::client::ReconnectionPolicy).
+    ///
+    /// A policy is Rust code, so this variant has no serialized form: it is
+    /// skipped on the way out and unreachable on the way in.
+    #[serde(skip)]
+    Custom(CustomReconnectionPolicy),
 }
 
 /// The default amount of jitter when waiting to reconnect.
@@ -1861,6 +1927,9 @@ impl ReconnectionConfig {
     /// default 100 ms suits the default 1 s delay. Raise it towards half the
     /// delay for a large fleet, and lower it for a policy in the tens of ms.
     ///
+    /// A [`Custom`](Self::Custom) policy is left alone: its jitter is part of
+    /// the delay it returns.
+    ///
     /// Default: 100 ms
     pub fn set_jitter(&mut self, jitter_ms: u32) {
         match self {
@@ -1873,6 +1942,7 @@ impl ReconnectionConfig {
             Self::Exponential { jitter, .. } => {
                 *jitter = jitter_ms;
             }
+            Self::Custom(_) => (),
         }
     }
 }

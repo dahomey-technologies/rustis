@@ -302,6 +302,8 @@ See the module [`cache`] to discover how you can implement client-side caching.
 
 #[cfg(feature = "client-cache")]
 pub mod cache;
+#[cfg(feature = "client-cache")]
+mod cache_store;
 pub mod client;
 pub mod commands;
 mod error;

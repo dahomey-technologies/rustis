@@ -182,6 +182,19 @@ impl Connection {
             Connection::Cluster(connection) => connection.tag(),
         }
     }
+
+    /// The version the handshake reported, or `None` for a cluster.
+    ///
+    /// A cluster is a set of servers, each with a version of its own, so one
+    /// string would have to pick a node and hide the rest.
+    #[inline]
+    pub(crate) fn server_version(&self) -> Option<Arc<str>> {
+        match self {
+            Connection::Standalone(connection) => Some(connection.get_version().into()),
+            Connection::Sentinel(connection) => Some(connection.get_version().into()),
+            Connection::Cluster(_) => None,
+        }
+    }
 }
 
 impl<'a, R> IntoFuture for PreparedCommand<'a, &'a mut Connection, R>

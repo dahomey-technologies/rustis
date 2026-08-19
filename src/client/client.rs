@@ -1,9 +1,10 @@
 use crate::{
     ClientError, Error, Result, TimeoutKind,
     client::{
-        ClientTrackingInvalidationStream, CommandFuture, ExclusiveClient, IntoConfig, Message,
-        MonitorStream, Pipeline, PreparedCommand, ProbeLabel, PubSubStream, ServerConfig, State,
-        Transaction, bounded_channel, command_traits::*, record_probe,
+        ClientStats, ClientTrackingInvalidationStream, CommandFuture, CommandInterceptor, Config,
+        ExclusiveClient, IntoConfig, Message, MonitorStream, Pipeline, PreparedCommand, ProbeLabel,
+        PubSubStream, ServerConfig, State, StatsRecorder, Transaction, bounded_channel,
+        command_traits::*, record_probe,
     },
     commands::PubSubCommands,
     network::{
@@ -15,7 +16,11 @@ use crate::{
 };
 use bytes::Bytes;
 use serde::{Serialize, de::DeserializeOwned};
-use std::{future::IntoFuture, sync::Arc, time::Duration};
+use std::{
+    future::IntoFuture,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 use tracing::{info, trace};
 
 /// Client with a unique connection to a Redis server.
@@ -52,6 +57,15 @@ pub struct Client {
     /// Memory budget handed to each push sink this client opens, from
     /// `Config::backpressure.max_push_bytes`.
     max_push_bytes: usize,
+    /// The configuration this client was built from, kept whole so a caller can
+    /// read back what it connected with. The scalars above are copies on the
+    /// hot path, not a second source of truth.
+    config: Arc<Config>,
+    /// Counters the network task publishes as it runs.
+    stats: Arc<StatsRecorder>,
+    /// Copied out of the config so the send path reads one `Option` instead of
+    /// walking into the whole `Config` on every command.
+    interceptor: Option<Arc<dyn CommandInterceptor>>,
 }
 
 impl Client {
@@ -67,8 +81,12 @@ impl Client {
         let is_cluster = matches!(config.server, ServerConfig::Cluster(_));
         let max_pubsub_bytes = config.backpressure.max_pubsub_bytes;
         let max_push_bytes = config.backpressure.max_push_bytes;
-        let (msg_sender, network_task_join_handle, reconnect_sender, connection_tag) =
-            NetworkHandler::connect(config.into_config()?).await?;
+        let interceptor = config
+            .interceptor
+            .as_ref()
+            .map(|interceptor| Arc::clone(interceptor.get()));
+        let (msg_sender, network_task_join_handle, reconnect_sender, connection_tag, stats) =
+            NetworkHandler::connect(config.clone()).await?;
 
         Ok(Self {
             shared: Arc::new(Some(ClientShared {
@@ -82,7 +100,74 @@ impl Client {
             is_cluster,
             max_pubsub_bytes,
             max_push_bytes,
+            config: Arc::new(config),
+            stats,
+            interceptor,
         })
+    }
+
+    /// The configuration this client was built from.
+    ///
+    /// A pool wrapper, a health checker or a telemetry exporter can then ask a
+    /// client what it was configured with instead of being handed the `Config`
+    /// separately. It is the value after parsing, so a client built from a URI
+    /// reads back every default the URI left unsaid.
+    ///
+    /// # Example
+    /// ```
+    /// use rustis::{client::{Client, ServerConfig}, Result};
+    ///
+    /// # async fn example() -> Result<()> {
+    /// let client = Client::connect("127.0.0.1:6379").await?;
+    /// assert!(matches!(client.config().server, ServerConfig::Standalone { .. }));
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn config(&self) -> &Config {
+        &self.config
+    }
+
+    /// What the connection is doing right now: queue depth, shed commands,
+    /// reconnections.
+    ///
+    /// This is the other half of [`BackpressureConfig`](crate::client::BackpressureConfig):
+    /// the budget is sized against
+    /// [`queued_bytes_high_water`](ClientStats::queued_bytes_high_water), and
+    /// whether it is being hit is [`shed_commands`](ClientStats::shed_commands).
+    /// Every clone of a client reads the same counters, one connection having
+    /// one queue.
+    ///
+    /// # Example
+    /// ```
+    /// use rustis::{client::Client, Result};
+    ///
+    /// # async fn example() -> Result<()> {
+    /// let client = Client::connect("127.0.0.1:6379").await?;
+    /// assert_eq!(0, client.stats().shed_commands);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn stats(&self) -> ClientStats {
+        self.stats.snapshot()
+    }
+
+    /// Whether the link to the server is up.
+    ///
+    /// `false` covers a link that is down and one that is backing off between
+    /// attempts, both of which recover on their own. The state that does not is
+    /// [`is_terminated`](Self::is_terminated).
+    pub fn is_connected(&self) -> bool {
+        self.stats.connected()
+    }
+
+    /// The server version the handshake reported, refreshed at every
+    /// reconnection.
+    ///
+    /// `None` for a cluster: its nodes have versions of their own, so one string
+    /// would have to pick a node and hide the rest. Reading this replaces
+    /// re-issuing `HELLO` to branch on a version-dependent behaviour.
+    pub fn server_version(&self) -> Option<Arc<str>> {
+        self.stats.server_version()
     }
 
     /// Whether this client is connected to a Redis Cluster.
@@ -293,9 +378,22 @@ impl Client {
         #[cfg(not(test))]
         let probe_label = ();
 
-        let (response, command_name) = self.internal_send(command, retry_on_error).await?;
-
-        Self::finish_send(&response, command_name, probe_label)
+        // Concluded here rather than at the reply: a server error and a decode
+        // mismatch are both born below, and an interceptor that missed them
+        // would report as successful a command its caller sees fail.
+        let started_at = self.started_at();
+        let result = async {
+            let (response, command_name) = self.internal_send(command, retry_on_error).await?;
+            Self::finish_send(&response, command_name.clone(), probe_label)
+                .map(|r| (r, command_name))
+        }
+        .await;
+        self.notify_completion(
+            result.as_ref().ok().and_then(|(_, name)| name.as_ref()),
+            started_at,
+            result.as_ref().err(),
+        );
+        result.map(|(response, _)| response)
     }
 
     /// Turns a reply into the type the caller declared for it, and names the
@@ -400,6 +498,38 @@ impl Client {
         Ok((response, command_name))
     }
 
+    /// Reads the clock only when an interceptor is installed: the two readings
+    /// per command would otherwise be a cost on the hot path for nobody.
+    #[inline]
+    fn started_at(&self) -> Option<Instant> {
+        self.interceptor.as_ref().map(|_| Instant::now())
+    }
+
+    /// The interceptor installed on this client, if any.
+    #[inline]
+    pub(crate) fn interceptor(&self) -> Option<&Arc<dyn CommandInterceptor>> {
+        self.interceptor.as_ref()
+    }
+
+    /// Tells the interceptor a command resolved, if there is one.
+    #[inline]
+    fn notify_completion(
+        &self,
+        command_name: Option<&Bytes>,
+        started_at: Option<Instant>,
+        error: Option<&Error>,
+    ) {
+        if let Some(interceptor) = &self.interceptor
+            && let Some(started_at) = started_at
+        {
+            interceptor.on_complete(
+                command_name.map_or(&[][..], |name| name.as_ref()),
+                started_at.elapsed(),
+                error,
+            );
+        }
+    }
+
     /// Await a single-response oneshot, applying the configured `command_timeout`
     /// so subscribe/monitor callers honour the same contract as regular sends.
     #[inline]
@@ -473,18 +603,40 @@ impl Client {
             results_sender,
             retry_on_error.unwrap_or(self.retry_on_error),
         );
-        let command_name = self.send_message(message)?;
+        let started_at = self.started_at();
+        let command_name = match self.send_message(message) {
+            Ok(command_name) => command_name,
+            Err(e) => {
+                self.notify_completion(None, started_at, Some(&e));
+                return Err(e);
+            }
+        };
 
-        let results = if self.command_timeout != Duration::ZERO {
+        let results = self
+            .await_batch_results(results_receiver, command_name)
+            .await;
+        // A batch resolves as one unit, so it is announced under no command name
+        // rather than under the first of the commands it carries.
+        self.notify_completion(None, started_at, results.as_ref().err());
+
+        Ok(results?.into_iter().zip(command_names).collect())
+    }
+
+    /// Awaits a batch's replies under the configured `command_timeout`.
+    #[inline]
+    async fn await_batch_results(
+        &self,
+        results_receiver: ResultsReceiver,
+        command_name: Option<Bytes>,
+    ) -> Result<Vec<RespResponse>> {
+        if self.command_timeout != Duration::ZERO {
             Self::name_command(
                 timeout(self.command_timeout, TimeoutKind::Command, results_receiver).await,
                 command_name,
             )??
         } else {
             results_receiver.await?
-        }?;
-
-        Ok(results.into_iter().zip(command_names).collect())
+        }
     }
 
     #[inline]
@@ -498,6 +650,17 @@ impl Client {
         for command in message.commands_mut() {
             if let Some(error) = command.take_serialization_error() {
                 return Err(error.with_command(command.name_bytes()));
+            }
+        }
+
+        // Every command the client sends passes here — single, batched, and the
+        // subscribe/monitor commands the client issues on its own behalf — so
+        // this is the one place an interceptor has to be consulted. It runs
+        // before the slots are computed, so a command it rewrites is routed on
+        // what it left rather than on what it was handed.
+        if let Some(interceptor) = &self.interceptor {
+            for command in message.commands_mut() {
+                interceptor.on_command(command);
             }
         }
 

@@ -43,6 +43,29 @@ impl MessageToReceive {
     }
 }
 
+/// Which message a reply turned out to belong to.
+#[expect(
+    clippy::large_enum_variant,
+    reason = "`Completed` carries the message itself rather than a handle to it, \
+              which is what makes the queue unable to hand the same message out \
+              twice. The value is returned once per reply, matched on at the call \
+              site and dropped there — it is never stored, so the size is a stack \
+              slot on the hottest path in the client. Boxing it would trade that \
+              for an allocation per reply."
+)]
+pub(crate) enum ReplyMatch {
+    /// Owed to a message that was already resolved: the command ran, but its
+    /// caller is gone. Dropping it is what keeps every later reply on its own
+    /// message.
+    Discarded(crate::Result<RespResponse>),
+    /// Held: the batch it belongs to is still short of replies.
+    Absorbed,
+    /// The message this reply completes, and the reply that completed it.
+    Completed(MessageToReceive, crate::Result<RespResponse>),
+    /// Nothing awaits it.
+    Unmatched(crate::Result<RespResponse>),
+}
+
 /// The two queues a connection holds, and the totals that bound them.
 ///
 /// # Why one type for two queues
@@ -180,10 +203,6 @@ impl MessageQueue {
         self.queued_bytes = self.queued_bytes.saturating_sub(cost);
     }
 
-    pub(crate) fn front_to_receive_mut(&mut self) -> Option<&mut MessageToReceive> {
-        self.to_receive.front_mut()
-    }
-
     /// Takes the message whose reply has arrived, releasing its byte charge.
     pub(crate) fn pop_to_receive(&mut self) -> Option<MessageToReceive> {
         let message_to_receive = self.to_receive.pop_front()?;
@@ -209,9 +228,61 @@ impl MessageQueue {
         rolled_back
     }
 
+    /// Reads a reply against the queue and reports which message it belongs to.
+    ///
+    /// The rule this owns is the one whose violation is silent and permanent: a
+    /// reply matched to the wrong message hands a caller someone else's answer,
+    /// and every reply after it stays shifted for the life of the connection.
+    /// Three things have to agree for that not to happen — the pending discards,
+    /// the per-message reply count, and the responses a batch has collected so
+    /// far — and all three live here, which is why the decision does too.
+    ///
+    /// A batch is written as several independent commands, each awaiting its own
+    /// reply. An error in the middle resolves the whole message, so the commands
+    /// queued behind it lose their caller while their replies are already on the
+    /// wire: they are counted as discards rather than left to be matched.
+    ///
+    pub(crate) fn match_reply(&mut self, result: crate::Result<RespResponse>) -> ReplyMatch {
+        if self.take_discard() {
+            return ReplyMatch::Discarded(result);
+        }
+
+        let Some(front) = self.to_receive.front_mut() else {
+            return ReplyMatch::Unmatched(result);
+        };
+
+        if front.num_commands > 1 {
+            match result {
+                // One more reply collected; the message stays at the head.
+                Ok(response) => {
+                    front.pending_responses.push(response);
+                    front.num_commands = front.num_commands.saturating_sub(1);
+                    return ReplyMatch::Absorbed;
+                }
+                // An error resolves the whole message, whatever it was still
+                // waiting for.
+                Err(e) => return self.complete_front(Err(e)),
+            }
+        }
+
+        self.complete_front(result)
+    }
+
+    /// Resolves the message at the head of the receive queue, disowning the
+    /// replies its remaining commands are still going to draw.
+    fn complete_front(&mut self, result: crate::Result<RespResponse>) -> ReplyMatch {
+        let Some(message_to_receive) = self.pop_to_receive() else {
+            return ReplyMatch::Unmatched(result);
+        };
+
+        self.discard_further(message_to_receive.num_commands.saturating_sub(1));
+
+        ReplyMatch::Completed(message_to_receive, result)
+    }
+
     /// Whether the next reply belongs to an already-resolved message and must be
     /// dropped, consuming one of the pending discards if so.
-    pub(crate) fn take_discard(&mut self) -> bool {
+    fn take_discard(&mut self) -> bool {
         if self.results_to_discard > 0 {
             self.results_to_discard = self.results_to_discard.saturating_sub(1);
             true
@@ -571,6 +642,88 @@ mod tests {
         assert!(
             !queue.take_discard(),
             "a discard names a reply that died with the connection"
+        );
+    }
+
+    /// Writes `num_commands` commands as one message and returns the queue with
+    /// that message awaiting its replies.
+    fn awaiting(num_commands: usize) -> MessageQueue {
+        let mut queue = queue();
+        queue.push_to_send(message());
+        let (msg, cost) = queue.pop_to_send().expect("just queued");
+        queue.await_reply(msg, num_commands, cost);
+        queue
+    }
+
+    fn ok() -> crate::Result<RespResponse> {
+        Ok(RespResponse::Null)
+    }
+
+    fn failure() -> crate::Result<RespResponse> {
+        Err(Error::from(ErrorKind::DisconnectedByPeer))
+    }
+
+    #[test]
+    fn a_single_command_message_is_completed_by_its_reply() {
+        let mut queue = awaiting(1);
+
+        let matched = queue.match_reply(ok());
+
+        assert!(matches!(matched, ReplyMatch::Completed(..)));
+        assert_eq!(0, queue.to_receive_len(), "the message left the queue");
+        assert_eq!(0, queue.queued_bytes(), "its charge left with it");
+    }
+
+    #[test]
+    fn a_batch_holds_its_replies_until_the_last_one() {
+        let mut queue = awaiting(3);
+
+        assert!(matches!(queue.match_reply(ok()), ReplyMatch::Absorbed));
+        assert!(matches!(queue.match_reply(ok()), ReplyMatch::Absorbed));
+
+        let ReplyMatch::Completed(message_to_receive, _) = queue.match_reply(ok()) else {
+            panic!("the third reply completes a batch of three");
+        };
+        assert_eq!(
+            2,
+            message_to_receive.pending_responses.len(),
+            "the two replies held are handed back with the third"
+        );
+    }
+
+    #[test]
+    fn an_error_inside_a_batch_resolves_it_and_disowns_what_follows() {
+        let mut queue = awaiting(3);
+        queue.match_reply(ok());
+
+        assert!(matches!(
+            queue.match_reply(failure()),
+            ReplyMatch::Completed(..)
+        ));
+
+        // The two commands behind it were executed, so their replies are still
+        // on their way with no caller left. Matching them would hand every later
+        // reply to the wrong message.
+        assert!(matches!(queue.match_reply(ok()), ReplyMatch::Discarded(_)));
+        // One discard per command left behind, not one more.
+        assert!(matches!(queue.match_reply(ok()), ReplyMatch::Unmatched(_)));
+    }
+
+    #[test]
+    fn a_reply_nothing_awaits_is_matched_to_no_message() {
+        let mut queue = queue();
+
+        assert!(matches!(queue.match_reply(ok()), ReplyMatch::Unmatched(_)));
+    }
+
+    #[test]
+    fn a_completed_message_stops_owing_the_reply_that_completed_it() {
+        let mut queue = awaiting(1);
+        queue.match_reply(ok());
+
+        assert!(
+            matches!(queue.match_reply(ok()), ReplyMatch::Unmatched(_)),
+            "a single-command message disowns nothing"
         );
     }
 }

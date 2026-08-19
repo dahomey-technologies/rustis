@@ -1,5 +1,5 @@
 use super::connection_mode::{ConnectionMode, ReplyRoute};
-use super::message_queue::MessageQueue;
+use super::message_queue::{MessageQueue, MessageToReceive, ReplyMatch};
 use super::pub_sub_push::PubSubPush;
 use super::reply_mode::ReplyMode;
 use super::retry_policy::RetryPolicy;
@@ -775,142 +775,17 @@ impl NetworkHandler {
         }
     }
 
-    #[expect(
-        clippy::arithmetic_side_effects,
-        reason = "`num_commands` is only decremented in the arm where it is neither \
-                  1 nor being resolved — and it never starts at 0, because \
-                  `send_messages` only enqueues a message to receive when it wrote \
-                  at least one command expecting a reply. The retry counter is \
-                  compared against `max_command_attempts` on the next line."
-    )]
     fn receive_result(&mut self, result: Result<RespResponse>) {
-        // Responses owed to a message that was already resolved as a whole: the
-        // commands were executed, so their replies still arrive, but there is no
-        // caller left for them. Matching them would shift every subsequent
-        // response by one.
-        if self.queue.take_discard() {
-            debug!("discarding response of an already resolved message: {result:?}");
-            return;
-        }
-
-        match self.queue.front_to_receive_mut() {
-            Some(message_to_receive) => {
-                trace!("message_to_receive: {:?}", message_to_receive);
-
-                if message_to_receive.num_commands == 1 || result.is_err() {
-                    if let Some(mut message_to_receive) = self.queue.pop_to_receive() {
-                        // A batch message is sent as several independent
-                        // commands, each awaiting its own response. Resolving
-                        // the whole message on the error of one of them leaves
-                        // the commands queued behind it without a caller, while
-                        // their replies are already on their way.
-                        if message_to_receive.num_commands > 1 {
-                            self.queue
-                                .discard_further(message_to_receive.num_commands - 1);
-                        }
-
-                        if self
-                            .retry_policy
-                            .asks_for_retry(&result, &message_to_receive.message)
-                        {
-                            self.retry_policy
-                                .absorb_reasons(&mut message_to_receive.message, result);
-
-                            // A command caught in a pathological redirect loop
-                            // would otherwise be replayed forever, so a message
-                            // out of budget is failed with a distinct error.
-                            if !self
-                                .retry_policy
-                                .charge_attempt(&mut message_to_receive.message)
-                            {
-                                debug!(
-                                    "Message reached the maximum number of attempts, failing it"
-                                );
-                                message_to_receive.message.send_error(Error::from(
-                                    ClientError::MaxCommandAttemptsReached,
-                                ));
-                            }
-                            // retry: upgrade the weak handle just long enough to
-                            // requeue the message. A failed upgrade means every
-                            // client is gone and the channel is closing, so the
-                            // retry is moot.
-                            else if let Some(msg_sender) = self.msg_sender.upgrade() {
-                                if let Err(e) = msg_sender.send(message_to_receive.message) {
-                                    error!("Cannot retry message: {e}");
-                                }
-                            } else {
-                                debug!("Cannot retry message: channel closed");
-                            }
-                        } else {
-                            trace!("Will respond to: {:?}", message_to_receive.message);
-
-                            // This path answers the caller directly instead of
-                            // going through `Message::send_error`, so it names
-                            // the command itself. It carries the server's own
-                            // errors — a `WRONGTYPE`, a `NOPERM` — which are
-                            // exactly the ones a caller cannot act on without
-                            // knowing what drew them.
-                            let command_name = message_to_receive.message.command_name();
-                            let result = match (result, &command_name) {
-                                (Err(e), Some(command)) => Err(e.with_command(command.clone())),
-                                (result, _) => result,
-                            };
-
-                            match message_to_receive.message.kind {
-                                MessageKind::Single {
-                                    result_sender: Some(result_sender),
-                                    ..
-                                }
-                                | MessageKind::PubSub { result_sender, .. }
-                                | MessageKind::Monitor { result_sender, .. } => {
-                                    self.dispatch_result(
-                                        result_sender,
-                                        result,
-                                        command_name.as_ref(),
-                                    );
-                                }
-                                MessageKind::Batch { results_sender, .. } => match result {
-                                    Ok(resp_buf) => {
-                                        message_to_receive.pending_responses.push(resp_buf);
-                                        self.dispatch_result(
-                                            results_sender,
-                                            Ok(message_to_receive.pending_responses),
-                                            command_name.as_ref(),
-                                        );
-                                    }
-                                    Err(e) => {
-                                        self.dispatch_result(
-                                            results_sender,
-                                            Err(e),
-                                            command_name.as_ref(),
-                                        );
-                                    }
-                                },
-                                MessageKind::Invalidation { .. }
-                                | MessageKind::Single {
-                                    result_sender: None,
-                                    ..
-                                } => {
-                                    debug!("forget value {result:?}")
-                                    // fire & forget
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    match result {
-                        Ok(value) => {
-                            message_to_receive.pending_responses.push(value);
-                            message_to_receive.num_commands -= 1;
-                        }
-                        Err(e) => {
-                            self.retry_policy
-                                .absorb_reasons(&mut message_to_receive.message, Err(e));
-                        }
-                    }
-                }
+        match self.queue.match_reply(result) {
+            ReplyMatch::Discarded(result) => {
+                debug!("discarding response of an already resolved message: {result:?}");
             }
-            None => {
+            ReplyMatch::Absorbed => (),
+            ReplyMatch::Completed(message_to_receive, result) => {
+                trace!("message_to_receive: {message_to_receive:?}");
+                self.resolve(message_to_receive, result);
+            }
+            ReplyMatch::Unmatched(result) => {
                 // Disconnection errors legitimately end here (no message is left
                 // to carry them). An `Ok` frame with an empty in-flight queue is
                 // unexpected — a mis-routed push, a buggy server/proxy, or a
@@ -923,6 +798,86 @@ impl NetworkHandler {
                         "Dropping an unexpected response with no message awaiting it: {result:?}"
                     );
                 }
+            }
+        }
+    }
+
+    /// Sends a resolved message back for another attempt, or answers its caller.
+    fn resolve(&mut self, mut message_to_receive: MessageToReceive, result: Result<RespResponse>) {
+        if self
+            .retry_policy
+            .asks_for_retry(&result, &message_to_receive.message)
+        {
+            self.retry_policy
+                .absorb_reasons(&mut message_to_receive.message, result);
+
+            // A command caught in a pathological redirect loop would otherwise be
+            // replayed forever, so a message out of budget is failed with a
+            // distinct error.
+            if !self
+                .retry_policy
+                .charge_attempt(&mut message_to_receive.message)
+            {
+                debug!("Message reached the maximum number of attempts, failing it");
+                message_to_receive
+                    .message
+                    .send_error(Error::from(ClientError::MaxCommandAttemptsReached));
+            }
+            // retry: upgrade the weak handle just long enough to requeue the
+            // message. A failed upgrade means every client is gone and the
+            // channel is closing, so the retry is moot.
+            else if let Some(msg_sender) = self.msg_sender.upgrade() {
+                if let Err(e) = msg_sender.send(message_to_receive.message) {
+                    error!("Cannot retry message: {e}");
+                }
+            } else {
+                debug!("Cannot retry message: channel closed");
+            }
+
+            return;
+        }
+
+        trace!("Will respond to: {:?}", message_to_receive.message);
+
+        // This path answers the caller directly instead of going through
+        // `Message::send_error`, so it names the command itself. It carries the
+        // server's own errors — a `WRONGTYPE`, a `NOPERM` — which are exactly
+        // the ones a caller cannot act on without knowing what drew them.
+        let command_name = message_to_receive.message.command_name();
+        let result = match (result, &command_name) {
+            (Err(e), Some(command)) => Err(e.with_command(command.clone())),
+            (result, _) => result,
+        };
+
+        match message_to_receive.message.kind {
+            MessageKind::Single {
+                result_sender: Some(result_sender),
+                ..
+            }
+            | MessageKind::PubSub { result_sender, .. }
+            | MessageKind::Monitor { result_sender, .. } => {
+                self.dispatch_result(result_sender, result, command_name.as_ref());
+            }
+            MessageKind::Batch { results_sender, .. } => match result {
+                Ok(resp_buf) => {
+                    message_to_receive.pending_responses.push(resp_buf);
+                    self.dispatch_result(
+                        results_sender,
+                        Ok(message_to_receive.pending_responses),
+                        command_name.as_ref(),
+                    );
+                }
+                Err(e) => {
+                    self.dispatch_result(results_sender, Err(e), command_name.as_ref());
+                }
+            },
+            MessageKind::Invalidation { .. }
+            | MessageKind::Single {
+                result_sender: None,
+                ..
+            } => {
+                debug!("forget value {result:?}")
+                // fire & forget
             }
         }
     }

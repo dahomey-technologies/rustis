@@ -165,6 +165,12 @@ The upgrade checklist. Each item is stated in the section it belongs to below.
 
 ### Fixed
 
+- **`ClientStats::queued_commands` no longer over-reports after a reconnection.** The
+  replay rebuilt the byte total before re-queuing the messages it kept, and left the
+  command total standing, so each replayed command was counted twice and the excess
+  stayed for the life of the connection. Both totals now belong to one type that
+  zeroes them with the queues it empties.
+
 - **`connect_timeout` bounds the handshake, not only the dial.** A server that
   accepted the socket and never answered `HELLO` left `Client::connect` waiting
   forever: the dial succeeded in microseconds, so the only deadline in the path

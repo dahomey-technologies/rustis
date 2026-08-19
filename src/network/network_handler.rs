@@ -1,3 +1,4 @@
+use super::message_queue::MessageQueue;
 use super::pub_sub_push::PubSubPush;
 use crate::{
     ClientError, Connection, ConnectionState, Error, ErrorKind, JoinHandle, ReconnectionState,
@@ -364,41 +365,6 @@ enum Status {
     LeavingMonitor,
 }
 
-struct MessageToSend {
-    pub message: Message,
-}
-
-impl MessageToSend {
-    pub(crate) fn new(message: Message) -> Self {
-        Self { message }
-    }
-}
-
-#[derive(Debug)]
-struct MessageToReceive {
-    pub message: Message,
-    pub num_commands: usize,
-    pub pending_responses: Vec<RespResponse>,
-    /// What this message still holds of the queue budget.
-    ///
-    /// It is carried rather than recomputed on removal, so the amount released
-    /// is exactly the amount charged whatever the message has been through since.
-    pub queued_bytes: usize,
-}
-
-impl MessageToReceive {
-    pub(crate) fn new(message: Message, num_commands: usize, queued_bytes: usize) -> Self {
-        Self {
-            message,
-            num_commands,
-            // A batch collects exactly `num_commands` responses; size the buffer
-            // once instead of letting it grow.
-            pending_responses: Vec::with_capacity(num_commands),
-            queued_bytes,
-        }
-    }
-}
-
 struct PendingSubscription {
     pub channel_or_pattern: Bytes,
     pub subscription_type: SubscriptionType,
@@ -413,8 +379,8 @@ pub(crate) struct NetworkHandler {
     /// for retries
     msg_sender: WeakMsgSender,
     msg_receiver: MsgReceiver,
-    messages_to_send: VecDeque<MessageToSend>,
-    messages_to_receive: VecDeque<MessageToReceive>,
+    /// The two message queues and the totals that bound them.
+    queue: MessageQueue,
     pending_subscriptions: VecDeque<PendingSubscription>,
     pending_unsubscriptions: VecDeque<HashMap<Bytes, SubscriptionType>>,
     subscriptions: HashMap<Bytes, (SubscriptionType, PubSubSender)>,
@@ -449,30 +415,13 @@ pub(crate) struct NetworkHandler {
     max_command_attempts: usize,
     /// Send-wave cap from `Config::max_messages_per_wave`.
     max_messages_per_wave: usize,
-    /// Memory budget for `messages_to_send`, from
-    /// `Config::backpressure.max_queued_bytes` (`0` = unlimited).
-    max_queued_bytes: usize,
-    /// Running total of `Message::queued_bytes` over both queues: a message is
-    /// charged when it is queued and released when its reply arrives.
-    ///
-    /// Maintained incrementally at every push and pop rather than recomputed:
-    /// the queue is walked often enough that summing it per message would be
-    /// quadratic in the queue depth.
-    queued_bytes: usize,
-    /// Running total of `Message::num_commands` over the send queue.
-    ///
-    /// Kept incrementally: the send loop reads it on every wave, and folding the
-    /// queue costs an O(queue-depth) walk in shipped builds. The charge is
-    /// released on write, not on reply: this counts what still waits to go out.
-    queued_commands: usize,
-    /// Counters the client handles read to report what the connection is doing.
+    /// Connection-level counters a client reads: link state, server version,
+    /// reconnections, shed commands. The queue depths are published by
+    /// [`MessageQueue`], which owns them.
     ///
     /// Written only here, from the single network task, and only with `Relaxed`
     /// stores: an observability counter must never order anything.
     stats: Arc<StatsRecorder>,
-    /// Number of incoming results belonging to a message that has already been
-    /// resolved, and which must therefore be dropped instead of matched.
-    results_to_discard: usize,
     #[cfg(test)]
     send_batch_test_hook: Option<SendBatchTestHook>,
     #[cfg(test)]
@@ -524,8 +473,7 @@ impl NetworkHandler {
             connection,
             msg_sender: msg_sender.downgrade(),
             msg_receiver,
-            messages_to_send: VecDeque::new(),
-            messages_to_receive: VecDeque::new(),
+            queue: MessageQueue::new(max_queued_bytes, Arc::clone(&stats)),
             pending_subscriptions: VecDeque::new(),
             pending_unsubscriptions: VecDeque::new(),
             subscriptions: HashMap::new(),
@@ -541,11 +489,7 @@ impl NetworkHandler {
             reconnection_state: ReconnectionState::new(reconnection_config),
             max_command_attempts,
             max_messages_per_wave,
-            max_queued_bytes,
-            queued_bytes: 0,
-            queued_commands: 0,
             stats: Arc::clone(&stats),
-            results_to_discard: 0,
             #[cfg(test)]
             send_batch_test_hook,
             #[cfg(test)]
@@ -594,10 +538,9 @@ impl NetworkHandler {
             }
 
             // One publication per iteration rather than one per site that moves
-            // the totals: the fields only change inside this body, so no reader
+            // the totals: the queues only change inside this body, so no reader
             // can tell the difference and the accounting keeps a single owner.
-            self.stats
-                .set_queued(self.queued_commands, self.queued_bytes);
+            self.queue.publish();
         }
 
         debug!("end of network loop");
@@ -673,44 +616,11 @@ impl NetworkHandler {
     fn record_queue_depths(&self) {
         if let Some(hook) = &self.queue_metrics_test_hook {
             hook.record_queue_depths(
-                self.messages_to_send.len(),
-                self.messages_to_receive.len(),
-                self.queued_commands,
+                self.queue.to_send_len(),
+                self.queue.to_receive_len(),
+                self.queue.queued_commands(),
             );
         }
-    }
-
-    /// Whether queuing `cost` more bytes would breach the queue budget.
-    ///
-    /// The budget covers both queues: what is waiting to be written and what is
-    /// waiting for a reply. Writing a command frees nothing, so releasing its
-    /// charge there left a connection that answers nothing bounded by no one.
-    ///
-    /// With nothing outstanding a command is always admitted, whatever its size:
-    /// refusing one larger than the whole budget would make it permanently
-    /// unsendable rather than merely delayed. What is held is therefore the
-    /// budget plus at most one message.
-    fn would_exceed_queue_budget(&self, cost: usize) -> bool {
-        let outstanding = self.queued_bytes;
-        self.max_queued_bytes != 0
-            && outstanding != 0
-            // A saturated sum is still above any budget, so saturating here gives
-            // the same answer without an overflow to reason about.
-            && outstanding.saturating_add(cost) > self.max_queued_bytes
-    }
-
-    /// Queues a message for sending, keeping the byte accounting in step.
-    #[expect(
-        clippy::arithmetic_side_effects,
-        reason = "the running total counts bytes of buffers that are actually \
-                  allocated and still queued, so it is bounded by the memory \
-                  holding them. Saturating instead would silently desynchronise \
-                  the backpressure accounting from what is really queued."
-    )]
-    fn queue_message(&mut self, msg: Message) {
-        self.queued_bytes += msg.queued_bytes();
-        self.queued_commands += msg.num_commands();
-        self.messages_to_send.push_back(MessageToSend::new(msg));
     }
 
     fn handle_message(&mut self, mut msg: Message) {
@@ -731,11 +641,11 @@ impl NetworkHandler {
         if will_be_queued
             && msg.attempts == 0
             && !matches!(msg.kind, MessageKind::Invalidation { .. })
-            && self.would_exceed_queue_budget(msg.queued_bytes())
+            && self.queue.would_exceed_budget(msg.queued_bytes())
         {
             debug!(
                 "send queue is full ({} bytes), shedding command: {:?}",
-                self.queued_bytes,
+                self.queue.queued_bytes(),
                 msg.commands()
             );
             self.stats.record_shed();
@@ -812,7 +722,7 @@ impl NetworkHandler {
                 if let Some(err) = collision_error {
                     msg.send_error(err);
                 } else {
-                    self.queue_message(msg);
+                    self.queue.push_to_send(msg);
                 }
             }
             Status::Disconnected => {
@@ -821,7 +731,7 @@ impl NetworkHandler {
                         "network disconnected, queuing command: {:?}",
                         msg.commands()
                     );
-                    self.queue_message(msg);
+                    self.queue.push_to_send(msg);
                 } else {
                     debug!(
                         "network disconnected, sending command in error: {:?}",
@@ -830,17 +740,17 @@ impl NetworkHandler {
                     msg.send_error(Error::from(ErrorKind::DisconnectedByPeer));
                 }
             }
-            Status::EnteringMonitor => self.queue_message(msg),
+            Status::EnteringMonitor => self.queue.push_to_send(msg),
             Status::Monitor => {
                 for command in msg.commands() {
                     if matches!(command.kind(), CommandKind::Reset) {
                         self.status = Status::LeavingMonitor;
                     }
                 }
-                self.queue_message(msg);
+                self.queue.push_to_send(msg);
             }
             Status::LeavingMonitor => {
-                self.queue_message(msg);
+                self.queue.push_to_send(msg);
             }
         }
 
@@ -865,34 +775,28 @@ impl NetworkHandler {
         // line for every `log`-only consumer, which the bridge exists to serve.
         // Reading a maintained total costs the same whether or not anything is
         // listening, which is why the total is maintained.
-        if self.queued_commands > 1 {
-            debug!("sending batch of {} commands", self.queued_commands);
+        if self.queue.queued_commands() > 1 {
+            debug!("sending batch of {} commands", self.queue.queued_commands());
         }
 
         // Test-only: force retry reasons onto the first message of this drain so
         // a test can reproduce a redirected message ahead of unrelated ones.
         #[cfg(test)]
         if let Some(hook) = &self.send_batch_test_hook
-            && !self.messages_to_send.is_empty()
+            && !self.queue.to_send_is_empty()
             && let Some(reasons) = hook.take_injection()
-            && let Some(front) = self.messages_to_send.front_mut()
+            && let Some(front) = self.queue.front_to_send_mut()
         {
             front.message.retry_reasons = Some(reasons);
         }
 
-        let start_idx = self.messages_to_receive.len();
+        let start_len = self.queue.to_receive_len();
 
-        while let Some(message_to_send) = self.messages_to_send.pop_front() {
-            let mut msg = message_to_send.message;
-            // The charge follows the message: writing it does not free the memory
-            // it holds, only receiving its reply does. A message that awaits no
-            // reply is released here, having nowhere else to be released.
-            let cost = msg.queued_bytes();
-            // The command count is released unconditionally: the message is out
-            // of the send queue whatever happens to it below, and this counts
-            // only what is still waiting to be written.
-            self.queued_commands = self.queued_commands.saturating_sub(msg.num_commands());
-
+        // Taking a message releases its command charge and hands back its byte
+        // charge, which follows the message: writing it frees no memory. A
+        // message that awaits no reply is released below, having nowhere else to
+        // be released.
+        while let Some((mut msg, cost)) = self.queue.pop_to_send() {
             // Scope the retry reasons to the current message: they must not
             // leak onto the other messages sharing this send batch.
             let mut retry_reasons = SmallVec::<[RetryReason; 10]>::new();
@@ -999,26 +903,17 @@ impl NetworkHandler {
             }
 
             if num_commands_to_receive > 0 {
-                self.messages_to_receive.push_back(MessageToReceive::new(
-                    msg,
-                    num_commands_to_receive,
-                    cost,
-                ));
+                self.queue.await_reply(msg, num_commands_to_receive, cost);
             } else {
-                self.queued_bytes = self.queued_bytes.saturating_sub(cost);
+                self.queue.release(cost);
             }
         }
 
         if let Err(e) = self.connection.flush().await {
             error!("Flush error: {e}");
 
-            while self.messages_to_receive.len() > start_idx {
-                if let Some(msg_to_receive) = self.messages_to_receive.pop_back() {
-                    self.queued_bytes = self
-                        .queued_bytes
-                        .saturating_sub(msg_to_receive.queued_bytes);
-                    msg_to_receive.message.send_error(e.clone());
-                }
+            for msg_to_receive in self.queue.rollback_awaiting(start_len) {
+                msg_to_receive.message.send_error(e.clone());
             }
         }
 
@@ -1225,9 +1120,7 @@ impl NetworkHandler {
 
     #[expect(
         clippy::arithmetic_side_effects,
-        reason = "each subtraction has its guard on the branch above it: \
-                  `results_to_discard` is only decremented inside `> 0`, and \
-                  `num_commands` is only decremented in the arm where it is neither \
+        reason = "`num_commands` is only decremented in the arm where it is neither \
                   1 nor being resolved — and it never starts at 0, because \
                   `send_messages` only enqueues a message to receive when it wrote \
                   at least one command expecting a reply. The retry counter is \
@@ -1238,28 +1131,25 @@ impl NetworkHandler {
         // commands were executed, so their replies still arrive, but there is no
         // caller left for them. Matching them would shift every subsequent
         // response by one.
-        if self.results_to_discard > 0 {
-            self.results_to_discard -= 1;
+        if self.queue.take_discard() {
             debug!("discarding response of an already resolved message: {result:?}");
             return;
         }
 
-        match self.messages_to_receive.front_mut() {
+        match self.queue.front_to_receive_mut() {
             Some(message_to_receive) => {
                 trace!("message_to_receive: {:?}", message_to_receive);
 
                 if message_to_receive.num_commands == 1 || result.is_err() {
-                    if let Some(mut message_to_receive) = self.messages_to_receive.pop_front() {
-                        self.queued_bytes = self
-                            .queued_bytes
-                            .saturating_sub(message_to_receive.queued_bytes);
+                    if let Some(mut message_to_receive) = self.queue.pop_to_receive() {
                         // A batch message is sent as several independent
                         // commands, each awaiting its own response. Resolving
                         // the whole message on the error of one of them leaves
                         // the commands queued behind it without a caller, while
                         // their replies are already on their way.
                         if message_to_receive.num_commands > 1 {
-                            self.results_to_discard += message_to_receive.num_commands - 1;
+                            self.queue
+                                .discard_further(message_to_receive.num_commands - 1);
                         }
 
                         let mut should_retry = false;
@@ -1647,17 +1537,13 @@ impl NetworkHandler {
         reason = "the retry counter is compared against `max_command_attempts` \
                   immediately after each increment, and `queued_bytes` accounts \
                   bytes of buffers that are allocated and requeued — see \
-                  `queue_message`."
+                  `MessageQueue::push_to_send`."
     )]
     async fn reconnect(&mut self) -> bool {
         debug!("reconnecting...");
         let old_status = self.status;
         self.status = Status::Disconnected;
         self.stats.set_connected(false);
-
-        // The responses we were waiting to discard died with the connection;
-        // keeping the count would discard legitimate responses afterwards.
-        self.results_to_discard = 0;
 
         // A `SKIP` waiting for the command it silences died with the connection too.
         self.skip_next_reply = false;
@@ -1680,8 +1566,13 @@ impl NetworkHandler {
         #[cfg(test)]
         self.record_queue_depths();
 
-        let mut retained_to_receive = VecDeque::with_capacity(self.messages_to_receive.len());
-        while let Some(mut message_to_receive) = self.messages_to_receive.pop_front() {
+        // The queues are taken whole, filtered, and put back; `restore` rebuilds
+        // both totals from what survived, so the purge decides *what* is kept and
+        // never *what it costs*.
+        let (to_receive, to_send) = self.queue.take_queues();
+
+        let mut retained_to_receive = VecDeque::with_capacity(to_receive.len());
+        for mut message_to_receive in to_receive {
             if !message_to_receive.message.retry_on_error {
                 message_to_receive
                     .message
@@ -1697,22 +1588,9 @@ impl NetworkHandler {
                 }
             }
         }
-        self.messages_to_receive = retained_to_receive;
 
-        let mut retained_to_send = VecDeque::with_capacity(self.messages_to_send.len());
-        // Both queues are rebuilt below, so the byte total is rebuilt with them
-        // rather than adjusted message by message. The retained replies keep
-        // holding their share until the replay charges them again.
-        self.queued_bytes = self
-            .messages_to_receive
-            .iter()
-            .map(|message_to_receive| message_to_receive.queued_bytes)
-            .sum();
-        // The send queue is rebuilt below, so its command total is rebuilt with
-        // it. The retained replies are not in it: they are waiting for an answer,
-        // not to be written, and the replay charges them again when it queues them.
-        self.queued_commands = 0;
-        while let Some(mut message_to_send) = self.messages_to_send.pop_front() {
+        let mut retained_to_send = VecDeque::with_capacity(to_send.len());
+        for mut message_to_send in to_send {
             if !message_to_send.message.retry_on_error {
                 message_to_send
                     .message
@@ -1724,13 +1602,12 @@ impl NetworkHandler {
                         .message
                         .send_error(Error::from(ClientError::MaxCommandAttemptsReached));
                 } else {
-                    self.queued_bytes += message_to_send.message.queued_bytes();
-                    self.queued_commands += message_to_send.message.num_commands();
                     retained_to_send.push_back(message_to_send);
                 }
             }
         }
-        self.messages_to_send = retained_to_send;
+
+        self.queue.restore(retained_to_receive, retained_to_send);
 
         loop {
             if let Some(delay) = self.reconnection_state.next_delay() {
@@ -1759,20 +1636,12 @@ impl NetworkHandler {
                 }
             } else {
                 error!("Max reconnection attempts reached: the client is finished");
-                while let Some(message_to_receive) = self.messages_to_receive.pop_front() {
-                    message_to_receive
-                        .message
-                        .send_error(Error::from(ErrorKind::DisconnectedByPeer));
+                // Taking empties both queues and both totals, so nothing is left
+                // holding a charge for a message that will never be sent.
+                for message in self.queue.take_all() {
+                    message.send_error(Error::from(ErrorKind::DisconnectedByPeer));
                 }
-                // Both queues are emptied below, so the total goes with them.
-                while let Some(message_to_send) = self.messages_to_send.pop_front() {
-                    message_to_send
-                        .message
-                        .send_error(Error::from(ErrorKind::DisconnectedByPeer));
-                }
-                self.queued_bytes = 0;
-                self.queued_commands = 0;
-                self.stats.set_queued(0, 0);
+                self.queue.publish();
                 return false;
             }
 
@@ -1828,20 +1697,9 @@ impl NetworkHandler {
             // response would be shifted by one, permanently. Messages already
             // sent but awaiting a reply are replayed before the ones still
             // queued, preserving the original global send order.
-            let to_replay: Vec<Message> = std::mem::take(&mut self.messages_to_receive)
-                .into_iter()
-                .map(|message_to_receive| message_to_receive.message)
-                .chain(
-                    std::mem::take(&mut self.messages_to_send)
-                        .into_iter()
-                        .map(|message_to_send| message_to_send.message),
-                )
-                .collect();
-            // `messages_to_send` was emptied above and `handle_message` charges
-            // every message it queues, so the total has to start from zero or
-            // the replayed messages would be counted twice.
-            self.queued_bytes = 0;
-            for message in to_replay {
+            // Taking zeroes both totals with the queues it empties, so a message
+            // the replay queues again is charged once rather than once per pass.
+            for message in self.queue.take_all() {
                 self.handle_message(message);
             }
 

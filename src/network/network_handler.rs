@@ -1,5 +1,8 @@
 use super::message_queue::MessageQueue;
 use super::pub_sub_push::PubSubPush;
+use super::router::{
+    Delivery, PendingSubscription, Router, SubscriptionConfirmed, UnsubscriptionConfirmed,
+};
 use crate::{
     ClientError, Connection, ConnectionState, Error, ErrorKind, JoinHandle, ReconnectionState,
     RedisError, RedisErrorKind, Result, RetryReason,
@@ -14,13 +17,7 @@ use bytes::Bytes;
 use futures_util::{FutureExt, select};
 use smallvec::SmallVec;
 use std::borrow::Cow;
-use std::{
-    collections::{HashMap, VecDeque},
-    future::poll_fn,
-    sync::Arc,
-    task::Poll,
-    time::Duration,
-};
+use std::{collections::VecDeque, future::poll_fn, sync::Arc, task::Poll, time::Duration};
 use tokio::{sync::broadcast, time::Instant};
 use tracing::{Instrument, debug, error, info, info_span, trace, warn};
 
@@ -365,14 +362,6 @@ enum Status {
     LeavingMonitor,
 }
 
-struct PendingSubscription {
-    pub channel_or_pattern: Bytes,
-    pub subscription_type: SubscriptionType,
-    pub sender: PubSubSender,
-    /// indicates if more subscriptions will arrive in the same batch
-    pub more_to_come: bool,
-}
-
 pub(crate) struct NetworkHandler {
     status: Status,
     connection: Connection,
@@ -381,15 +370,8 @@ pub(crate) struct NetworkHandler {
     msg_receiver: MsgReceiver,
     /// The two message queues and the totals that bound them.
     queue: MessageQueue,
-    pending_subscriptions: VecDeque<PendingSubscription>,
-    pending_unsubscriptions: VecDeque<HashMap<Bytes, SubscriptionType>>,
-    subscriptions: HashMap<Bytes, (SubscriptionType, PubSubSender)>,
-    /// Subscriptions whose subscriber is gone, collected while a push is being
-    /// routed and unsubscribed from at the end of the read wave.
-    ///
-    /// Delivery is matched on the synchronous read path, but sending the
-    /// UNSUBSCRIBE needs the async send path, so the two are separated.
-    orphaned_subscriptions: Vec<(Bytes, SubscriptionType)>,
+    /// Where a push goes: the pub/sub subscription table and the two push sinks.
+    router: Router,
     is_reply_on: bool,
     /// `CLIENT REPLY SKIP` silences the reply of the command that follows it, and
     /// only that one — unlike `OFF`, which silences the connection until `ON`.
@@ -398,15 +380,6 @@ pub(crate) struct NetworkHandler {
     /// and lent as `&mut` to whichever connection is being built: the network task
     /// is its only user, so no `Arc` and no lock are involved.
     connection_state: ConnectionState,
-    /// Sink for client-side-caching invalidation pushes, active while the
-    /// connection is in `Status::Connected`. Kept separate from `monitor_sender`
-    /// so registering one push consumer cannot silently overwrite the other's
-    /// slot — the two flows are routed by distinct `Status` states, so a single
-    /// shared field was only ever a latent trap, not a working multiplexer.
-    invalidation_sender: Option<PushSender>,
-    /// Sink for MONITOR output, active while the connection is in
-    /// `Status::Monitor` / `LeavingMonitor`. See `invalidation_sender`.
-    monitor_sender: Option<PushSender>,
     reconnect_sender: ReconnectSender,
     auto_resubscribe: bool,
     auto_remonitor: bool,
@@ -474,15 +447,10 @@ impl NetworkHandler {
             msg_sender: msg_sender.downgrade(),
             msg_receiver,
             queue: MessageQueue::new(max_queued_bytes, Arc::clone(&stats)),
-            pending_subscriptions: VecDeque::new(),
-            pending_unsubscriptions: VecDeque::new(),
-            subscriptions: HashMap::new(),
-            orphaned_subscriptions: Vec::new(),
+            router: Router::new(),
             is_reply_on: true,
             skip_next_reply: false,
             connection_state,
-            invalidation_sender: None,
-            monitor_sender: None,
             reconnect_sender: reconnect_sender.clone(),
             auto_resubscribe,
             auto_remonitor,
@@ -664,7 +632,7 @@ impl NetworkHandler {
                         ..
                     } => {
                         for (channel_or_pattern, _sender) in subscriptions.iter() {
-                            if self.subscriptions.contains_key(channel_or_pattern) {
+                            if self.router.is_subscribed(channel_or_pattern) {
                                 debug!(
                                     "[{:?}] There is already a subscription on channel `{}`",
                                     self.status,
@@ -689,7 +657,7 @@ impl NetworkHandler {
                                 },
                             );
 
-                            self.pending_subscriptions.extend(pending_subscriptions);
+                            self.router.expect_subscriptions(pending_subscriptions);
                         }
                     }
                     MessageKind::Monitor { push_sender, .. } => {
@@ -697,20 +665,20 @@ impl NetworkHandler {
                         let push_sender = push_sender.take();
                         if let Some(push_sender) = push_sender {
                             debug!("Registering MONITOR push_sender");
-                            self.monitor_sender = Some(push_sender);
+                            self.router.set_monitor_sink(push_sender);
                         }
                     }
                     MessageKind::Invalidation { push_sender } => {
                         let push_sender = push_sender.take();
                         if let Some(push_sender) = push_sender {
                             debug!("Registering Invalidation push_sender");
-                            self.invalidation_sender = Some(push_sender);
+                            self.router.set_invalidation_sink(push_sender);
                         }
                         return; // no message to send
                     }
                     MessageKind::Single { command, .. } => {
                         if let CommandKind::Unsbuscribe(subscription_type) = command.kind() {
-                            self.pending_unsubscriptions.push_back(
+                            self.router.expect_unsubscriptions(
                                 command.args().map(|a| (a, *subscription_type)).collect(),
                             );
                         }
@@ -843,7 +811,7 @@ impl NetworkHandler {
                         self.connection_state.clear();
                         self.is_reply_on = true;
                         self.skip_next_reply = false;
-                        self.subscriptions.clear();
+                        self.router.clear_subscriptions();
                     }
                     _ => (),
                 }
@@ -1037,7 +1005,7 @@ impl NetworkHandler {
                         if response.is_err() {
                             self.receive_result(response);
                         } else {
-                            match &mut self.invalidation_sender {
+                            match self.router.invalidation_sink_mut() {
                                 Some(push_sender) => {
                                     #[cfg(test)]
                                     let delivered_bytes = response
@@ -1100,7 +1068,7 @@ impl NetworkHandler {
             .map(|response| response.retained_bytes())
             .unwrap_or(0);
 
-        let Some(push_sender) = &self.monitor_sender else {
+        let Some(push_sender) = self.router.monitor_sink() else {
             return;
         };
 
@@ -1296,23 +1264,26 @@ impl NetworkHandler {
         }
     }
 
-    /// Records a subscription whose subscriber is gone, so the read wave ends by
-    /// unsubscribing from it.
-    ///
-    /// A delivery fails only when the receiving half has been dropped, which is
-    /// permanent: retrying it on the next message would never succeed. Leaving
-    /// the entry in place instead keeps the server publishing to a channel
-    /// nobody can receive on, for as long as the connection lives. Removing it
-    /// here also makes this the *first* and only failed delivery for that
-    /// channel, so one warning and one UNSUBSCRIBE are emitted, not one per
-    /// message.
-    fn orphan_subscription(&mut self, orphaned: Option<(Bytes, SubscriptionType)>) {
-        let Some((channel_or_pattern, subscription_type)) = orphaned else {
-            return;
-        };
-        self.subscriptions.remove(&channel_or_pattern);
-        self.orphaned_subscriptions
-            .push((channel_or_pattern, subscription_type));
+    /// Test-only: records what a pub/sub delivery did, so a test can measure how
+    /// much traffic a paused subscriber's channel absorbs.
+    #[cfg_attr(
+        not(test),
+        expect(unused_variables, reason = "no hook outside a test build")
+    )]
+    fn record_delivery(&self, delivery: &Delivery) {
+        #[cfg(test)]
+        if let Some(hook) = &self.queue_metrics_test_hook {
+            match delivery {
+                Delivery::Delivered { retained_bytes } => {
+                    hook.record_pub_sub_delivered(*retained_bytes);
+                }
+                Delivery::SubscriberGone => hook.record_pub_sub_delivery_failed(),
+                // Nothing was offered to a channel, so nothing is counted
+                // either way: the message named a channel this connection
+                // holds no subscription for.
+                Delivery::NoSubscriber => (),
+            }
+        }
     }
 
     /// Unsubscribes from every subscription whose subscriber turned out to be
@@ -1326,13 +1297,11 @@ impl NetworkHandler {
     /// every later response by one. They are fire-and-forget, like the ones
     /// `PubSubSplitSink::drop` sends, since no caller is left to be answered.
     async fn unsubscribe_orphaned_subscriptions(&mut self) {
-        if self.orphaned_subscriptions.is_empty() {
+        if !self.router.has_orphaned() {
             return;
         }
 
-        for (channel_or_pattern, subscription_type) in
-            std::mem::take(&mut self.orphaned_subscriptions)
-        {
+        for (channel_or_pattern, subscription_type) in self.router.take_orphaned() {
             let PreparedCommand { mut command, .. } = match subscription_type {
                 SubscriptionType::Channel => self.connection.unsubscribe(channel_or_pattern),
                 SubscriptionType::Pattern => self.connection.punsubscribe(channel_or_pattern),
@@ -1363,159 +1332,87 @@ impl NetworkHandler {
                 match pub_sub_message {
                     PubSubPush::Message(channel_or_pattern, _)
                     | PubSubPush::SMessage(channel_or_pattern, _) => {
-                        #[cfg(test)]
-                        let delivered_bytes = ref_value.retained_bytes();
-                        // The key is looked up alongside its value because
-                        // sending consumes `value`, and with it the borrowed
-                        // channel name: naming the channel in the log, and
-                        // cleaning the subscription up, both need a name that
-                        // outlives the send.
-                        let orphaned = match self.subscriptions.get_key_value(channel_or_pattern) {
-                            Some((key, (subscription_type, pub_sub_sender))) => {
-                                let sent = pub_sub_sender.send(value);
-                                #[cfg(test)]
-                                if let Some(hook) = &self.queue_metrics_test_hook {
-                                    if sent.is_ok() {
-                                        hook.record_pub_sub_delivered(delivered_bytes);
-                                    } else {
-                                        hook.record_pub_sub_delivery_failed();
-                                    }
-                                }
-                                match sent {
-                                    Ok(()) => None,
-                                    Err(e) => {
-                                        warn!(
-                                            "Cannot send pub/sub message to caller from channel `{}`: {e}",
-                                            String::from_utf8_lossy(key)
-                                        );
-                                        Some((key.clone(), *subscription_type))
-                                    }
-                                }
-                            }
-                            None => {
-                                error!(
-                                    "Unexpected message on channel `{}`",
-                                    String::from_utf8_lossy(channel_or_pattern)
-                                );
-                                None
-                            }
-                        };
-                        self.orphan_subscription(orphaned);
+                        // The name is copied before the send, which consumes
+                        // `value` and with it the borrowed channel name a log
+                        // line still needs.
+                        let named = Bytes::copy_from_slice(channel_or_pattern);
+                        let delivery = self.router.deliver(&named, value);
+                        self.record_delivery(&delivery);
+                        match delivery {
+                            Delivery::Delivered { .. } => (),
+                            Delivery::SubscriberGone => warn!(
+                                "Cannot send pub/sub message to caller from channel `{}`: the receiver is gone",
+                                String::from_utf8_lossy(&named)
+                            ),
+                            Delivery::NoSubscriber => error!(
+                                "Unexpected message on channel `{}`",
+                                String::from_utf8_lossy(&named)
+                            ),
+                        }
                         None
                     }
                     PubSubPush::Subscribe(channel_or_pattern)
                     | PubSubPush::PSubscribe(channel_or_pattern)
                     | PubSubPush::SSubscribe(channel_or_pattern) => {
-                        // Peek before popping: a mismatched confirmation must not
-                        // consume (and silently drop) the pending subscriber. Only
-                        // pop once we know the front entry is the one being confirmed.
-                        let matches = self
-                            .pending_subscriptions
-                            .front()
-                            .is_some_and(|p| p.channel_or_pattern == channel_or_pattern);
-                        if matches && let Some(pending_sub) = self.pending_subscriptions.pop_front()
-                        {
-                            if self
-                                .subscriptions
-                                .insert(
-                                    pending_sub.channel_or_pattern,
-                                    (pending_sub.subscription_type, pending_sub.sender),
-                                )
-                                .is_some()
-                            {
+                        let named = Bytes::copy_from_slice(channel_or_pattern);
+                        match self.router.confirm_subscription(&named) {
+                            SubscriptionConfirmed::AlreadySubscribed => {
                                 return Some(Err(Error::from(ClientError::AlreadySubscribed)));
                             }
-
-                            if pending_sub.more_to_come {
+                            // A batch of subscriptions is answered once, at the
+                            // last confirmation.
+                            SubscriptionConfirmed::Registered { more_to_come: true } => {
                                 return None;
                             }
-
-                            self.receive_result(Ok(RespResponse::ok()));
-                        } else {
-                            error!(
-                                "Unexpected subscription confirmation on channel `{}`",
-                                String::from_utf8_lossy(channel_or_pattern)
-                            );
-                            // Surface the anomaly to the caller instead of reporting
-                            // a spurious success; the pending entry is left intact.
-                            self.receive_result(Err(Error::from(
-                                ClientError::UnexpectedSubscriptionConfirmation,
-                            )));
+                            SubscriptionConfirmed::Registered {
+                                more_to_come: false,
+                            } => self.receive_result(Ok(RespResponse::ok())),
+                            SubscriptionConfirmed::Unexpected => {
+                                error!(
+                                    "Unexpected subscription confirmation on channel `{}`",
+                                    String::from_utf8_lossy(&named)
+                                );
+                                // Surface the anomaly to the caller instead of reporting
+                                // a spurious success; the pending entry is left intact.
+                                self.receive_result(Err(Error::from(
+                                    ClientError::UnexpectedSubscriptionConfirmation,
+                                )));
+                            }
                         }
                         None
                     }
                     PubSubPush::Unsubscribe(channel_or_pattern)
                     | PubSubPush::PUnsubscribe(channel_or_pattern)
                     | PubSubPush::SUnsubscribe(channel_or_pattern) => {
-                        self.subscriptions.remove(channel_or_pattern);
-                        if let Some(remaining) = self.pending_unsubscriptions.front_mut() {
-                            if remaining.len() > 1 {
-                                if remaining.remove(channel_or_pattern).is_none() {
-                                    error!(
-                                        "Cannot find channel or pattern to remove: `{}`",
-                                        String::from_utf8_lossy(channel_or_pattern)
-                                    );
-                                }
-                                None
-                            } else {
-                                // last unsubscription notification received
-                                let Some(mut remaining) = self.pending_unsubscriptions.pop_front()
-                                else {
-                                    error!(
-                                        "Cannot find channel or pattern to remove: `{}`",
-                                        String::from_utf8_lossy(channel_or_pattern)
-                                    );
-                                    return None;
-                                };
-                                if remaining.remove(channel_or_pattern).is_none() {
-                                    error!(
-                                        "Cannot find channel or pattern to remove: `{}`",
-                                        String::from_utf8_lossy(channel_or_pattern)
-                                    );
-                                    return None;
-                                }
+                        let named = Bytes::copy_from_slice(channel_or_pattern);
+                        match self.router.confirm_unsubscription(&named) {
+                            UnsubscriptionConfirmed::More => None,
+                            UnsubscriptionConfirmed::Complete => {
                                 self.receive_result(Ok(RespResponse::ok()));
                                 None
                             }
-                        } else {
-                            Some(value)
+                            // Nobody here asked for it, so it belongs to the
+                            // caller as a plain reply.
+                            UnsubscriptionConfirmed::Unsolicited => Some(value),
                         }
                     }
                     PubSubPush::PMessage(pattern, channel, _) => {
-                        #[cfg(test)]
-                        let delivered_bytes = ref_value.retained_bytes();
-                        let orphaned = match self.subscriptions.get_key_value(pattern) {
-                            Some((key, (subscription_type, pub_sub_sender))) => {
-                                let sent = pub_sub_sender.send(value);
-                                #[cfg(test)]
-                                if let Some(hook) = &self.queue_metrics_test_hook {
-                                    if sent.is_ok() {
-                                        hook.record_pub_sub_delivered(delivered_bytes);
-                                    } else {
-                                        hook.record_pub_sub_delivery_failed();
-                                    }
-                                }
-                                match sent {
-                                    Ok(()) => None,
-                                    Err(e) => {
-                                        warn!(
-                                            "Cannot send pub/sub message to caller for pattern `{}`: {e}",
-                                            String::from_utf8_lossy(key)
-                                        );
-                                        Some((key.clone(), *subscription_type))
-                                    }
-                                }
-                            }
-                            None => {
-                                error!(
-                                    "Unexpected message on channel `{}` for pattern `{}`",
-                                    String::from_utf8_lossy(channel),
-                                    String::from_utf8_lossy(pattern)
-                                );
-                                None
-                            }
-                        };
-                        self.orphan_subscription(orphaned);
+                        let named_pattern = Bytes::copy_from_slice(pattern);
+                        let named_channel = Bytes::copy_from_slice(channel);
+                        let delivery = self.router.deliver(&named_pattern, value);
+                        self.record_delivery(&delivery);
+                        match delivery {
+                            Delivery::Delivered { .. } => (),
+                            Delivery::SubscriberGone => warn!(
+                                "Cannot send pub/sub message to caller for pattern `{}`: the receiver is gone",
+                                String::from_utf8_lossy(&named_pattern)
+                            ),
+                            Delivery::NoSubscriber => error!(
+                                "Unexpected message on channel `{}` for pattern `{}`",
+                                String::from_utf8_lossy(&named_channel),
+                                String::from_utf8_lossy(&named_pattern)
+                            ),
+                        }
                         None
                     }
                 }
@@ -1550,7 +1447,7 @@ impl NetworkHandler {
 
         // A fresh connection is subscribed to nothing, so an orphaned
         // subscription has already achieved what its UNSUBSCRIBE was for.
-        self.orphaned_subscriptions.clear();
+        self.router.clear_orphaned();
 
         // Purge every non-retryable message, wherever it sits in the queue,
         // and keep the retryable ones in order. A prefix-only purge would leave
@@ -1677,7 +1574,7 @@ impl NetworkHandler {
             // messages so that they are routed through `handle_message`,
             // exactly as fresh messages and the retry path are.
             if let Status::Monitor | Status::EnteringMonitor = old_status {
-                if self.monitor_sender.is_some() {
+                if self.router.has_monitor_sink() {
                     self.status = Status::Monitor;
                 } else {
                     self.status = Status::Connected;
@@ -1716,58 +1613,21 @@ impl NetworkHandler {
     }
 
     async fn auto_resubscribe(&mut self) -> Result<()> {
-        // Drop every pending unsubscription first, emitting nothing. On a fresh
-        // connection the server is subscribed to nothing, so a pending
-        // unsubscription has already achieved its goal. Removing the channels
-        // from `subscriptions` up front also prevents the resubscribe loop
-        // below from restoring subscriptions the caller was in the middle of
-        // cancelling.
-        for map in self.pending_unsubscriptions.drain(..) {
-            for channel_or_pattern in map.into_keys() {
-                self.subscriptions.remove(&channel_or_pattern);
-            }
-        }
-
-        if !self.subscriptions.is_empty() {
-            for (channel_or_pattern, (subscription_type, _)) in &self.subscriptions {
-                match subscription_type {
-                    SubscriptionType::Channel => {
-                        self.connection.subscribe(channel_or_pattern).await?;
-                    }
-                    SubscriptionType::Pattern => {
-                        self.connection.psubscribe(channel_or_pattern).await?;
-                    }
-                    SubscriptionType::ShardChannel => {
-                        self.connection.ssubscribe(channel_or_pattern).await?;
-                    }
+        // The router decides what the new socket has to carry: the pending
+        // unsubscriptions are dropped, a fresh connection being subscribed to
+        // nothing, and a pending subscription is promoted to a confirmed one,
+        // being re-issued here.
+        for (channel_or_pattern, subscription_type) in self.router.take_resubscriptions() {
+            match subscription_type {
+                SubscriptionType::Channel => {
+                    self.connection.subscribe(channel_or_pattern).await?;
                 }
-            }
-        }
-
-        if !self.pending_subscriptions.is_empty() {
-            for pending_sub in self.pending_subscriptions.drain(..) {
-                match pending_sub.subscription_type {
-                    SubscriptionType::Channel => {
-                        self.connection
-                            .subscribe(pending_sub.channel_or_pattern.clone())
-                            .await?;
-                    }
-                    SubscriptionType::Pattern => {
-                        self.connection
-                            .psubscribe(pending_sub.channel_or_pattern.clone())
-                            .await?;
-                    }
-                    SubscriptionType::ShardChannel => {
-                        self.connection
-                            .ssubscribe(pending_sub.channel_or_pattern.clone())
-                            .await?;
-                    }
+                SubscriptionType::Pattern => {
+                    self.connection.psubscribe(channel_or_pattern).await?;
                 }
-
-                self.subscriptions.insert(
-                    pending_sub.channel_or_pattern,
-                    (pending_sub.subscription_type, pending_sub.sender),
-                );
+                SubscriptionType::ShardChannel => {
+                    self.connection.ssubscribe(channel_or_pattern).await?;
+                }
             }
         }
 

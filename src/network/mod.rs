@@ -22,6 +22,7 @@ mod message_queue;
 mod network_handler;
 mod pub_sub_push;
 mod reconnection_state;
+mod router;
 mod sentinel_connection;
 mod standalone_connection;
 mod version;

@@ -1,5 +1,6 @@
 use super::message_queue::MessageQueue;
 use super::pub_sub_push::PubSubPush;
+use super::reply_mode::ReplyMode;
 use super::router::{
     Delivery, PendingSubscription, Router, SubscriptionConfirmed, UnsubscriptionConfirmed,
 };
@@ -372,10 +373,8 @@ pub(crate) struct NetworkHandler {
     queue: MessageQueue,
     /// Where a push goes: the pub/sub subscription table and the two push sinks.
     router: Router,
-    is_reply_on: bool,
-    /// `CLIENT REPLY SKIP` silences the reply of the command that follows it, and
-    /// only that one — unlike `OFF`, which silences the connection until `ON`.
-    skip_next_reply: bool,
+    /// Which commands the server answers: the client's mirror of `CLIENT REPLY`.
+    reply_mode: ReplyMode,
     /// Connection-attached state to replay when the socket is remade. Owned here
     /// and lent as `&mut` to whichever connection is being built: the network task
     /// is its only user, so no `Arc` and no lock are involved.
@@ -448,8 +447,7 @@ impl NetworkHandler {
             msg_receiver,
             queue: MessageQueue::new(max_queued_bytes, Arc::clone(&stats)),
             router: Router::new(),
-            is_reply_on: true,
-            skip_next_reply: false,
+            reply_mode: ReplyMode::new(),
             connection_state,
             reconnect_sender: reconnect_sender.clone(),
             auto_resubscribe,
@@ -785,20 +783,10 @@ impl NetworkHandler {
                 let kind = *command.kind();
 
                 match kind {
-                    CommandKind::ClientReply(ClientReplyMode::On) => {
-                        self.is_reply_on = true;
-                        self.skip_next_reply = false;
-                        self.connection_state.record(StateSlot::ReplyMode, command);
-                    }
-                    CommandKind::ClientReply(ClientReplyMode::Off) => {
-                        self.is_reply_on = false;
-                        self.skip_next_reply = false;
-                        self.connection_state.record(StateSlot::ReplyMode, command);
-                    }
                     // `SKIP` is not connection state: it is consumed by the next
                     // command and leaves the connection as it found it.
-                    CommandKind::ClientReply(ClientReplyMode::Skip) => {
-                        self.skip_next_reply = true;
+                    CommandKind::ClientReply(ClientReplyMode::On | ClientReplyMode::Off) => {
+                        self.connection_state.record(StateSlot::ReplyMode, command);
                     }
                     CommandKind::ConnectionState(slot) => {
                         self.connection_state.record(slot, command);
@@ -809,8 +797,6 @@ impl NetworkHandler {
                     // through.
                     CommandKind::Reset => {
                         self.connection_state.clear();
-                        self.is_reply_on = true;
-                        self.skip_next_reply = false;
                         self.router.clear_subscriptions();
                     }
                     _ => (),
@@ -830,19 +816,7 @@ impl NetworkHandler {
                         .sync_connection_state(&self.connection_state);
                 }
 
-                let expects_reply = if !self.is_reply_on {
-                    false
-                } else if matches!(kind, CommandKind::ClientReply(ClientReplyMode::Skip)) {
-                    // `CLIENT REPLY SKIP` is not answered either.
-                    false
-                } else if self.skip_next_reply {
-                    self.skip_next_reply = false;
-                    false
-                } else {
-                    true
-                };
-
-                if expects_reply {
+                if self.reply_mode.admit(kind) {
                     num_commands_to_receive += 1;
                 }
 
@@ -1443,7 +1417,7 @@ impl NetworkHandler {
         self.stats.set_connected(false);
 
         // A `SKIP` waiting for the command it silences died with the connection too.
-        self.skip_next_reply = false;
+        self.reply_mode.forget_pending_skip();
 
         // A fresh connection is subscribed to nothing, so an orphaned
         // subscription has already achieved what its UNSUBSCRIBE was for.
@@ -1550,7 +1524,7 @@ impl NetworkHandler {
             // The new connection was restored from the same registry, so the
             // mirror the send loop uses has to be derived from it rather than
             // left at whatever the dead connection ended on.
-            self.is_reply_on = self.connection_state.is_reply_on();
+            self.reply_mode.restore(self.connection_state.is_reply_on());
 
             if self.auto_resubscribe
                 && let Err(e) = self.auto_resubscribe().await

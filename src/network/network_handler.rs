@@ -1,3 +1,4 @@
+use super::connection_mode::{ConnectionMode, ReplyRoute};
 use super::message_queue::MessageQueue;
 use super::pub_sub_push::PubSubPush;
 use super::reply_mode::ReplyMode;
@@ -356,17 +357,9 @@ impl QueueMetricsTestHook {
 // in-flight messages the cap never fires, so low-concurrency behaviour is
 // unchanged whatever it is set to.
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Status {
-    Disconnected,
-    Connected,
-    EnteringMonitor,
-    Monitor,
-    LeavingMonitor,
-}
-
 pub(crate) struct NetworkHandler {
-    status: Status,
+    /// What the connection is carrying, and where that sends a reply.
+    mode: ConnectionMode,
     connection: Connection,
     /// for retries
     msg_sender: WeakMsgSender,
@@ -443,7 +436,7 @@ impl NetworkHandler {
         stats.set_server_version(connection.server_version());
 
         let mut network_handler = NetworkHandler {
-            status: Status::Connected,
+            mode: ConnectionMode::Connected,
             connection,
             msg_sender: msg_sender.downgrade(),
             msg_receiver,
@@ -540,7 +533,7 @@ impl NetworkHandler {
             // Send in waves rather than accumulating the whole channel into
             // one write (see `Config::max_messages_per_wave`).
             if queued >= self.max_messages_per_wave {
-                if self.status != Status::Disconnected {
+                if !self.mode.is_disconnected() {
                     self.send_messages().await;
                 }
                 queued = 0;
@@ -563,7 +556,7 @@ impl NetworkHandler {
             }
         }
 
-        if self.status != Status::Disconnected {
+        if !self.mode.is_disconnected() {
             self.send_messages().await
         }
 
@@ -592,7 +585,7 @@ impl NetworkHandler {
     }
 
     fn handle_message(&mut self, mut msg: Message) {
-        trace!("[{:?}] Will handle message: {msg:?}", self.status);
+        trace!("[{:?}] Will handle message: {msg:?}", self.mode);
 
         // Shed an incoming command rather than let the send queue grow past its
         // memory budget, which is what a reconnection outage would otherwise do.
@@ -605,7 +598,7 @@ impl NetworkHandler {
         // that is about to be failed with `DisconnectedByPeer` for opting out of
         // retries: it never reaches the queue, so blaming the queue for it would
         // report the wrong cause.
-        let will_be_queued = self.status != Status::Disconnected || msg.retry_on_error;
+        let will_be_queued = !self.mode.is_disconnected() || msg.retry_on_error;
         if will_be_queued
             && msg.attempts == 0
             && !matches!(msg.kind, MessageKind::Invalidation { .. })
@@ -623,8 +616,8 @@ impl NetworkHandler {
 
         let mut collision_error = None;
 
-        match &self.status {
-            Status::Connected => {
+        match &self.mode {
+            ConnectionMode::Connected => {
                 match &mut msg.kind {
                     MessageKind::PubSub {
                         subscription_type,
@@ -635,7 +628,7 @@ impl NetworkHandler {
                             if self.router.is_subscribed(channel_or_pattern) {
                                 debug!(
                                     "[{:?}] There is already a subscription on channel `{}`",
-                                    self.status,
+                                    self.mode,
                                     String::from_utf8_lossy(channel_or_pattern)
                                 );
                                 collision_error = Some(Error::from(ClientError::AlreadySubscribed));
@@ -661,7 +654,7 @@ impl NetworkHandler {
                         }
                     }
                     MessageKind::Monitor { push_sender, .. } => {
-                        self.status = Status::EnteringMonitor;
+                        self.mode.enter_monitor();
                         let push_sender = push_sender.take();
                         if let Some(push_sender) = push_sender {
                             debug!("Registering MONITOR push_sender");
@@ -693,7 +686,7 @@ impl NetworkHandler {
                     self.queue.push_to_send(msg);
                 }
             }
-            Status::Disconnected => {
+            ConnectionMode::Disconnected => {
                 if msg.retry_on_error {
                     debug!(
                         "network disconnected, queuing command: {:?}",
@@ -708,16 +701,13 @@ impl NetworkHandler {
                     msg.send_error(Error::from(ErrorKind::DisconnectedByPeer));
                 }
             }
-            Status::EnteringMonitor => self.queue.push_to_send(msg),
-            Status::Monitor => {
+            // Monitoring, at either edge: nothing here subscribes or registers a
+            // sink, so the message is only queued — and watched for the `RESET`
+            // that ends the stream.
+            _ => {
                 for command in msg.commands() {
-                    if matches!(command.kind(), CommandKind::Reset) {
-                        self.status = Status::LeavingMonitor;
-                    }
+                    self.mode.observe_queued(*command.kind());
                 }
-                self.queue.push_to_send(msg);
-            }
-            Status::LeavingMonitor => {
                 self.queue.push_to_send(msg);
             }
         }
@@ -973,9 +963,13 @@ impl NetworkHandler {
     }
 
     fn handle_result(&mut self, result: Result<RespResponse>) {
-        match self.status {
-            Status::Disconnected => (),
-            Status::Connected => match &result {
+        let is_monitor_line = matches!(&result, Ok(response) if response.is_monitor());
+
+        match self.mode.route_reply(is_monitor_line) {
+            ReplyRoute::Dropped => (),
+            ReplyRoute::MonitorSink => self.deliver_monitor_result(result),
+            ReplyRoute::ToCaller => self.receive_result(result),
+            ReplyRoute::Routed => match &result {
                 Ok(response) if response.is_push() => {
                     if let Some(response) = self.try_match_pubsub_message(result) {
                         if response.is_err() {
@@ -1012,25 +1006,6 @@ impl NetworkHandler {
                 }
                 _ => {
                     self.receive_result(result);
-                }
-            },
-            Status::EnteringMonitor => {
-                self.receive_result(result);
-                self.status = Status::Monitor;
-            }
-            Status::Monitor => match &result {
-                Ok(response) if response.is_monitor() => {
-                    self.deliver_monitor_result(result);
-                }
-                _ => self.receive_result(result),
-            },
-            Status::LeavingMonitor => match &result {
-                Ok(response) if response.is_monitor() => {
-                    self.deliver_monitor_result(result);
-                }
-                _ => {
-                    self.receive_result(result);
-                    self.status = Status::Connected;
                 }
             },
         }
@@ -1294,7 +1269,7 @@ impl NetworkHandler {
             self.handle_message(Message::single_forget(command, true));
         }
 
-        if self.status != Status::Disconnected {
+        if !self.mode.is_disconnected() {
             self.send_messages().await;
         }
     }
@@ -1407,8 +1382,7 @@ impl NetworkHandler {
     #[tracing::instrument(name = "reconnect", skip_all)]
     async fn reconnect(&mut self) -> bool {
         debug!("reconnecting...");
-        let old_status = self.status;
-        self.status = Status::Disconnected;
+        let was_monitoring = self.mode.disconnect().is_monitoring();
         self.stats.set_connected(false);
 
         // A `SKIP` waiting for the command it silences died with the connection too.
@@ -1481,7 +1455,7 @@ impl NetworkHandler {
             }
 
             if self.auto_remonitor
-                && let Err(e) = self.auto_remonitor(old_status).await
+                && let Err(e) = self.auto_remonitor(was_monitoring).await
             {
                 error!("Failed to reconnect: {e:?}");
                 continue;
@@ -1491,18 +1465,11 @@ impl NetworkHandler {
                 debug!("Cannot send reconnect notification to clients: {e}");
             }
 
-            // Restore the connection status before replaying in-flight
+            // Restore what the connection carries before replaying in-flight
             // messages so that they are routed through `handle_message`,
             // exactly as fresh messages and the retry path are.
-            if let Status::Monitor | Status::EnteringMonitor = old_status {
-                if self.router.has_monitor_sink() {
-                    self.status = Status::Monitor;
-                } else {
-                    self.status = Status::Connected;
-                }
-            } else {
-                self.status = Status::Connected;
-            }
+            self.mode
+                .restore(was_monitoring, self.router.has_monitor_sink());
 
             // Replay every in-flight message through `handle_message` rather
             // than pushing it straight into `messages_to_send`. This rebuilds
@@ -1555,8 +1522,8 @@ impl NetworkHandler {
         Ok(())
     }
 
-    async fn auto_remonitor(&mut self, old_status: Status) -> Result<()> {
-        if let Status::Monitor | Status::EnteringMonitor = old_status {
+    async fn auto_remonitor(&mut self, was_monitoring: bool) -> Result<()> {
+        if was_monitoring {
             self.connection.send(&cmd("MONITOR").into()).await?;
         }
 

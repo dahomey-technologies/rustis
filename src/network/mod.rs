@@ -17,6 +17,7 @@
 mod async_executor_strategy;
 mod cluster_connection;
 mod connection;
+mod connection_mode;
 mod connection_state;
 mod message_queue;
 mod network_handler;

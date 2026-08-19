@@ -1094,6 +1094,39 @@ impl NetworkHandler {
     #[tracing::instrument(name = "reconnect", skip_all)]
     async fn reconnect(&mut self) -> bool {
         debug!("reconnecting...");
+        let was_monitoring = self.abandon_connection();
+
+        loop {
+            let Some(delay) = self.reconnection_state.next_delay() else {
+                self.abandon_client();
+                return false;
+            };
+
+            debug!("Waiting {delay} ms before reconnection");
+            if !self
+                .serve_until(backoff_deadline(Instant::now(), delay))
+                .await
+            {
+                return false;
+            }
+
+            if let Err(e) = self.connection.reconnect(&mut self.connection_state).await {
+                error!("Failed to reconnect: {e:?}");
+                continue;
+            }
+
+            if let Err(e) = self.restore_connection(was_monitoring).await {
+                error!("Failed to reconnect: {e:?}");
+                continue;
+            }
+
+            return true;
+        }
+    }
+
+    /// Gives up the dead socket and reports whether it was carrying a MONITOR
+    /// stream, which is what the restored one has to resume.
+    fn abandon_connection(&mut self) -> bool {
         let was_monitoring = self.mode.disconnect().is_monitoring();
         self.stats.set_connected(false);
 
@@ -1113,103 +1146,101 @@ impl NetworkHandler {
         // replay counts as one attempt, which the purge charges.
         self.queue.purge_for_replay(&self.retry_policy);
 
-        loop {
-            if let Some(delay) = self.reconnection_state.next_delay() {
-                debug!("Waiting {delay} ms before reconnection");
+        was_monitoring
+    }
 
-                // keep on receiving new message during the delay
-                let start = Instant::now();
-                // A pathologically large reconnection delay would overflow the
-                // monotonic clock; cap it rather than panicking the network task.
-                let end = start
-                    .checked_add(Duration::from_millis(delay))
-                    .or_else(|| start.checked_add(Duration::from_secs(3600)))
-                    .unwrap_or(start);
-                loop {
-                    let delay = end.duration_since(Instant::now());
-                    let result =
-                        timeout_future(delay, poll_fn(|cx| self.msg_receiver.poll_recv(cx))).await;
-                    if let Ok(msg) = result {
-                        if !self.try_handle_message(msg).await {
-                            return false;
-                        }
-                    } else {
-                        // delay has expired
-                        break;
+    /// Gives up the client itself: the reconnection policy is out of attempts,
+    /// so nothing queued will ever be sent.
+    fn abandon_client(&mut self) {
+        error!("Max reconnection attempts reached: the client is finished");
+        // Taking empties both queues and both totals, so nothing is left
+        // holding a charge for a message that will never be sent.
+        for message in self.queue.take_all() {
+            message.send_error(Error::from(ErrorKind::DisconnectedByPeer));
+        }
+        self.queue.publish();
+    }
+
+    /// Keeps serving callers until `deadline`, and reports whether the task
+    /// should carry on.
+    ///
+    /// A backoff is a wait, not an outage: a caller that sends during it is
+    /// queued like any other and goes out with the replay. Parking the channel
+    /// instead would make every reconnection look like a burst of failures to
+    /// callers whose command was never even attempted.
+    ///
+    /// `false` means the message channel closed — the last client is gone and
+    /// there is nothing left to reconnect for.
+    async fn serve_until(&mut self, deadline: Instant) -> bool {
+        loop {
+            let delay = deadline.duration_since(Instant::now());
+            match timeout_future(delay, poll_fn(|cx| self.msg_receiver.poll_recv(cx))).await {
+                Ok(msg) => {
+                    if !self.try_handle_message(msg).await {
+                        return false;
                     }
                 }
-            } else {
-                error!("Max reconnection attempts reached: the client is finished");
-                // Taking empties both queues and both totals, so nothing is left
-                // holding a charge for a message that will never be sent.
-                for message in self.queue.take_all() {
-                    message.send_error(Error::from(ErrorKind::DisconnectedByPeer));
-                }
-                self.queue.publish();
-                return false;
+                // The deadline expired: time to try the socket again.
+                Err(_) => return true,
             }
-
-            if let Err(e) = self.connection.reconnect(&mut self.connection_state).await {
-                error!("Failed to reconnect: {e:?}");
-                continue;
-            }
-
-            // The new connection was restored from the same registry, so the
-            // mirror the send loop uses has to be derived from it rather than
-            // left at whatever the dead connection ended on.
-            self.reply_mode.restore(self.connection_state.is_reply_on());
-
-            if self.auto_resubscribe
-                && let Err(e) = self.auto_resubscribe().await
-            {
-                error!("Failed to reconnect: {e:?}");
-                continue;
-            }
-
-            if self.auto_remonitor
-                && let Err(e) = self.auto_remonitor(was_monitoring).await
-            {
-                error!("Failed to reconnect: {e:?}");
-                continue;
-            }
-
-            if let Err(e) = self.reconnect_sender.send(()) {
-                debug!("Cannot send reconnect notification to clients: {e}");
-            }
-
-            // Restore what the connection carries before replaying in-flight
-            // messages so that they are routed through `handle_message`,
-            // exactly as fresh messages and the retry path are.
-            self.mode
-                .restore(was_monitoring, self.router.has_monitor_sink());
-
-            // Replay every in-flight message through `handle_message` rather
-            // than pushing it straight into `messages_to_send`. This rebuilds
-            // the pub/sub bookkeeping (`pending_subscriptions` /
-            // `pending_unsubscriptions`) for the replayed messages exactly as
-            // the retry path does. Bypassing it would replay, for instance, an
-            // UNSUBSCRIBE without a matching `pending_unsubscriptions` entry:
-            // its confirmation push would then go unmatched, the stale message
-            // would keep its slot in the receive queue, and every subsequent
-            // response would be shifted by one, permanently. Messages already
-            // sent but awaiting a reply are replayed before the ones still
-            // queued, preserving the original global send order.
-            // Taking zeroes both totals with the queues it empties, so a message
-            // the replay queues again is charged once rather than once per pass.
-            for message in self.queue.take_all() {
-                self.handle_message(message);
-            }
-
-            self.send_messages().await;
-
-            info!("reconnected!");
-            self.stats.set_connected(true);
-            self.stats
-                .set_server_version(self.connection.server_version());
-            self.stats.record_reconnection();
-            self.reconnection_state.reset_attempts();
-            return true;
         }
+    }
+
+    /// Puts back on a fresh socket everything the dead one was carrying, and
+    /// replays what it still owed.
+    async fn restore_connection(&mut self, was_monitoring: bool) -> Result<()> {
+        // The new connection was restored from the same registry, so the
+        // mirror the send loop uses has to be derived from it rather than
+        // left at whatever the dead connection ended on.
+        self.reply_mode.restore(self.connection_state.is_reply_on());
+
+        if self.auto_resubscribe {
+            self.auto_resubscribe().await?;
+        }
+
+        if self.auto_remonitor {
+            self.auto_remonitor(was_monitoring).await?;
+        }
+
+        // Nobody listening is not a reason to abandon a connection that is up:
+        // this is a notification, not a step of the restoration.
+        if let Err(e) = self.reconnect_sender.send(()) {
+            debug!("Cannot send reconnect notification to clients: {e}");
+        }
+
+        // Restore what the connection carries before replaying in-flight
+        // messages so that they are routed through `handle_message`,
+        // exactly as fresh messages and the retry path are.
+        self.mode
+            .restore(was_monitoring, self.router.has_monitor_sink());
+
+        // Replay every in-flight message through `handle_message` rather
+        // than pushing it straight into `messages_to_send`. This rebuilds
+        // the pub/sub bookkeeping (`pending_subscriptions` /
+        // `pending_unsubscriptions`) for the replayed messages exactly as
+        // the retry path does. Bypassing it would replay, for instance, an
+        // UNSUBSCRIBE without a matching `pending_unsubscriptions` entry:
+        // its confirmation push would then go unmatched, the stale message
+        // would keep its slot in the receive queue, and every subsequent
+        // response would be shifted by one, permanently. Messages already
+        // sent but awaiting a reply are replayed before the ones still
+        // queued, preserving the original global send order.
+        // Taking zeroes both totals with the queues it empties, so a message
+        // the replay queues again is charged once rather than once per pass.
+        for message in self.queue.take_all() {
+            self.handle_message(message);
+        }
+
+        self.send_messages().await;
+
+        info!("reconnected!");
+        self.stats.set_connected(true);
+        self.stats
+            .set_server_version(self.connection.server_version());
+        self.stats.record_reconnection();
+        self.reconnection_state.reset_attempts();
+
+        Ok(())
     }
 
     async fn auto_resubscribe(&mut self) -> Result<()> {
@@ -1295,6 +1326,28 @@ fn indicates_demoted_master(result: &Result<RespResponse>) -> bool {
 /// `select!` branch never wins and the loop stays one shape for every server kind.
 const NO_MAINTENANCE_DELAY: Duration = Duration::from_secs(3600);
 
+/// Stands in for a delay the monotonic clock cannot represent.
+const UNREPRESENTABLE_BACKOFF: Duration = Duration::from_secs(3600);
+
+/// When a backoff of `delay` milliseconds, started at `start`, is over.
+///
+/// A reconnection policy is caller-supplied, so the delay is an arbitrary `u64`
+/// of milliseconds. Adding one to an `Instant` panics on overflow, and a panic
+/// here kills the network task — the sole owner of the routing state, with no
+/// reconnection loop left to recover — so the sum is checked rather than taken.
+///
+/// Which delays actually overflow is platform-dependent, and on the usual ones
+/// none does: a Linux `Instant` holds a `timespec`, whose seconds are an `i64`,
+/// so no `u64` of milliseconds comes close. This is a guard for the platforms
+/// with a narrower clock, not a cap on what a policy may ask for — a delay of
+/// `u64::MAX` is honoured as the ~584-million-year wait it is.
+fn backoff_deadline(start: Instant, delay: u64) -> Instant {
+    start
+        .checked_add(Duration::from_millis(delay))
+        .or_else(|| start.checked_add(UNREPRESENTABLE_BACKOFF))
+        .unwrap_or(start)
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(
@@ -1305,8 +1358,34 @@ mod tests {
         clippy::indexing_slicing,
         reason = "test code: a panic is how a test reports failure"
     )]
-    use super::{indicates_demoted_master, is_connection_level_error};
+    use super::{
+        Duration, Instant, backoff_deadline, indicates_demoted_master, is_connection_level_error,
+    };
     use crate::{ClientError, Error, ErrorKind, RedisError, RedisErrorKind};
+
+    #[test]
+    fn a_backoff_ends_where_its_delay_puts_it() {
+        let start = Instant::now();
+        assert_eq!(
+            start + Duration::from_millis(250),
+            backoff_deadline(start, 250)
+        );
+    }
+
+    #[test]
+    fn a_zero_delay_is_over_at_once() {
+        let start = Instant::now();
+        assert_eq!(start, backoff_deadline(start, 0));
+    }
+
+    #[test]
+    fn the_largest_delay_a_policy_can_return_yields_a_deadline_instead_of_a_panic() {
+        // A caller-supplied policy may return any `u64`. Whether that overflows
+        // the clock is platform-dependent, so what is pinned is the invariant
+        // that holds everywhere: a deadline in the future, and no panic.
+        let start = Instant::now();
+        assert!(backoff_deadline(start, u64::MAX) > start);
+    }
 
     #[test]
     fn per_message_errors_are_not_connection_level() {

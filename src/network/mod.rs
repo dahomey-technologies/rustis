@@ -28,6 +28,8 @@ mod retry_policy;
 mod router;
 mod sentinel_connection;
 mod standalone_connection;
+#[cfg(test)]
+mod test_hooks;
 mod version;
 
 pub(crate) use async_executor_strategy::*;
@@ -39,4 +41,6 @@ pub(crate) use pub_sub_push::*;
 pub(crate) use reconnection_state::*;
 pub(crate) use sentinel_connection::*;
 pub(crate) use standalone_connection::*;
+#[cfg(test)]
+pub(crate) use test_hooks::*;
 pub(crate) use version::*;

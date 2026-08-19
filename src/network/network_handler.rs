@@ -2,6 +2,7 @@ use super::connection_mode::{ConnectionMode, ReplyRoute};
 use super::message_queue::MessageQueue;
 use super::pub_sub_push::PubSubPush;
 use super::reply_mode::ReplyMode;
+use super::retry_policy::RetryPolicy;
 use super::router::{
     Delivery, PendingSubscription, Router, SubscriptionConfirmed, UnsubscriptionConfirmed,
 };
@@ -378,8 +379,9 @@ pub(crate) struct NetworkHandler {
     auto_resubscribe: bool,
     auto_remonitor: bool,
     reconnection_state: ReconnectionState,
-    /// Per-message retry cap from `Config::max_command_attempts` (`0` = unlimited).
-    max_command_attempts: usize,
+    /// When a reply sends its message back for another attempt, and how many
+    /// attempts it gets.
+    retry_policy: RetryPolicy,
     /// Send-wave cap from `Config::max_messages_per_wave`.
     max_messages_per_wave: usize,
     /// Connection-level counters a client reads: link state, server version,
@@ -448,7 +450,7 @@ impl NetworkHandler {
             auto_resubscribe,
             auto_remonitor,
             reconnection_state: ReconnectionState::new(reconnection_config),
-            max_command_attempts,
+            retry_policy: RetryPolicy::new(max_command_attempts),
             max_messages_per_wave,
             stats: Arc::clone(&stats),
             #[cfg(test)]
@@ -1071,38 +1073,20 @@ impl NetworkHandler {
                                 .discard_further(message_to_receive.num_commands - 1);
                         }
 
-                        let mut should_retry = false;
-
-                        if let Err(e) = &result
-                            && matches!(e.kind(), ErrorKind::Retry(_))
+                        if self
+                            .retry_policy
+                            .asks_for_retry(&result, &message_to_receive.message)
                         {
-                            should_retry = true;
-                        } else if message_to_receive.message.retry_reasons.is_some() {
-                            should_retry = true;
-                        }
+                            self.retry_policy
+                                .absorb_reasons(&mut message_to_receive.message, result);
 
-                        if should_retry {
-                            if let Err(ErrorKind::Retry(reasons)) = result.map_err(Error::into_kind)
+                            // A command caught in a pathological redirect loop
+                            // would otherwise be replayed forever, so a message
+                            // out of budget is failed with a distinct error.
+                            if !self
+                                .retry_policy
+                                .charge_attempt(&mut message_to_receive.message)
                             {
-                                if let Some(retry_reasons) =
-                                    &mut message_to_receive.message.retry_reasons
-                                {
-                                    retry_reasons.extend(reasons);
-                                } else {
-                                    message_to_receive.message.retry_reasons =
-                                        Some(Vec::from_iter(reasons));
-                                }
-                            }
-
-                            // Bound message-level retries: a command caught in a
-                            // pathological redirect loop would otherwise be replayed
-                            // forever. Count this attempt and fail the message with a
-                            // distinct error once the cap is reached.
-                            message_to_receive.message.attempts += 1;
-                            if max_attempts_reached(
-                                message_to_receive.message.attempts,
-                                self.max_command_attempts,
-                            ) {
                                 debug!(
                                     "Message reached the maximum number of attempts, failing it"
                                 );
@@ -1184,16 +1168,8 @@ impl NetworkHandler {
                             message_to_receive.num_commands -= 1;
                         }
                         Err(e) => {
-                            if let ErrorKind::Retry(reasons) = e.into_kind() {
-                                if let Some(retry_reasons) =
-                                    &mut message_to_receive.message.retry_reasons
-                                {
-                                    retry_reasons.extend(reasons);
-                                } else {
-                                    message_to_receive.message.retry_reasons =
-                                        Some(Vec::from_iter(reasons));
-                                }
-                            }
+                            self.retry_policy
+                                .absorb_reasons(&mut message_to_receive.message, Err(e));
                         }
                     }
                 }
@@ -1399,7 +1375,7 @@ impl NetworkHandler {
 
         // Keep only what may be replayed, and fail the rest. The reconnection
         // replay counts as one attempt, which the purge charges.
-        self.queue.purge_for_replay(self.max_command_attempts);
+        self.queue.purge_for_replay(&self.retry_policy);
 
         loop {
             if let Some(delay) = self.reconnection_state.next_delay() {
@@ -1583,14 +1559,6 @@ fn indicates_demoted_master(result: &Result<RespResponse>) -> bool {
 /// `select!` branch never wins and the loop stays one shape for every server kind.
 const NO_MAINTENANCE_DELAY: Duration = Duration::from_secs(3600);
 
-/// Whether a message that has been attempted `attempts` times has reached the
-/// configured per-message cap. `cap == 0` means unlimited (the default), matching
-/// the historical behavior of never bounding retries at the message level.
-#[inline]
-pub(super) fn max_attempts_reached(attempts: usize, cap: usize) -> bool {
-    cap != 0 && attempts >= cap
-}
-
 #[cfg(test)]
 mod tests {
     #![allow(
@@ -1601,20 +1569,7 @@ mod tests {
         clippy::indexing_slicing,
         reason = "test code: a panic is how a test reports failure"
     )]
-    use super::{indicates_demoted_master, is_connection_level_error, max_attempts_reached};
-
-    #[test]
-    fn zero_cap_is_unlimited() {
-        assert!(!max_attempts_reached(1, 0));
-        assert!(!max_attempts_reached(1_000_000, 0));
-    }
-
-    #[test]
-    fn cap_reached_at_or_above_limit() {
-        assert!(!max_attempts_reached(2, 3));
-        assert!(max_attempts_reached(3, 3));
-        assert!(max_attempts_reached(4, 3));
-    }
+    use super::{indicates_demoted_master, is_connection_level_error};
     use crate::{ClientError, Error, ErrorKind, RedisError, RedisErrorKind};
 
     #[test]

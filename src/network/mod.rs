@@ -24,6 +24,7 @@ mod network_handler;
 mod pub_sub_push;
 mod reconnection_state;
 mod reply_mode;
+mod retry_policy;
 mod router;
 mod sentinel_connection;
 mod standalone_connection;

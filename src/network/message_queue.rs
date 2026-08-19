@@ -1,4 +1,4 @@
-use super::network_handler::max_attempts_reached;
+use super::retry_policy::RetryPolicy;
 use crate::{
     ClientError, Error, ErrorKind,
     client::{Message, StatsRecorder},
@@ -250,8 +250,8 @@ impl MessageQueue {
     /// Keeps what a reconnection may replay, and fails the rest.
     ///
     /// A message survives only if its caller opted into retries and it has
-    /// attempts left, `max_command_attempts` being the cap (`0` = unlimited).
-    /// The replay itself counts as one attempt, so it is charged here.
+    /// attempts left under `retry_policy`. The replay itself counts as one
+    /// attempt, so it is charged here.
     ///
     /// Both queues are filtered by the same rule, and in place: a message that
     /// was written and one that was not are equally lost when the socket dies.
@@ -269,21 +269,15 @@ impl MessageQueue {
     #[expect(
         clippy::arithmetic_side_effects,
         reason = "the totals are rebuilt from messages whose buffers are \
-                  allocated and held, so they are bounded by that memory; \
-                  `attempts` is bounded by the reconnection count."
+                  allocated and held, so they are bounded by that memory."
     )]
-    pub(crate) fn purge_for_replay(&mut self, max_command_attempts: usize) {
+    pub(crate) fn purge_for_replay(&mut self, retry_policy: &RetryPolicy) {
         self.results_to_discard = 0;
 
         // `send_error` consumes the message it answers, so a survivor is moved
         // into a new queue rather than kept in place.
-        fn survives(message: &mut Message, max_command_attempts: usize) -> bool {
-            if !message.retry_on_error {
-                return false;
-            }
-
-            message.attempts += 1;
-            !max_attempts_reached(message.attempts, max_command_attempts)
+        fn survives(message: &mut Message, retry_policy: &RetryPolicy) -> bool {
+            message.retry_on_error && retry_policy.charge_attempt(message)
         }
 
         fn failure(message: &Message) -> Error {
@@ -296,7 +290,7 @@ impl MessageQueue {
 
         let mut retained_to_receive = VecDeque::with_capacity(self.to_receive.len());
         for mut message_to_receive in std::mem::take(&mut self.to_receive) {
-            if survives(&mut message_to_receive.message, max_command_attempts) {
+            if survives(&mut message_to_receive.message, retry_policy) {
                 retained_to_receive.push_back(message_to_receive);
             } else {
                 let error = failure(&message_to_receive.message);
@@ -307,7 +301,7 @@ impl MessageQueue {
 
         let mut retained_to_send = VecDeque::with_capacity(self.to_send.len());
         for mut message_to_send in std::mem::take(&mut self.to_send) {
-            if survives(&mut message_to_send.message, max_command_attempts) {
+            if survives(&mut message_to_send.message, retry_policy) {
                 retained_to_send.push_back(message_to_send);
             } else {
                 let error = failure(&message_to_send.message);
@@ -398,7 +392,7 @@ mod tests {
         assert_eq!(2, queue.queued_commands());
 
         // The purge keeps everything, and rebuilds the totals from what it kept.
-        queue.purge_for_replay(0);
+        queue.purge_for_replay(&RetryPolicy::new(0));
         assert_eq!(2, queue.queued_commands());
         let after_purge = queue.queued_bytes();
 
@@ -433,7 +427,7 @@ mod tests {
         queue.push_to_send(Message::single_forget(cmd("PING").into(), false));
         queue.push_to_send(message());
 
-        queue.purge_for_replay(0);
+        queue.purge_for_replay(&RetryPolicy::new(0));
 
         assert_eq!(1, queue.queued_commands());
         assert_eq!(1, queue.to_send_len());
@@ -512,7 +506,7 @@ mod tests {
         queue.push_to_send(opted_out);
         queue.push_to_send(retryable);
 
-        queue.purge_for_replay(0);
+        queue.purge_for_replay(&RetryPolicy::new(0));
 
         assert_eq!(1, queue.queued_commands());
         assert!(
@@ -532,7 +526,7 @@ mod tests {
         queue.push_to_send(Message::single_forget(cmd("SECOND").into(), false));
         queue.push_to_send(Message::single_forget(cmd("THIRD").into(), true));
 
-        queue.purge_for_replay(0);
+        queue.purge_for_replay(&RetryPolicy::new(0));
 
         // A prefix-only purge would leave SECOND behind FIRST and replay it.
         let replayed: Vec<_> = queue
@@ -554,11 +548,11 @@ mod tests {
         queue.push_to_send(message);
 
         // Cap of 2: the first replay is the first attempt, the second exhausts it.
-        queue.purge_for_replay(2);
+        queue.purge_for_replay(&RetryPolicy::new(2));
         assert_eq!(1, queue.queued_commands());
         assert!(receiver.try_recv().is_err());
 
-        queue.purge_for_replay(2);
+        queue.purge_for_replay(&RetryPolicy::new(2));
         assert_eq!(0, queue.queued_commands());
         assert_eq!(0, queue.queued_bytes());
         assert!(receiver.try_recv().is_ok());
@@ -572,7 +566,7 @@ mod tests {
         queue.await_reply(msg, 1, cost);
         queue.discard_further(1);
 
-        queue.purge_for_replay(0);
+        queue.purge_for_replay(&RetryPolicy::new(0));
 
         assert!(
             !queue.take_discard(),

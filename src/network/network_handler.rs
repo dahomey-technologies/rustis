@@ -18,7 +18,9 @@ use bytes::Bytes;
 use futures_util::{FutureExt, select};
 use smallvec::SmallVec;
 use std::borrow::Cow;
-use std::{collections::VecDeque, future::poll_fn, sync::Arc, task::Poll, time::Duration};
+#[cfg(test)]
+use std::collections::VecDeque;
+use std::{future::poll_fn, sync::Arc, task::Poll, time::Duration};
 use tokio::{sync::broadcast, time::Instant};
 use tracing::{Instrument, debug, error, info, info_span, trace, warn};
 
@@ -1403,13 +1405,6 @@ impl NetworkHandler {
     /// exhausted its retry budget — is grouped under one identifiable unit
     /// instead of being interleaved with ordinary traffic.
     #[tracing::instrument(name = "reconnect", skip_all)]
-    #[expect(
-        clippy::arithmetic_side_effects,
-        reason = "the retry counter is compared against `max_command_attempts` \
-                  immediately after each increment, and `queued_bytes` accounts \
-                  bytes of buffers that are allocated and requeued — see \
-                  `MessageQueue::push_to_send`."
-    )]
     async fn reconnect(&mut self) -> bool {
         debug!("reconnecting...");
         let old_status = self.status;
@@ -1423,62 +1418,14 @@ impl NetworkHandler {
         // subscription has already achieved what its UNSUBSCRIBE was for.
         self.router.clear_orphaned();
 
-        // Purge every non-retryable message, wherever it sits in the queue,
-        // and keep the retryable ones in order. A prefix-only purge would leave
-        // a non-retryable message behind a retryable one, and it would then be
-        // replayed on reconnect — double-executing a command whose caller
-        // opted out of retries.
-        // A reconnection replay is also a retry attempt: count it and fail a message
-        // that has exhausted its budget instead of replaying it once more.
-        let max_command_attempts = self.max_command_attempts;
-
         // Sampled before the purge, so a purge reads as the high-water mark
         // stopping rather than as a depth that fell.
         #[cfg(test)]
         self.record_queue_depths();
 
-        // The queues are taken whole, filtered, and put back; `restore` rebuilds
-        // both totals from what survived, so the purge decides *what* is kept and
-        // never *what it costs*.
-        let (to_receive, to_send) = self.queue.take_queues();
-
-        let mut retained_to_receive = VecDeque::with_capacity(to_receive.len());
-        for mut message_to_receive in to_receive {
-            if !message_to_receive.message.retry_on_error {
-                message_to_receive
-                    .message
-                    .send_error(Error::from(ErrorKind::DisconnectedByPeer));
-            } else {
-                message_to_receive.message.attempts += 1;
-                if max_attempts_reached(message_to_receive.message.attempts, max_command_attempts) {
-                    message_to_receive
-                        .message
-                        .send_error(Error::from(ClientError::MaxCommandAttemptsReached));
-                } else {
-                    retained_to_receive.push_back(message_to_receive);
-                }
-            }
-        }
-
-        let mut retained_to_send = VecDeque::with_capacity(to_send.len());
-        for mut message_to_send in to_send {
-            if !message_to_send.message.retry_on_error {
-                message_to_send
-                    .message
-                    .send_error(Error::from(ErrorKind::DisconnectedByPeer));
-            } else {
-                message_to_send.message.attempts += 1;
-                if max_attempts_reached(message_to_send.message.attempts, max_command_attempts) {
-                    message_to_send
-                        .message
-                        .send_error(Error::from(ClientError::MaxCommandAttemptsReached));
-                } else {
-                    retained_to_send.push_back(message_to_send);
-                }
-            }
-        }
-
-        self.queue.restore(retained_to_receive, retained_to_send);
+        // Keep only what may be replayed, and fail the rest. The reconnection
+        // replay counts as one attempt, which the purge charges.
+        self.queue.purge_for_replay(self.max_command_attempts);
 
         loop {
             if let Some(delay) = self.reconnection_state.next_delay() {
@@ -1673,7 +1620,7 @@ const NO_MAINTENANCE_DELAY: Duration = Duration::from_secs(3600);
 /// configured per-message cap. `cap == 0` means unlimited (the default), matching
 /// the historical behavior of never bounding retries at the message level.
 #[inline]
-fn max_attempts_reached(attempts: usize, cap: usize) -> bool {
+pub(super) fn max_attempts_reached(attempts: usize, cap: usize) -> bool {
     cap != 0 && attempts >= cap
 }
 

@@ -1,4 +1,6 @@
+use super::network_handler::max_attempts_reached;
 use crate::{
+    ClientError, Error, ErrorKind,
     client::{Message, StatsRecorder},
     resp::RespResponse,
 };
@@ -245,45 +247,85 @@ impl MessageQueue {
             .collect()
     }
 
-    /// Takes both queues for a reconnection purge, leaving the totals alone:
-    /// [`restore`](Self::restore) recomputes them from what the purge kept.
+    /// Keeps what a reconnection may replay, and fails the rest.
     ///
-    /// The pending discards go, though. They name replies that died with the
+    /// A message survives only if its caller opted into retries and it has
+    /// attempts left, `max_command_attempts` being the cap (`0` = unlimited).
+    /// The replay itself counts as one attempt, so it is charged here.
+    ///
+    /// Both queues are filtered by the same rule, and in place: a message that
+    /// was written and one that was not are equally lost when the socket dies.
+    /// The order of the survivors is kept — a prefix-only purge would leave a
+    /// non-retryable message behind a retryable one, and replay it.
+    ///
+    /// The pending discards go too. They name replies that died with the
     /// connection, so keeping the count would discard legitimate replies from
     /// the next one.
-    pub(crate) fn take_queues(&mut self) -> (VecDeque<MessageToReceive>, VecDeque<MessageToSend>) {
-        self.results_to_discard = 0;
-        (
-            std::mem::take(&mut self.to_receive),
-            std::mem::take(&mut self.to_send),
-        )
-    }
-
-    /// Puts back what a purge kept, recomputing both totals from it.
     ///
-    /// Bytes come from both queues; commands from the send queue alone. A
-    /// retained reply is waiting for an answer, not to be written.
+    /// Both totals are then rebuilt from the survivors, so this decides *what*
+    /// is kept and never *what it costs*. Bytes come from both queues; commands
+    /// from the send queue alone, since a retained reply waits for an answer,
+    /// not to be written.
     #[expect(
         clippy::arithmetic_side_effects,
         reason = "the totals are rebuilt from messages whose buffers are \
-                  allocated and held, so they are bounded by that memory."
+                  allocated and held, so they are bounded by that memory; \
+                  `attempts` is bounded by the reconnection count."
     )]
-    pub(crate) fn restore(
-        &mut self,
-        to_receive: VecDeque<MessageToReceive>,
-        to_send: VecDeque<MessageToSend>,
-    ) {
-        self.queued_bytes = to_receive
+    pub(crate) fn purge_for_replay(&mut self, max_command_attempts: usize) {
+        self.results_to_discard = 0;
+
+        // `send_error` consumes the message it answers, so a survivor is moved
+        // into a new queue rather than kept in place.
+        fn survives(message: &mut Message, max_command_attempts: usize) -> bool {
+            if !message.retry_on_error {
+                return false;
+            }
+
+            message.attempts += 1;
+            !max_attempts_reached(message.attempts, max_command_attempts)
+        }
+
+        fn failure(message: &Message) -> Error {
+            if message.retry_on_error {
+                Error::from(ClientError::MaxCommandAttemptsReached)
+            } else {
+                Error::from(ErrorKind::DisconnectedByPeer)
+            }
+        }
+
+        let mut retained_to_receive = VecDeque::with_capacity(self.to_receive.len());
+        for mut message_to_receive in std::mem::take(&mut self.to_receive) {
+            if survives(&mut message_to_receive.message, max_command_attempts) {
+                retained_to_receive.push_back(message_to_receive);
+            } else {
+                let error = failure(&message_to_receive.message);
+                message_to_receive.message.send_error(error);
+            }
+        }
+        self.to_receive = retained_to_receive;
+
+        let mut retained_to_send = VecDeque::with_capacity(self.to_send.len());
+        for mut message_to_send in std::mem::take(&mut self.to_send) {
+            if survives(&mut message_to_send.message, max_command_attempts) {
+                retained_to_send.push_back(message_to_send);
+            } else {
+                let error = failure(&message_to_send.message);
+                message_to_send.message.send_error(error);
+            }
+        }
+        self.to_send = retained_to_send;
+
+        self.queued_bytes = self
+            .to_receive
             .iter()
             .map(|message_to_receive| message_to_receive.queued_bytes)
             .sum();
         self.queued_commands = 0;
-        for message_to_send in &to_send {
+        for message_to_send in &self.to_send {
             self.queued_bytes += message_to_send.message.queued_bytes();
             self.queued_commands += message_to_send.message.num_commands();
         }
-        self.to_receive = to_receive;
-        self.to_send = to_send;
     }
 
     /// Publishes the totals to the counters a client reads.
@@ -356,8 +398,7 @@ mod tests {
         assert_eq!(2, queue.queued_commands());
 
         // The purge keeps everything, and rebuilds the totals from what it kept.
-        let (to_receive, to_send) = queue.take_queues();
-        queue.restore(to_receive, to_send);
+        queue.purge_for_replay(0);
         assert_eq!(2, queue.queued_commands());
         let after_purge = queue.queued_bytes();
 
@@ -389,12 +430,10 @@ mod tests {
     #[test]
     fn a_purge_that_drops_a_message_drops_its_charge_with_it() {
         let mut queue = queue();
-        queue.push_to_send(message());
+        queue.push_to_send(Message::single_forget(cmd("PING").into(), false));
         queue.push_to_send(message());
 
-        let (to_receive, mut to_send) = queue.take_queues();
-        to_send.pop_front();
-        queue.restore(to_receive, to_send);
+        queue.purge_for_replay(0);
 
         assert_eq!(1, queue.queued_commands());
         assert_eq!(1, queue.to_send_len());
@@ -448,5 +487,96 @@ mod tests {
         assert!(queue.take_discard());
         assert!(queue.take_discard());
         assert!(!queue.take_discard());
+    }
+
+    /// A message whose caller is waiting, so the error a purge sends is
+    /// observable.
+    fn awaited_message(
+        retry_on_error: bool,
+    ) -> (
+        Message,
+        tokio::sync::oneshot::Receiver<crate::Result<RespResponse>>,
+    ) {
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        (
+            Message::single(cmd("PING").into(), sender, retry_on_error),
+            receiver,
+        )
+    }
+
+    #[test]
+    fn a_purge_fails_what_opted_out_of_retries_and_keeps_the_rest() {
+        let mut queue = queue();
+        let (opted_out, mut opted_out_receiver) = awaited_message(false);
+        let (retryable, mut retryable_receiver) = awaited_message(true);
+        queue.push_to_send(opted_out);
+        queue.push_to_send(retryable);
+
+        queue.purge_for_replay(0);
+
+        assert_eq!(1, queue.queued_commands());
+        assert!(
+            matches!(opted_out_receiver.try_recv(), Ok(Err(_))),
+            "a message that opted out of retries is failed, not replayed"
+        );
+        assert!(
+            retryable_receiver.try_recv().is_err(),
+            "a retryable message is replayed, not answered"
+        );
+    }
+
+    #[test]
+    fn a_purge_keeps_the_order_of_the_survivors() {
+        let mut queue = queue();
+        queue.push_to_send(Message::single_forget(cmd("FIRST").into(), true));
+        queue.push_to_send(Message::single_forget(cmd("SECOND").into(), false));
+        queue.push_to_send(Message::single_forget(cmd("THIRD").into(), true));
+
+        queue.purge_for_replay(0);
+
+        // A prefix-only purge would leave SECOND behind FIRST and replay it.
+        let replayed: Vec<_> = queue
+            .take_all()
+            .iter()
+            .filter_map(|message| {
+                message
+                    .command_name()
+                    .map(|name| String::from_utf8_lossy(&name).into_owned())
+            })
+            .collect();
+        assert_eq!(vec!["FIRST", "THIRD"], replayed);
+    }
+
+    #[test]
+    fn a_purge_charges_one_attempt_and_fails_a_message_out_of_budget() {
+        let mut queue = queue();
+        let (message, mut receiver) = awaited_message(true);
+        queue.push_to_send(message);
+
+        // Cap of 2: the first replay is the first attempt, the second exhausts it.
+        queue.purge_for_replay(2);
+        assert_eq!(1, queue.queued_commands());
+        assert!(receiver.try_recv().is_err());
+
+        queue.purge_for_replay(2);
+        assert_eq!(0, queue.queued_commands());
+        assert_eq!(0, queue.queued_bytes());
+        assert!(receiver.try_recv().is_ok());
+    }
+
+    #[test]
+    fn a_purge_drops_the_replies_the_dead_connection_owed() {
+        let mut queue = queue();
+        queue.push_to_send(message());
+        let (msg, cost) = queue.pop_to_send().unwrap();
+        queue.await_reply(msg, 1, cost);
+        queue.discard_further(1);
+
+        queue.purge_for_replay(0);
+
+        assert!(
+            !queue.take_discard(),
+            "a discard names a reply that died with the connection"
+        );
     }
 }

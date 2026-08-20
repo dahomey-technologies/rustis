@@ -107,7 +107,9 @@ allocation, and both are addressed directly:
   `unreachable`, `todo`, `unimplemented`) is `deny` crate-wide, and
   `clippy::indexing_slicing` is `deny` in `resp/` and `network/` — the two zones
   where a panic is fatal rather than merely wrong. Surviving sites carry an
-  `#[allow(…, reason = "…")]` naming the invariant that makes them unreachable.
+  `#[expect(…, reason = "…")]` naming the invariant that makes them unreachable —
+  `expect` rather than `allow`, so a justification whose lint stops firing becomes
+  a warning and is deleted instead of rotting.
 * Frame size, nesting depth and element counts are bounded and configurable
   (`Config::limits`), so a crafted reply cannot drive an unbounded allocation or
   a stack overflow.

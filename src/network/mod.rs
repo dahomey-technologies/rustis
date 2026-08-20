@@ -16,6 +16,7 @@
 
 mod async_executor_strategy;
 mod cluster_connection;
+mod cluster_reply_mode;
 mod cluster_request;
 mod cluster_send_batch;
 mod cluster_topology;

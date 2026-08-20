@@ -1,3 +1,4 @@
+use super::cluster_reply_mode::ClusterReplyMode;
 use super::cluster_request::{
     RequestInfo, RequestQueue, SubRequest, collect_redirections, is_pub_sub_command,
 };
@@ -9,7 +10,7 @@ use crate::{
     client::{ClusterConfig, Config, ReadPreference},
     commands::{ClusterNodeResult, InternalCommands, RequestPolicy},
     network::sleep,
-    resp::{ClientReplyMode, Command, CommandBuilder, CommandKind, RespResponse, hash_slot},
+    resp::{Command, CommandBuilder, RespResponse, hash_slot},
 };
 use bytes::Bytes;
 use smallvec::{SmallVec, smallvec};
@@ -264,14 +265,13 @@ pub(crate) struct ClusterConnection {
     /// While they are silent, no in-flight bookkeeping may be filed: a sub-request
     /// waiting for a reply that will never come sits at the head of
     /// `pending_requests` forever and stalls every caller behind it.
-    is_reply_on: bool,
     /// A `CLIENT REPLY SKIP` held back until the command it silences is routed.
     ///
     /// It carries no routing policy of its own because it is only correct on the
     /// nodes that command reaches — one for a key-routed command, several for a
     /// multi-shard one. Same shape as the "Lazy MULTI" state below, and for the same
     /// reason: the target is known only once the next command arrives.
-    pending_reply_skip: Option<Command>,
+    reply_mode: ClusterReplyMode,
     /// State to manage the "Lazy MULTI" logic
     transaction_state: TransactionState,
     /// When the next proactive reload is due, `None` when there is none. The
@@ -309,8 +309,7 @@ impl ClusterConnection {
             pending_requests: RequestQueue::default(),
             pending_redirections: Vec::new(),
             tag,
-            is_reply_on: true,
-            pending_reply_skip: None,
+            reply_mode: ClusterReplyMode::new(),
             transaction_state: TransactionState::default(),
             next_topology_refresh: cluster_config.topology_refresh_interval.map(deadline_after),
             send_batch: SendBatch::default(),
@@ -349,19 +348,8 @@ impl ClusterConnection {
         command: &Command,
         retry_reasons: &[RetryReason],
     ) -> Result<()> {
-        // The mode has to move before the command is routed, so that `file_request`
-        // sees it: `CLIENT REPLY ON` is itself answered and must be filed, while
-        // `OFF` is not answered and must not be.
-        match command.kind() {
-            CommandKind::ClientReply(ClientReplyMode::On) => self.is_reply_on = true,
-            CommandKind::ClientReply(ClientReplyMode::Off) => self.is_reply_on = false,
-            // Held back rather than sent: it belongs on the nodes the next command
-            // reaches, which is only known once that command is routed.
-            CommandKind::ClientReply(ClientReplyMode::Skip) => {
-                self.pending_reply_skip = Some(command.clone());
-                return Ok(());
-            }
-            _ => (),
+        if !self.reply_mode.admit(command) {
+            return Ok(());
         }
 
         // The skip travels with the command it silences, on every node that command
@@ -369,7 +357,7 @@ impl ClusterConnection {
         // fails, where it never reached a node at all and the handler has already
         // spent its own one-shot on the command that errored.
         let result = self.feed_routed(command, retry_reasons).await;
-        self.pending_reply_skip = None;
+        self.reply_mode.forget_held_skip();
         result
     }
 
@@ -504,12 +492,12 @@ impl ClusterConnection {
             return Ok(());
         };
 
-        let held_skip = self.pending_reply_skip.take();
+        let held_skip = self.reply_mode.lift_held_skip();
         let (node_idx, _) = self.get_no_request_policy_node(command, ask_reasons)?;
         let result = self
             .feed_no_request_policy(&multi_cmd, node_idx, false)
             .await;
-        self.pending_reply_skip = held_skip;
+        self.reply_mode.restore_held_skip(held_skip);
 
         result?;
         self.transaction_state.node_index = Some(node_idx);
@@ -523,7 +511,7 @@ impl ClusterConnection {
     ///
     /// The single funnel for all four routing policies, so the decision is made once.
     fn file_request(&mut self, request_info: RequestInfo) {
-        if self.is_reply_on && self.pending_reply_skip.is_none() {
+        if self.reply_mode.awaits_a_reply() {
             self.pending_requests.push(request_info);
         }
     }
@@ -580,7 +568,7 @@ impl ClusterConnection {
     /// This tip is in-use by commands that don't accept key name arguments.
     /// The command operates atomically per shard.
     async fn request_policy_all_shards(&mut self, command: &Command) -> Result<()> {
-        let reply_skip = self.pending_reply_skip.clone();
+        let reply_skip = self.reply_mode.held_skip().cloned();
         let sub_requests = self
             .topology
             .feed_each(command, reply_skip.as_ref(), NodeReach::Masters)
@@ -604,7 +592,7 @@ impl ClusterConnection {
                 .connect_replicas(&self.cluster_config, &self.config, &self.state_snapshot)
                 .await?;
         }
-        let reply_skip = self.pending_reply_skip.clone();
+        let reply_skip = self.reply_mode.held_skip().cloned();
         let sub_requests = self
             .topology
             .feed_each(command, reply_skip.as_ref(), NodeReach::All)
@@ -652,7 +640,7 @@ impl ClusterConnection {
 
         // Each shard receives the skip before its own slice of the command, so each
         // suppresses exactly one reply — its own.
-        let reply_skip = self.pending_reply_skip.clone();
+        let reply_skip = self.reply_mode.held_skip().cloned();
         let mut sub_requests = SmallVec::<[SubRequest; 10]>::new();
 
         for slice in shard_slices(routed_keys) {
@@ -713,7 +701,7 @@ impl ClusterConnection {
 
         // Each node receives the skip before its own slice of the command, so
         // each suppresses exactly one reply — its own.
-        let reply_skip = self.pending_reply_skip.clone();
+        let reply_skip = self.reply_mode.held_skip().cloned();
         let mut sub_requests = SmallVec::<[SubRequest; 10]>::new();
 
         for (node_index, channels) in node_channels {
@@ -779,7 +767,7 @@ impl ClusterConnection {
         node_idx: usize,
         should_ask: bool,
     ) -> Result<()> {
-        let reply_skip = self.pending_reply_skip.clone();
+        let reply_skip = self.reply_mode.held_skip().cloned();
         let node = self
             .topology
             .node_mut(node_idx)
@@ -1137,11 +1125,9 @@ impl ClusterConnection {
         // which will repopulate `pending_requests` consistently.
         self.pending_requests.clear();
 
-        // A skip still held belonged to a command that never reached the wire on the
-        // socket that just died. The handler resets its own one-shot; keeping this one
-        // would silence the first command of the new connection while that reply is
-        // still expected, shifting every response after it.
-        self.pending_reply_skip = None;
+        // A skip still held belonged to a command that never reached the wire on
+        // the socket that just died. The handler resets its own one-shot.
+        self.reply_mode.forget_held_skip();
 
         Ok(())
 

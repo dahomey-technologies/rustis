@@ -65,6 +65,8 @@ The upgrade checklist. Each item is stated in the section it belongs to below.
   forms (`key_with_count` and the stepped variants) are unchanged and may still
   declare zero keys, as `EVAL` does.
 
+- **`ClientError::InvalidTag` is removed.** No code path could produce it.
+
 `cargo semver-checks` reports 11 removed trait methods and 4 removed structs.
 
 ### Added

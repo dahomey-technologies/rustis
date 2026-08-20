@@ -46,9 +46,6 @@ pub enum RetryReason {
 #[derive(Debug, Error, Clone)]
 #[non_exhaustive]
 pub enum ClientError {
-    /// Raised when an invalid RESP tag is encountered
-    #[error("protocol: invalid tag")]
-    InvalidTag,
     /// Raised when an expected array result is not received for MGET command
     #[error("protocol: expected array result for MGET")]
     ExpectedArrayForMGet,
@@ -318,7 +315,6 @@ impl ClientError {
             | ClientError::CannotParseMap
             | ClientError::CannotParseSequence
             | ClientError::UnknownRespTag(_)
-            | ClientError::InvalidTag
             | ClientError::BulkLengthTooLarge
             | ClientError::CollectionLengthTooLarge
             | ClientError::MaxNestingDepthExceeded

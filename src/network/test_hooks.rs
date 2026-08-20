@@ -41,6 +41,13 @@ pub(crate) struct SendBatchTestHook {
     clippy::expect_used,
     reason = "test-support code: a panic is how a test reports failure"
 )]
+#[cfg_attr(
+    not(feature = "server-tests"),
+    expect(
+        dead_code,
+        reason = "the arming and reading half of the hook only has callers among the tests that need a live Redis"
+    )
+)]
 impl SendBatchTestHook {
     pub(crate) fn new() -> Self {
         Self::default()
@@ -136,6 +143,13 @@ pub(crate) struct QueueMetricsTestHook {
     write_wave_high_water: Arc<std::sync::atomic::AtomicUsize>,
 }
 
+#[cfg_attr(
+    not(feature = "server-tests"),
+    expect(
+        dead_code,
+        reason = "the arming and reading half of the hook only has callers among the tests that need a live Redis"
+    )
+)]
 impl QueueMetricsTestHook {
     pub(crate) fn new() -> Self {
         Self::default()

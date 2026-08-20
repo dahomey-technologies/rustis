@@ -1008,7 +1008,7 @@ impl<'a> HelloOptions<'a> {
 // the library. They are not dead in the suite, which asserts on them, hence the
 // `not(test)`: an unconditional `expect` would itself go unfulfilled under `cfg(test)`.
 #[cfg_attr(
-    not(test),
+    any(not(test), not(feature = "server-tests")),
     expect(
         dead_code,
         reason = "the handshake reads `version`; the rest mirror the HELLO reply"

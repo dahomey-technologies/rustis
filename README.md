@@ -154,6 +154,26 @@ That is the only thing `run_tests.sh` does beyond selecting the features —
 `cargo test --features tokio-rustls,pool,json,client-cache -- --test-threads=1`.
 Extra arguments are forwarded, so `./run_tests.sh string` filters by name.
 
+## Without a server
+
+`./run_tests.sh --hermetic` runs the half of the suite that reaches no server:
+**470 tests, in about a second**, with no Docker, no deployment and no network.
+It is the signal available offline, and it is a plain `cargo test` away:
+
+```bash
+cargo test --tests --no-default-features \
+    --features tokio-runtime,tokio-rustls,pool,json,client-cache
+```
+
+The `server-tests` feature is what selects the two halves. It is on by default,
+so `cargo test` still runs everything; turning it off compiles out every module
+that needs a Redis, and what remains passes. The split is carried by the module
+list in `src/tests/mod.rs`: a `*_server` module holds the server-bound tests of
+the module it is named after, whose own tests stay hermetic. A test placed on the
+wrong side does not go unnoticed — it fails the hermetic run.
+
+The doctests are excluded (`--tests`): each one opens a connection.
+
 # Benchmarks
 
 1. From the `redis` directory, run `docker_up.sh` or `docker_up.cmd`

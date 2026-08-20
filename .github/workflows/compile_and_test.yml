@@ -114,8 +114,11 @@ jobs:
     steps:
       - name: Checkout sources
         uses: actions/checkout@v5
+      # `server-tests` is named because `--no-default-features` would otherwise
+      # drop it, and with it the half of the suite that needs a live Redis: the
+      # lint would stop reading the very files it exists to police.
       - name: cargo clippy --all-targets
-        run: cargo clippy --all-targets --no-default-features --features tokio-runtime,tokio-rustls,pool,json,client-cache -- -D warnings
+        run: cargo clippy --all-targets --no-default-features --features tokio-runtime,tokio-rustls,pool,json,client-cache,server-tests -- -D warnings
 
   # `--all-targets` only covers the targets the named features enable, so the job
   # above — which names neither `bench` nor `web-examples` — compiles none of the
@@ -140,7 +143,7 @@ jobs:
       - name: cargo clippy --all-targets (bench, web-examples)
         run: |
           cargo clippy --all-targets --no-default-features \
-            --features tokio-runtime,tokio-rustls,pool,json,client-cache,bench,web-examples \
+            --features tokio-runtime,tokio-rustls,pool,json,client-cache,server-tests,bench,web-examples \
             -- -D warnings
 
   # Report the public-API breaks a pull request introduces, so each one is a

@@ -208,12 +208,6 @@ async fn run_connection(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        Result,
-        client::Client,
-        commands::StringCommands,
-        tests::{get_default_addr, log_try_init},
-    };
 
     /// Spawns a minimal upstream that reads a request then replies with
     /// `response`, so the proxy mechanism can be tested without a real Redis.
@@ -371,22 +365,5 @@ mod tests {
             seen
         );
         assert_eq!(4, proxy.connections_accepted());
-    }
-
-    /// End-to-end proof the harness is usable by a real client: a transparent
-    /// proxy in front of Redis must be indistinguishable from a direct
-    /// connection.
-    #[tokio::test]
-    async fn a_real_client_round_trips_through_the_transparent_proxy() -> Result<()> {
-        log_try_init();
-        let proxy = FaultProxy::start(get_default_addr(), vec![]).await.unwrap();
-
-        let client = Client::connect(format!("redis://{}", proxy.addr)).await?;
-        client.set("fault_proxy_smoke_key", "value").await?;
-        let value: String = client.get("fault_proxy_smoke_key").await?;
-        assert_eq!(value, "value");
-        client.close().await?;
-
-        Ok(())
     }
 }

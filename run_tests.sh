@@ -15,7 +15,19 @@
 # refused rather than waved through — a missing node makes its tests fail to
 # connect while the suite still reports a total.
 # The filter is not inspected, so the gate also stops a run that needs no server
-# at all. `RUSTIS_SKIP_DEPLOYMENT_CHECK=1` is the way past it for those.
+# at all. `--hermetic` is the way to run those, and
+# `RUSTIS_SKIP_DEPLOYMENT_CHECK=1` the way past the gate for anything else.
+
+# `--hermetic` turns `server-tests` off, which leaves the tests that reach no
+# server. They need no deployment check and no `--test-threads=1`: none of them
+# shares a Redis, so they run in parallel, in about a second. `--tests` is what
+# keeps the doctests out — every one of them opens a connection.
+if [ "$1" = "--hermetic" ]; then
+    shift
+    exec cargo test --tests --no-default-features \
+        --features tokio-runtime,tokio-rustls,pool,json,client-cache "$@"
+fi
+
 check_deployment() {
     [ -n "$RUSTIS_SKIP_DEPLOYMENT_CHECK" ] && return 0
     command -v docker >/dev/null 2>&1 || return 0

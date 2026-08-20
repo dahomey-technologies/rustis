@@ -22,7 +22,7 @@ rust-version = "1.88"
 bench = false
 
 [features]
-default = ["tokio-runtime"]
+default = ["tokio-runtime", "server-tests"]
 tokio-runtime = ["tokio/macros", "tokio/net", "tokio/rt", "tokio/io-util"]
 tokio-rustls = ["dep:tokio-rustls", "dep:webpki-roots", "rustls"]
 tokio-native-tls = ["dep:tokio-native-tls", "native-tls"]
@@ -31,6 +31,12 @@ native-tls = ["dep:native-tls"]
 rustls = ["dep:rustls"]
 json = ["dep:serde_json"]
 client-cache = ["dep:moka", "dep:dashmap"]
+# Gates the half of the test suite that needs a live Redis. On by default, so
+# the full suite is what `cargo test` runs; turning it off leaves the tests that
+# need neither a server nor a network, which then all pass. It carries no
+# dependency and gates nothing outside `cfg(test)`, so a dependent never builds
+# anything different because of it.
+server-tests = []
 # Marker features, carrying no dependency of their own: they gate the
 # `bench`-only module in the library and the `required-features` of the benchmark
 # and web-example targets, whose crates are plain dev dependencies.
@@ -110,6 +116,12 @@ rustls-pemfile = "2.2"
 # whatever features the suite runs with.
 uuid = { version = "1", features = ["serde", "v4"] }
 serde_json = "1.0"
+
+# Every test here connects to a Redis, so the target itself is gated: the
+# hermetic run must not even build it.
+[[test]]
+name = "arg_arity"
+required-features = ["server-tests"]
 
 [package.metadata.docs.rs]
 features = ["tokio-runtime", "tokio-rustls", "pool", "json", "client-cache"]

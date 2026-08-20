@@ -249,7 +249,7 @@ impl<S: CacheStore> Cache<S> {
     /// A test needs this to wait for the flush instead of sleeping: the `Cache`
     /// owns its invalidation stream, so a caller has no other way to know that a
     /// lost invalidation has been reacted to.
-    #[cfg(test)]
+    #[cfg(all(test, feature = "server-tests"))]
     pub(crate) fn flush_generation(&self) -> u64 {
         self.flush_generation.load(Ordering::SeqCst)
     }

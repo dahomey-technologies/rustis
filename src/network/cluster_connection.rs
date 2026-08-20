@@ -51,6 +51,13 @@ pub(crate) struct ClusterTestHook {
     clippy::unwrap_used,
     reason = "test-support code: a panic is how a test reports failure"
 )]
+#[cfg_attr(
+    not(feature = "server-tests"),
+    expect(
+        dead_code,
+        reason = "the arming half of the hook only has callers among the tests that need a live Redis"
+    )
+)]
 impl ClusterTestHook {
     pub(crate) fn new() -> Self {
         Self::default()

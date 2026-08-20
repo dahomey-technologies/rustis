@@ -154,7 +154,7 @@ impl SentinelConnection {
 
     /// The Sentinel instances this connection knows, the one that last answered
     /// first.
-    #[cfg(test)]
+    #[cfg(all(test, feature = "server-tests"))]
     pub(crate) fn known_instances(&self) -> &[(String, u16)] {
         &self.sentinel_config.instances
     }

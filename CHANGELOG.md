@@ -352,6 +352,14 @@ The upgrade checklist. Each item is stated in the section it belongs to below.
   published surface by path. `tests/public_api.rs` queues a command from each family
   into a pipeline and a transaction, which fails when a batch impl list falls behind.
 
+- **The test suite selects the half that needs no server.** 470 tests reach neither
+  a Redis nor the network — 468 of the 1161 in the library, plus `tests/public_api.rs`
+  — but nothing named them, so the only way to run them was to run everything and
+  read 693 connection failures. The `server-tests` feature, on by default, now
+  carries the server-bound half: `./run_tests.sh --hermetic` runs the rest in about a
+  second, with no Docker and no deployment. The 19 modules that held both kinds are
+  split, so the gate stays on the module list in `src/tests/mod.rs`.
+
 - **CI builds the targets and feature sets it skipped.** `--all-targets` covers only
   the targets the named features enable, so no job built the 14 benchmark targets, the
   8 `bench`-gated examples or the 4 `web-examples` ones. `fuzzing` joins the feature

@@ -385,7 +385,7 @@ pub trait StringCommands<'a>: Sized {
         key1: impl Serialize,
         key2: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("LCS").key(key1).arg(key2).readonly())
+        prepare_command(self, cmd("LCS").key(key1).key(key2).readonly())
     }
 
     /// The LCS command implements the longest common subsequence algorithm

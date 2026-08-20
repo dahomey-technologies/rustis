@@ -138,7 +138,7 @@ pub trait SortedSetCommands<'a>: Sized {
     ) -> PreparedCommand<'a, Self, usize> {
         prepare_command(
             self,
-            cmd("ZDIFFSTORE").arg(destination).key_with_count(keys),
+            cmd("ZDIFFSTORE").key(destination).key_with_count(keys),
         )
     }
 
@@ -252,7 +252,7 @@ pub trait SortedSetCommands<'a>: Sized {
         prepare_command(
             self,
             cmd("ZINTERSTORE")
-                .arg(destination)
+                .key(destination)
                 .key_with_count(keys)
                 .arg_labeled("WEIGHTS", weights)
                 .arg_labeled("AGGREGATE", aggregate.into()),
@@ -758,7 +758,7 @@ pub trait SortedSetCommands<'a>: Sized {
         prepare_command(
             self,
             cmd("ZUNIONSTORE")
-                .arg(destination)
+                .key(destination)
                 .key_with_count(keys)
                 .arg_labeled("WEIGHTS", weights)
                 .arg_labeled("AGGREGATE", aggregate.into()),

@@ -500,7 +500,7 @@ pub trait GenericCommands<'a>: Sized {
                 .key(key)
                 .arg(options)
                 .arg("STORE")
-                .arg(destination),
+                .key(destination),
         )
     }
 

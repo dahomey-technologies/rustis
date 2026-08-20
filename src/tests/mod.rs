@@ -65,6 +65,7 @@ mod server_commands;
 mod set_commands;
 mod socket_options;
 mod sorted_set_commands;
+mod store_destination_keys;
 mod stream_commands;
 mod string_commands;
 mod t_disgest_commands;

@@ -19,6 +19,13 @@ The upgrade checklist. Each item is stated in the section it belongs to below.
 - **Five deprecated string commands are removed**: `getset`, `psetex`, `setex`,
   `setnx` and `substr`.
 
+- **Seven commands now route on a key they only named before.** In Cluster mode a
+  cross-slot call to `sdiffstore`, `sinterstore`, `zdiffstore`, `zinterstore`,
+  `zunionstore`, `sort_and_store` or `lcs` was sent and refused by the server with
+  `CROSSSLOT`; it is now refused locally with
+  `ClientError::MismatchedKeySlots`. Code matching on the server error must also
+  accept the client one. Stated in full under Fixed.
+
 - **The queue memory budget now covers what is in flight.** A command was charged
   to `BackpressureConfig::max_queued_bytes` until it was written, and is now charged
   until its reply arrives. A configuration sized against the send queue alone may
@@ -182,6 +189,15 @@ The upgrade checklist. Each item is stated in the section it belongs to below.
   five and `quit`. No module command reports a deprecation.
 
 ### Fixed
+
+- **Seven commands did not route on a key they name.** `sdiffstore`, `sinterstore`,
+  `zdiffstore`, `zinterstore`, `zunionstore` and `sort_and_store` added their
+  destination as a plain argument, and `lcs` did the same with its second key, so
+  the key took no part in slot computation. In Cluster mode the command routed on
+  its remaining keys alone, and the client-side `MismatchedKeySlots` check could not
+  see the unmarked key: a cross-slot pair was sent and refused by the server instead
+  of being refused locally. `sunionstore` and the two other `lcs` forms were already
+  correct.
 
 - **A client-side cache key that serialized to several arguments filed the entry
   under the first of them.** `Cache::get` on a struct key kept one entry for every

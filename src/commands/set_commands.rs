@@ -63,7 +63,7 @@ pub trait SetCommands<'a>: Sized {
         destination: impl Serialize,
         keys: impl Serialize,
     ) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("SDIFFSTORE").arg(destination).keys(keys))
+        prepare_command(self, cmd("SDIFFSTORE").key(destination).keys(keys))
     }
 
     /// Returns the members of the set resulting from the intersection of all the given sets.
@@ -115,7 +115,7 @@ pub trait SetCommands<'a>: Sized {
         destination: impl Serialize,
         keys: impl Serialize,
     ) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("SINTERSTORE").arg(destination).keys(keys))
+        prepare_command(self, cmd("SINTERSTORE").key(destination).keys(keys))
     }
 
     /// Returns if member is a member of the set stored at key.

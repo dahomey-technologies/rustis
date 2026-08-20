@@ -65,6 +65,11 @@ The upgrade checklist. Each item is stated in the section it belongs to below.
   forms (`key_with_count` and the stepped variants) are unchanged and may still
   declare zero keys, as `EVAL` does.
 
+- **`Client::close` returns `CloseOutcome` instead of `()`.** A connection is shared
+  by every clone of a client, so a `close` that finds a clone alive shuts nothing down
+  and used to report that as `Ok(())`. `CloseOutcome::Closed` and `StillShared` now
+  tell the two apart. `ExclusiveClient::close` follows.
+
 - **`ClientError::InvalidTag` is removed.** No code path could produce it.
 
 `cargo semver-checks` reports 11 removed trait methods and 4 removed structs.

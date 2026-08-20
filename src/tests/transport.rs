@@ -5,53 +5,19 @@
 //! needs a TCP endpoint to reach a server.
 
 use crate::{
-    Future, Result,
-    client::{
-        Client, Config, CustomTransport, ServerConfig, TransportFactory, TransportReader,
-        TransportWriter,
-    },
+    Result,
+    client::{Client, Config, CustomTransport, ServerConfig},
     commands::{ConnectionCommands, StringCommands},
     resp::cmd,
-    tests::{fake_server::FakeServer, log_try_init},
+    tests::{
+        fake_server::{FakeServer, duplex_config, duplex_pair},
+        log_try_init,
+    },
 };
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
 };
-
-/// Serves `server` on one end of a fresh in-memory pipe and hands the other end
-/// back as a transport.
-fn duplex_pair(server: FakeServer) -> (TransportReader, TransportWriter) {
-    let (client_side, server_side) = tokio::io::duplex(4096);
-    tokio::spawn(async move { server.serve(server_side).await });
-    let (reader, writer) = tokio::io::split(client_side);
-    (Box::new(reader), Box::new(writer))
-}
-
-/// A factory answering every dial with a fresh pipe, counting its calls so a
-/// test can tell a reconnection from the initial connection.
-struct DuplexTransport {
-    server: FakeServer,
-    dials: Arc<AtomicUsize>,
-}
-
-impl TransportFactory for DuplexTransport {
-    fn connect(&self) -> Future<'_, (TransportReader, TransportWriter)> {
-        let server = self.server.clone();
-        let dials = Arc::clone(&self.dials);
-        Box::pin(async move {
-            dials.fetch_add(1, Ordering::SeqCst);
-            Ok(duplex_pair(server))
-        })
-    }
-}
-
-fn duplex_config(server: FakeServer, dials: Arc<AtomicUsize>) -> Config {
-    Config {
-        server: ServerConfig::Custom(CustomTransport::new(DuplexTransport { server, dials })),
-        ..Default::default()
-    }
-}
 
 /// Serves `server` on a Unix socket in a temporary directory, returning its
 /// path. The socket is left behind for the test's lifetime, which is short.

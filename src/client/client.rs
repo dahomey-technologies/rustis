@@ -12,7 +12,7 @@ use crate::{
         PushSender, ReconnectReceiver, ReconnectSender, ResultReceiver, ResultSender,
         ResultsReceiver, ResultsSender, timeout, timeout_future,
     },
-    resp::{Command, CommandArgs, CommandArgsMut, RespResponse, Response, SubscriptionType, cmd},
+    resp::{Command, CommandArgs, CommandArgsMut, RespResponse, SubscriptionType, cmd},
 };
 use bytes::Bytes;
 use serde::{Serialize, de::DeserializeOwned};
@@ -36,6 +36,21 @@ use tracing::{info, trace};
 struct ClientShared {
     msg_sender: MsgSender,
     network_task_join_handle: JoinHandle<()>,
+}
+
+/// What [`Client::close`] did.
+///
+/// A connection is shared by every clone of a client, so a `close` call that
+/// finds a clone still alive shuts nothing down. The two cases are told apart
+/// here rather than both reported as `Ok(())`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CloseOutcome {
+    /// This was the last handle: the send channel is closed and the network task
+    /// has finished.
+    Closed,
+    /// A clone is still holding the connection, which stays up. Nothing was sent
+    /// and nothing was shut down.
+    StillShared,
 }
 
 #[derive(Clone)]
@@ -214,11 +229,37 @@ impl Client {
             .is_some_and(|shared| shared.network_task_join_handle.is_finished())
     }
 
-    /// if this client is the last client on the shared connection, the channel to send messages
-    /// to the underlying network handler will be closed explicitely.
+    /// Ends the connection, if this handle is the last one on it.
     ///
-    /// Then, this function will await for the network handler to be ended
-    pub async fn close(mut self) -> Result<()> {
+    /// A [`Client`] is a handle: several clones share one connection, one queue
+    /// and one network task. Only the last handle can end them, so the outcome
+    /// is what the call reports:
+    /// [`CloseOutcome::Closed`](crate::client::CloseOutcome::Closed) means the
+    /// send channel was closed and the network task has finished, and
+    /// [`StillShared`](crate::client::CloseOutcome::StillShared) means a clone
+    /// is still using the connection and nothing was shut down. `Ok` alone is
+    /// not the answer, which is why the outcome is returned rather than
+    /// discarded: a shutdown path that treats `Ok(())` as "drained" would be
+    /// wrong for every clone but one.
+    ///
+    /// Awaiting a `Closed` outcome awaits the network task, so the socket and
+    /// the buffers are gone when it returns. Dropping the last handle does the
+    /// same shutdown, without waiting for it.
+    ///
+    /// # Example
+    /// ```
+    /// use rustis::{client::{Client, CloseOutcome}, Result};
+    ///
+    /// # async fn example() -> Result<()> {
+    /// let client = Client::connect("127.0.0.1:6379").await?;
+    /// let clone = client.clone();
+    ///
+    /// assert_eq!(CloseOutcome::StillShared, client.close().await?);
+    /// assert_eq!(CloseOutcome::Closed, clone.close().await?);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn close(mut self) -> Result<CloseOutcome> {
         let mut shared: Arc<Option<ClientShared>> = Arc::new(None);
         std::mem::swap(&mut shared, &mut self.shared);
 
@@ -236,9 +277,10 @@ impl Client {
             // channel close and the await deadlocks.
             drop(msg_sender);
             network_task_join_handle.await?;
+            return Ok(CloseOutcome::Closed);
         }
 
-        Ok(())
+        Ok(CloseOutcome::StillShared)
     }
 
     /// Turns this handle into an [`ExclusiveClient`], the client that owns its
@@ -854,7 +896,7 @@ pub trait ClientPreparedCommand<'a, R> {
     fn forget(self) -> Result<()>;
 }
 
-impl<'a, R: Response> ClientPreparedCommand<'a, R> for PreparedCommand<'a, &'a Client, R> {
+impl<'a, R: DeserializeOwned> ClientPreparedCommand<'a, R> for PreparedCommand<'a, &'a Client, R> {
     /// Send command and forget its response
     ///
     /// # Errors
@@ -865,7 +907,7 @@ impl<'a, R: Response> ClientPreparedCommand<'a, R> for PreparedCommand<'a, &'a C
     }
 }
 
-impl<'a, R: Response + DeserializeOwned + 'a> IntoFuture for PreparedCommand<'a, &'a Client, R> {
+impl<'a, R: DeserializeOwned + 'a> IntoFuture for PreparedCommand<'a, &'a Client, R> {
     type Output = Result<R>;
     type IntoFuture = CommandFuture<'a, R>;
 

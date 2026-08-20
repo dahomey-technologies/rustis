@@ -55,7 +55,9 @@ async fn a_uuid_is_a_valid_key() -> Result<()> {
     assert_eq!("value", value);
 
     client.del(key).await?;
-    client.close().await
+    client.close().await?;
+
+    Ok(())
 }
 
 /// `serde_json::Value` is the type that settles the design: one type, several
@@ -82,7 +84,9 @@ async fn a_json_value_is_a_key_or_not_depending_on_its_variant() -> Result<()> {
         );
     }
 
-    client.close().await
+    client.close().await?;
+
+    Ok(())
 }
 
 /// Values are not checked, and must not be: a JSON object as a value is the same
@@ -101,7 +105,9 @@ async fn a_json_object_is_a_valid_set_of_field_values() -> Result<()> {
     assert_eq!("acme", tenant);
 
     client.del(key).await?;
-    client.close().await
+    client.close().await?;
+
+    Ok(())
 }
 
 /// A multi-key command takes the collection, and an empty one is refused: it
@@ -122,5 +128,7 @@ async fn a_collection_of_foreign_keys_is_accepted_but_not_an_empty_one() -> Resu
         "an empty key list is refused, got {error:?}"
     );
 
-    client.close().await
+    client.close().await?;
+
+    Ok(())
 }

@@ -1,12 +1,13 @@
 use crate::{
     Result,
     client::{
-        Client, ClientPreparedCommand, ClientTrackingInvalidationStream, CommandFuture, IntoConfig,
-        Pipeline, PreparedCommand, PubSubStream, Transaction, command_traits::*,
+        Client, ClientPreparedCommand, ClientTrackingInvalidationStream, CloseOutcome,
+        CommandFuture, IntoConfig, Pipeline, PreparedCommand, PubSubStream, Transaction,
+        command_traits::*,
     },
     commands::{BlockingCommands, PubSubCommands, TransactionCommands},
     network::ReconnectReceiver,
-    resp::{Command, Response},
+    resp::Command,
 };
 use serde::{Serialize, de::DeserializeOwned};
 use std::future::IntoFuture;
@@ -110,7 +111,7 @@ impl ExclusiveClient {
 
     /// See [`Client::close`].
     #[inline]
-    pub async fn close(self) -> Result<()> {
+    pub async fn close(self) -> Result<CloseOutcome> {
         self.inner.close().await
     }
 
@@ -197,7 +198,9 @@ impl ExclusiveClient {
     }
 }
 
-impl<'a, R: Response> ClientPreparedCommand<'a, R> for PreparedCommand<'a, &'a ExclusiveClient, R> {
+impl<'a, R: DeserializeOwned> ClientPreparedCommand<'a, R>
+    for PreparedCommand<'a, &'a ExclusiveClient, R>
+{
     #[inline]
     fn forget(self) -> Result<()> {
         self.executor
@@ -206,9 +209,7 @@ impl<'a, R: Response> ClientPreparedCommand<'a, R> for PreparedCommand<'a, &'a E
     }
 }
 
-impl<'a, R: Response + DeserializeOwned + 'a> IntoFuture
-    for PreparedCommand<'a, &'a ExclusiveClient, R>
-{
+impl<'a, R: DeserializeOwned + 'a> IntoFuture for PreparedCommand<'a, &'a ExclusiveClient, R> {
     type Output = Result<R>;
     type IntoFuture = CommandFuture<'a, R>;
 

@@ -29,6 +29,8 @@ mod buffer_decoder;
 mod cache;
 #[cfg(feature = "server-tests")]
 mod client;
+#[cfg(feature = "tokio-runtime")]
+mod close;
 mod cluster;
 mod cluster_commands;
 #[cfg(feature = "server-tests")]

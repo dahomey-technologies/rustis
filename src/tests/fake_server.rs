@@ -10,8 +10,54 @@
 //! ([`CommandEncoder`](crate::resp::CommandEncoder)), and has nothing that turns
 //! a value into a server reply.
 
-use std::collections::HashMap;
+use crate::{
+    Future,
+    client::{
+        Config, CustomTransport, ServerConfig, TransportFactory, TransportReader, TransportWriter,
+    },
+};
+use std::{
+    collections::HashMap,
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
+};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+
+/// Serves `server` on one end of a fresh in-memory pipe and hands the other end
+/// back as a transport.
+pub(crate) fn duplex_pair(server: FakeServer) -> (TransportReader, TransportWriter) {
+    let (client_side, server_side) = tokio::io::duplex(4096);
+    tokio::spawn(async move { server.serve(server_side).await });
+    let (reader, writer) = tokio::io::split(client_side);
+    (Box::new(reader), Box::new(writer))
+}
+
+/// A factory answering every dial with a fresh pipe, counting its calls so a
+/// test can tell a reconnection from the initial connection.
+struct DuplexTransport {
+    server: FakeServer,
+    dials: Arc<AtomicUsize>,
+}
+
+impl TransportFactory for DuplexTransport {
+    fn connect(&self) -> Future<'_, (TransportReader, TransportWriter)> {
+        let server = self.server.clone();
+        let dials = Arc::clone(&self.dials);
+        Box::pin(async move {
+            dials.fetch_add(1, Ordering::SeqCst);
+            Ok(duplex_pair(server))
+        })
+    }
+}
+
+pub(crate) fn duplex_config(server: FakeServer, dials: Arc<AtomicUsize>) -> Config {
+    Config {
+        server: ServerConfig::Custom(CustomTransport::new(DuplexTransport { server, dials })),
+        ..Default::default()
+    }
+}
 
 /// A RESP3 `HELLO` reply, the one every connection reads before anything else.
 pub(crate) const HELLO_REPLY: &[u8] = b"%7\r\n\

@@ -102,25 +102,36 @@ impl Connection {
     /// When this connection next has upkeep to do on its own, `None` when it has
     /// none.
     ///
-    /// Only a cluster connection has any: a standalone or Sentinel connection has
-    /// one server and nothing to discover.
+    /// A standalone connection has none: it has one server, named in the config,
+    /// and nothing to discover. A cluster reloads its topology; a Sentinel
+    /// connection checks that the master it is on is still the master.
     #[inline]
     pub(crate) fn next_maintenance(&self) -> Option<Instant> {
         match self {
-            Connection::Standalone(_) | Connection::Sentinel(_) => None,
+            Connection::Standalone(_) => None,
+            Connection::Sentinel(connection) => connection.next_maintenance(),
             Connection::Cluster(connection) => connection.next_maintenance(),
         }
     }
 
-    /// Runs the upkeep [`Self::next_maintenance`] announced.
+    /// Runs the upkeep [`Self::next_maintenance`] announced, and reports whether
+    /// the connection has to be remade for it to take effect.
+    ///
+    /// A cluster applies its own reload and never asks. A Sentinel connection
+    /// cannot: reconnecting replays the requests in flight and restores the
+    /// caller's state, which only the handler can do.
     ///
     /// The caller must run this outside a cancellable branch: a reload dropped
     /// halfway would leave the topology partly applied.
     #[inline]
-    pub(crate) async fn run_maintenance(&mut self) {
+    pub(crate) async fn run_maintenance(&mut self) -> bool {
         match self {
-            Connection::Standalone(_) | Connection::Sentinel(_) => (),
-            Connection::Cluster(connection) => connection.run_maintenance().await,
+            Connection::Standalone(_) => false,
+            Connection::Sentinel(connection) => connection.run_maintenance().await,
+            Connection::Cluster(connection) => {
+                connection.run_maintenance().await;
+                false
+            }
         }
     }
 

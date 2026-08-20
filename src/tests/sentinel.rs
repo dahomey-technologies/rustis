@@ -1,6 +1,6 @@
 use crate::{
     Result,
-    client::{Client, IntoConfig, ReconnectionConfig},
+    client::{Client, IntoConfig, ReconnectionConfig, ServerConfig},
     commands::{
         ConnectionCommands, GenericCommands, InternalCommands, ReplicaOfOptions, SentinelCommands,
         SentinelSimulateFailureMode, ServerCommands, StringCommands,
@@ -13,7 +13,7 @@ use crate::{
     },
 };
 use serial_test::serial;
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 /// A Sentinel is a different server with its own ACLs: a probe must carry the
 /// Sentinel's own credentials, never the master's.
@@ -528,6 +528,74 @@ async fn a_write_recovers_after_the_master_is_demoted() -> Result<()> {
     assert_eq!("after", value);
 
     client.del("sentinel_demoted_master").await?;
+    Ok(())
+}
+
+/// The `READONLY` recovery costs the caller a refused write: the client only
+/// learns the master moved by being told off for writing to it. Polling the
+/// Sentinels closes that gap — the connection is remade while nothing is being
+/// sent, so the next write is the first one and it succeeds.
+///
+/// The roles are swapped exactly as in `a_write_recovers_after_the_master_is_demoted`,
+/// which is what makes this test falsifiable: `REPLICAOF` drops no connection and
+/// `SENTINEL MONITOR` publishes no `+switch-master`, so neither the socket nor the
+/// subscription can be what notices. With no poll the reconnection never comes and
+/// the wait below times out.
+#[tokio::test]
+#[serial]
+async fn the_master_is_rediscovered_before_a_write_is_refused() -> Result<()> {
+    log_try_init();
+    let sentinel = wait_for_spare_sentinel_up().await?;
+    reset_spare_sentinel_topology(&sentinel).await?;
+
+    let host = get_default_host();
+    let mut config =
+        format!("redis+sentinel://{host}:26382/{SPARE_SENTINEL_SERVICE}").into_config()?;
+    config.reconnection = ReconnectionConfig::new_constant(0, 100);
+    if let ServerConfig::Sentinel(sentinel_config) = &mut config.server {
+        // Short enough that the test does not wait on the 10-second default.
+        sentinel_config.master_check_interval = Some(Duration::from_millis(200));
+    }
+    let client = Client::connect(config).await?;
+
+    client.set("sentinel_polled_master", "before").await?;
+    let reconnections_before = client.stats().reconnections;
+
+    let master = sentinel.sentinel_master(SPARE_SENTINEL_SERVICE).await?;
+    let announced_ip = master.ip;
+    let demoted_port = master.port;
+    let promoted_port = if demoted_port == 6383 { 6384 } else { 6383 };
+
+    let promoted = Client::connect(format!("{host}:{promoted_port}")).await?;
+    promoted.replicaof(ReplicaOfOptions::no_one()).await?;
+    let demoted = Client::connect(format!("{host}:{demoted_port}")).await?;
+    demoted
+        .replicaof(ReplicaOfOptions::master(&announced_ip, promoted_port))
+        .await?;
+
+    let _: Result<()> = sentinel.sentinel_remove(SPARE_SENTINEL_SERVICE).await;
+    sentinel
+        .sentinel_monitor(SPARE_SENTINEL_SERVICE, &announced_ip, promoted_port, 1)
+        .await?;
+
+    // The reconnection is what is waited on, not a write: retrying a write until
+    // it works is exactly the behaviour this test exists to distinguish from.
+    wait_until(
+        "the poll sends the client back through the sentinels",
+        || {
+            let client = client.clone();
+            async move { Ok(client.stats().reconnections > reconnections_before) }
+        },
+    )
+    .await?;
+
+    // No write has been attempted since the demotion, so this is the first one.
+    client.set("sentinel_polled_master", "after").await?;
+
+    let value: String = client.get("sentinel_polled_master").await?;
+    assert_eq!("after", value);
+
+    client.del("sentinel_polled_master").await?;
     Ok(())
 }
 

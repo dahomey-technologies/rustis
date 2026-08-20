@@ -31,6 +31,7 @@ const DEFAULT_RETRY_ON_ERROR: bool = false;
 const DEFAULT_MAX_COMMAND_ATTEMPTS: usize = 5;
 const DEFAULT_MAX_MESSAGES_PER_WAVE: usize = 48;
 const DEFAULT_MAX_DISCOVERY_ROUNDS: usize = 10;
+const DEFAULT_MASTER_CHECK_INTERVAL: Duration = Duration::from_secs(10);
 
 /// Sizing and recycling policy for the buffers a connection keeps alive between
 /// commands: the read/write framing buffers and the RESP parse tape.
@@ -1147,6 +1148,7 @@ impl Display for Config {
                 service_name,
                 wait_between_failures: _,
                 max_discovery_rounds: _,
+                master_check_interval: _,
                 password: _,
                 username: _,
                 // a provider has no URI representation
@@ -1319,6 +1321,7 @@ impl Display for Config {
             service_name: _,
             wait_between_failures: wait_beetween_failures,
             max_discovery_rounds: _,
+            master_check_interval: _,
             password,
             username,
             // a provider has no URI representation
@@ -1433,6 +1436,20 @@ pub struct SentinelConfig {
     /// The default is `10`.
     pub max_discovery_rounds: usize,
 
+    /// How often the master address is polled from the Sentinels, `None` to not
+    /// poll at all.
+    ///
+    /// The client also subscribes to `+switch-master`, which reports a failover
+    /// the moment it happens. This poll is the net under that subscription's one
+    /// blind spot: an event published while the subscription is itself
+    /// reconnecting is gone, and nothing else would notice the new master until
+    /// a write is refused. The two share one outcome — a rediscovery — and a
+    /// poll that finds the connection already on the announced master does
+    /// nothing, so a failover costs one rediscovery whichever notices it first.
+    ///
+    /// The default is 10 seconds.
+    pub master_check_interval: Option<Duration>,
+
     /// Sentinel username
     pub username: Option<String>,
 
@@ -1460,6 +1477,7 @@ impl fmt::Debug for SentinelConfig {
             .field("service_name", &self.service_name)
             .field("wait_between_failures", &self.wait_between_failures)
             .field("max_discovery_rounds", &self.max_discovery_rounds)
+            .field("master_check_interval", &self.master_check_interval)
             .field("username", &self.username)
             // never leak the password in clear text
             .field("password", &self.password.as_ref().map(|_| "***"))
@@ -1478,6 +1496,7 @@ impl Default for SentinelConfig {
             service_name: Default::default(),
             wait_between_failures: Duration::from_millis(DEFAULT_WAIT_BETWEEN_FAILURES),
             max_discovery_rounds: DEFAULT_MAX_DISCOVERY_ROUNDS,
+            master_check_interval: Some(DEFAULT_MASTER_CHECK_INTERVAL),
             password: None,
             username: None,
             credentials_provider: None,

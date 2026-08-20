@@ -9,9 +9,9 @@ use super::router::{
 #[cfg(test)]
 use super::test_hooks::{QueueMetricsTestHook, SendBatchTestHook};
 use crate::{
-    ClientError, Connection, ConnectionState, Error, ErrorKind, JoinHandle, ReconnectionState,
-    RedisError, RedisErrorKind, Result, RetryReason,
-    client::{Config, Message, MessageKind, PreparedCommand, StatsRecorder},
+    ClientError, Connection, ConnectionState, Error, ErrorKind, JoinHandle, MasterWatch,
+    ReconnectionState, RedisError, RedisErrorKind, Result, RetryReason,
+    client::{Config, Message, MessageKind, PreparedCommand, ServerConfig, StatsRecorder},
     commands::InternalPubSubCommands,
     resp::{
         ClientReplyMode, CommandKind, RespResponse, RespView, StateSlot, SubscriptionType, cmd,
@@ -120,6 +120,13 @@ pub(crate) struct NetworkHandler {
     retry_policy: RetryPolicy,
     /// Send-wave cap from `Config::max_messages_per_wave`.
     max_messages_per_wave: usize,
+    /// The `+switch-master` subscription, on a Sentinel connection only.
+    ///
+    /// It is held here rather than inside [`Connection`] because the `select!`
+    /// already borrows the connection mutably to read it: a branch reading the
+    /// subscription has to be a field the borrow checker can see is a different
+    /// one.
+    master_watch: Option<MasterWatch>,
     /// Connection-level counters a client reads: link state, server version,
     /// reconnections, shed commands. The queue depths are published by
     /// [`MessageQueue`], which owns them.
@@ -164,6 +171,15 @@ impl NetworkHandler {
         // why this is lent to the connection rather than carried by the config.
         let mut connection_state = ConnectionState::default();
 
+        // Only a Sentinel deployment has a failover to be told about, and only it
+        // names the Sentinels to hear it from.
+        let master_watch = match &config.server {
+            ServerConfig::Sentinel(sentinel_config) => {
+                Some(MasterWatch::new(sentinel_config, &config))
+            }
+            _ => None,
+        };
+
         let connection = Connection::connect(config, &mut connection_state).await?;
         let (msg_sender, msg_receiver): (MsgSender, MsgReceiver) =
             tokio::sync::mpsc::unbounded_channel();
@@ -188,6 +204,7 @@ impl NetworkHandler {
             reconnection_state: ReconnectionState::new(reconnection_config),
             retry_policy: RetryPolicy::new(max_command_attempts),
             max_messages_per_wave,
+            master_watch,
             stats: Arc::clone(&stats),
             #[cfg(test)]
             send_batch_test_hook,
@@ -232,7 +249,14 @@ impl NetworkHandler {
                     if !self.try_handle_result(result).await { break; }
                 },
                 () = sleep(until_maintenance).fuse() => {
-                    self.connection.run_maintenance().await;
+                    if self.connection.run_maintenance().await {
+                        info!("The Sentinels announce another master, rediscovering it");
+                        if !self.reconnect().await { break; }
+                    }
+                },
+                () = watch_switch(&mut self.master_watch).fuse() => {
+                    info!("A Sentinel announced a failover, rediscovering the master");
+                    if !self.reconnect().await { break; }
                 }
             }
 
@@ -1274,6 +1298,19 @@ fn indicates_demoted_master(result: &Result<RespResponse>) -> bool {
         Err(e) => {
             matches!(e.kind(), ErrorKind::Redis(error) if error.kind == RedisErrorKind::Readonly)
         }
+    }
+}
+
+/// Waits for the `+switch-master` subscription to announce a failover, and never
+/// resolves where there is no subscription.
+///
+/// Standing in for "never" is what keeps the `select!` one shape for every server
+/// kind: a standalone or cluster deployment has no Sentinel to hear from, so its
+/// branch simply never wins.
+async fn watch_switch(master_watch: &mut Option<MasterWatch>) {
+    match master_watch {
+        Some(master_watch) => master_watch.switched().await,
+        None => std::future::pending().await,
     }
 }
 

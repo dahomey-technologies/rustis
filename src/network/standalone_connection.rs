@@ -95,7 +95,6 @@ impl Endpoint {
 
     /// The host and port this endpoint dials, for the paths that can only work
     /// on a TCP address.
-    #[cfg(test)]
     pub(crate) fn tcp_address(&self) -> Option<(&str, u16)> {
         match self {
             Endpoint::Tcp { host, port } => Some((host, *port)),
@@ -615,6 +614,11 @@ impl StandaloneConnection {
 
     pub(crate) fn tag(&self) -> Arc<str> {
         self.tag.clone()
+    }
+
+    /// The address this connection is on, `None` when it is not a TCP one.
+    pub(crate) fn tcp_address(&self) -> Option<(&str, u16)> {
+        self.endpoint.tcp_address()
     }
 }
 

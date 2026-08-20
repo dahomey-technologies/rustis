@@ -69,6 +69,12 @@ The upgrade checklist. Each item is stated in the section it belongs to below.
 
 ### Added
 
+- **A Sentinel failover is now noticed before a command fails.** The client subscribes
+  to `+switch-master` and rediscovers the master when a Sentinel announces one, and
+  polls the fleet every `SentinelConfig::master_check_interval` (default 10 s) to cover
+  the announcements published while that subscription is itself redialling. A rediscovery
+  either path already made leaves the other with nothing to do.
+
 - **`ClientError::UnexpectedNil`**, raised when a `nil` reply is read as a type that
   cannot hold an absence. The message names the target type and points at `Option`.
 

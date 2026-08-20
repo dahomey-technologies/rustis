@@ -2,16 +2,21 @@ use crate::{
     ConnectionState, Error, ErrorKind, Result, RetryReason, StandaloneConnection,
     client::{Config, SentinelConfig},
     commands::{RoleResult, SentinelCommands, SentinelInfo, ServerCommands},
+    deadline_after,
     resp::{Command, RespResponse},
     sleep,
 };
 use std::{sync::Arc, task::Poll};
-use tracing::debug;
+use tokio::time::Instant;
+use tracing::{debug, info, warn};
 
 pub(crate) struct SentinelConnection {
     sentinel_config: SentinelConfig,
     config: Config,
     pub inner_connection: StandaloneConnection,
+    /// When the master address is next polled from the Sentinels, `None` when
+    /// polling is off.
+    next_master_check: Option<Instant>,
 }
 
 impl SentinelConnection {
@@ -48,6 +53,105 @@ impl SentinelConnection {
         Ok(())
     }
 
+    /// When the master address is next polled, `None` when polling is off.
+    #[inline]
+    pub(crate) fn next_maintenance(&self) -> Option<Instant> {
+        self.next_master_check
+    }
+
+    /// Polls the Sentinels for the master address and reports whether it moved.
+    ///
+    /// This is the net under the `+switch-master` subscription: an announcement
+    /// published while that subscription was itself redialling is gone, and
+    /// nothing else would notice the new master until a write came back
+    /// `READONLY`. Reconnecting is the caller's to do — swapping the socket from
+    /// here would drop the requests in flight on it.
+    ///
+    /// A round that reaches no Sentinel reports no move: the master this
+    /// connection is on is still the best thing known about the service, and
+    /// churning the connection over an unreachable fleet would only lose it.
+    /// That outcome is warned about rather than logged at `debug!` — it is the
+    /// state where the failover safety net is off, and it is indistinguishable
+    /// from a healthy round in the value returned.
+    pub(crate) async fn run_maintenance(&mut self) -> bool {
+        self.next_master_check = self
+            .sentinel_config
+            .master_check_interval
+            .map(deadline_after);
+
+        self.master_moved().await
+    }
+
+    /// Whether the Sentinels announce a master this connection is not on.
+    ///
+    /// The comparison is against the address actually connected, not against a
+    /// remembered announcement: a rediscovery the subscription already triggered
+    /// leaves this finding nothing to do, which is what keeps one failover from
+    /// costing two.
+    async fn master_moved(&mut self) -> bool {
+        let Some((current_host, current_port)) = self.inner_connection.tcp_address() else {
+            return false;
+        };
+        let (current_host, current_port) = (current_host.to_owned(), current_port);
+
+        let probe_config = Self::probe_config(&self.sentinel_config, &self.config);
+        let instances = self.sentinel_config.instances.clone();
+        // Which of the two silent outcomes this round ended on, so the warning
+        // below names the one that happened. The same distinction
+        // `DiscoveryOutcome` makes: a fleet that is down and a fleet that is up
+        // and unhelpful call for opposite things from whoever reads the log.
+        let mut reached_a_sentinel = false;
+
+        for (host, port) in &instances {
+            let mut sentinel_connection =
+                match StandaloneConnection::connect_control(host, *port, &probe_config).await {
+                    Ok(sentinel_connection) => sentinel_connection,
+                    Err(e) => {
+                        info!("Cannot reach Sentinel {host}:{port} to check the master: {e}");
+                        continue;
+                    }
+                };
+
+            match sentinel_connection
+                .sentinel_get_master_addr_by_name(self.sentinel_config.service_name.clone())
+                .await
+            {
+                Ok(Some((master_host, master_port))) => {
+                    let moved = master_host != current_host || master_port != current_port;
+                    if moved {
+                        info!(
+                            "Sentinel {host}:{port} announces master {master_host}:{master_port}, \
+                             this connection is on {current_host}:{current_port}"
+                        );
+                    }
+                    return moved;
+                }
+                Ok(None) => {
+                    reached_a_sentinel = true;
+                    continue;
+                }
+                Err(e) => {
+                    // Answered, and refused: an ACL or a handshake, not a node
+                    // that is down. It is counted as reached so the round says so.
+                    reached_a_sentinel = true;
+                    info!("Cannot check the master with Sentinel {host}:{port}: {e}");
+                    continue;
+                }
+            }
+        }
+
+        // The poll ran and learned nothing, so the net under the subscription is
+        // off. Which of the two reasons it is decides what is to be done about
+        // it, so it is what the line says.
+        let service_name = &self.sentinel_config.service_name;
+        if reached_a_sentinel {
+            warn!("No Sentinel knows the master of `{service_name}`");
+        } else {
+            warn!("No Sentinel could be reached to check the master of `{service_name}`");
+        }
+        false
+    }
+
     /// The Sentinel instances this connection knows, the one that last answered
     /// first.
     #[cfg(test)]
@@ -73,6 +177,7 @@ impl SentinelConnection {
             Self::connect_to_sentinel(&mut sentinel_config, config, connection_state).await?;
 
         Ok(SentinelConnection {
+            next_master_check: sentinel_config.master_check_interval.map(deadline_after),
             sentinel_config,
             config: config.clone(),
             inner_connection,
@@ -261,7 +366,7 @@ impl SentinelConnection {
     ///
     /// A failure here is not a connection failure: the master is already
     /// confirmed. The list simply stays as it was.
-    async fn learn_fleet(
+    pub(crate) async fn learn_fleet(
         sentinel_connection: &mut StandaloneConnection,
         sentinel_config: &mut SentinelConfig,
         answered: (&String, u16),

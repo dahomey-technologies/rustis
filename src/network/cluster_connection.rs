@@ -232,7 +232,7 @@ impl ClusterNodeResult {
 }
 
 /// `interval` from now, capped rather than overflowing the monotonic clock.
-fn deadline_after(interval: Duration) -> Instant {
+pub(crate) fn deadline_after(interval: Duration) -> Instant {
     let now = Instant::now();
     now.checked_add(interval).unwrap_or(now)
 }

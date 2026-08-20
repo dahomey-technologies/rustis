@@ -35,8 +35,8 @@ An asynchronous Redis client for Rust.
 * [Transaction](https://redis.io/docs/latest/develop/using-commands/transactions/) support
 * [Pub/sub](https://redis.io/docs/latest/develop/pubsub/) support
 * [Sentinel](https://redis.io/docs/latest/operate/oss_and_stack/management/sentinel/) support
-* [LUA Scripts/Functions](hhttps://redis.io/docs/latest/develop/programmability/) support
-* [Cluster](https://redis.io/docs/latest/operate/oss_and_stack/management/scaling/) support (minimus supported Redis version is 6)
+* [LUA Scripts/Functions](https://redis.io/docs/latest/develop/programmability/) support
+* [Cluster](https://redis.io/docs/latest/operate/oss_and_stack/management/scaling/) support
 * [Client-side caching](https://redis.io/docs/latest/develop/reference/client-side-caching/) support
 
 # Protocol Compatibility

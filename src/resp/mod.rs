@@ -176,16 +176,19 @@ The different command traits implementations ([`Client`](crate::client::Client),
  serde [`Deserialize`](https://docs.rs/serde/latest/serde/trait.Deserialize.html) trait,
  in order to deserialize it automatically from a RESP Buffer.
 
-## Warning: a `nil` reply decodes as a neutral value
-When the response type is not an [`Option`], a `nil` reply is converted to the neutral value of
-that type instead of being rejected: `0` for every integer width, `0.0` for `f32`/`f64`, `false`
-for `bool`, `'\0'` for `char` and `""` for `String`.
+## A `nil` reply needs an `Option`
+Redis answers `nil` for a key, a field or an element that does not exist. Read as a number, a
+string or a `char`, that absence has no honest value: `0` and `""` are values a present key can
+hold, so returning one would make the missing key indistinguishable from it.
 
-A missing key is therefore indistinguishable from a key holding that neutral value — a counter,
-a quota or a balance that expired reads as zero, with no error to tell you.
+A `nil` read as a scalar therefore fails the command with
+[`UnexpectedNil`](crate::ClientError::UnexpectedNil), and [`Option`] is the type that accepts it.
+The rule reaches inside the reply: an element of a collection and a field of a struct are scalars
+too, which is why `HMGET` is read as `Vec<Option<String>>`.
 
-Declare `Option<R>` to recover the distinction: it is honoured before any conversion and yields
-`None` on `nil`.
+Three readings keep the `nil`. A *collection* stays empty — an absent list read as `Vec<String>`
+has no elements, and a byte string has no bytes. [`Value`] carries it as [`Value::Null`]. And a
+`bool` reads it as `false`, the server answering `nil` to say a conditional write did not happen.
 
 #### Example
 ```
@@ -200,11 +203,10 @@ async fn main() -> Result<()> {
     let client = Client::connect("127.0.0.1:6379").await?;
     client.flushall(FlushingMode::Sync).await?;
 
-    // the key does not exist: `nil` becomes `0`, as if it held `0`
-    let counter: i64 = client.get("counter").await?;
-    assert_eq!(0, counter);
+    // the key does not exist, and `0` would be a lie
+    assert!(client.get::<i64>("counter").await.is_err());
 
-    // `Option` keeps the two apart
+    // `Option` accepts the absence
     let counter: Option<i64> = client.get("counter").await?;
     assert_eq!(None, counter);
 

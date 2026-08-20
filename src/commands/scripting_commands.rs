@@ -421,8 +421,8 @@ pub struct LibraryInfo {
 pub struct FunctionInfo {
     /// the name of the function.
     pub name: String,
-    /// the function's description.
-    pub description: String,
+    /// the function's description, `None` when the function declares none.
+    pub description: Option<String>,
     /// an array of [function flags](https://redis.io/docs/manual/programmability/functions-intro/#function-flags).
     pub flags: Vec<String>,
 }

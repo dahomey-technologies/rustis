@@ -57,8 +57,9 @@ pub use crate::cache_store::{CacheStore, CachedValue, MokaStore, MokaStoreBuilde
 ///
 ///     let cache = Cache::new(client.clone(), 60, tracking_opts).await?;
 ///
-///     let value: String = cache.get("mykey").await?;
-///     let field: String = cache.hget("myhash", "field1").await?;
+///     // `Option`, because a key or a field that does not exist answers nil.
+///     let value: Option<String> = cache.get("mykey").await?;
+///     let field: Option<String> = cache.hget("myhash", "field1").await?;
 ///
 ///     Ok(())
 /// }

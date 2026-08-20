@@ -10,7 +10,7 @@ use serde::{
     de::{DeserializeSeed, EnumAccess, IntoDeserializer, VariantAccess, Visitor},
     forward_to_deserialize_any,
 };
-use std::{slice, str, vec};
+use std::{slice, str};
 
 /// Reads a string that must hold exactly one character. The slice pattern keeps
 /// the length test and the read as one expression, so neither can drift from the
@@ -66,6 +66,9 @@ impl<'de> Deserializer<'de> for &'de Value {
         let result = match self {
             Value::Integer(i) => *i != 0,
             Value::Double(d) => *d != 0.,
+            // The one scalar a nil reads as: the server answers nil to say a
+            // conditional write did not happen, which is `false` and not an
+            // absence. Every other scalar refuses it.
             Value::Null => false,
             Value::SimpleString(s) => bool_from_text(s.as_bytes())?,
             Value::BulkString(s) => bool_from_text(s)?,
@@ -88,7 +91,11 @@ impl<'de> Deserializer<'de> for &'de Value {
                 i8::try_from(*i).map_err(|_| Error::from(ClientError::CannotParseInteger))?
             }
             Value::Double(d) => double_to_int::<i8>(*d)?,
-            Value::Null => 0,
+            Value::Null => {
+                return Err(Error::from(ClientError::UnexpectedNil {
+                    target: "an integer",
+                }));
+            }
             Value::BulkString(s) => str::from_utf8(s)?.parse::<i8>()?,
             Value::SimpleString(s) => s.parse::<i8>()?,
             Value::Array(a) => i8::try_from(single_integer(a)?)
@@ -111,7 +118,11 @@ impl<'de> Deserializer<'de> for &'de Value {
                 i16::try_from(*i).map_err(|_| Error::from(ClientError::CannotParseInteger))?
             }
             Value::Double(d) => double_to_int::<i16>(*d)?,
-            Value::Null => 0,
+            Value::Null => {
+                return Err(Error::from(ClientError::UnexpectedNil {
+                    target: "an integer",
+                }));
+            }
             Value::BulkString(s) => str::from_utf8(s)?.parse::<i16>()?,
             Value::SimpleString(s) => s.parse::<i16>()?,
             Value::Array(a) => i16::try_from(single_integer(a)?)
@@ -134,7 +145,11 @@ impl<'de> Deserializer<'de> for &'de Value {
                 i32::try_from(*i).map_err(|_| Error::from(ClientError::CannotParseInteger))?
             }
             Value::Double(d) => double_to_int::<i32>(*d)?,
-            Value::Null => 0,
+            Value::Null => {
+                return Err(Error::from(ClientError::UnexpectedNil {
+                    target: "an integer",
+                }));
+            }
             Value::BulkString(s) => str::from_utf8(s)?.parse::<i32>()?,
             Value::SimpleString(s) => s.parse::<i32>()?,
             Value::Array(a) => i32::try_from(single_integer(a)?)
@@ -155,7 +170,11 @@ impl<'de> Deserializer<'de> for &'de Value {
         let result = match self {
             Value::Integer(i) => i128::from(*i),
             Value::Double(d) => double_to_int::<i128>(*d)?,
-            Value::Null => 0,
+            Value::Null => {
+                return Err(Error::from(ClientError::UnexpectedNil {
+                    target: "an integer",
+                }));
+            }
             Value::BulkString(s) => str::from_utf8(s)?.parse::<i128>()?,
             Value::SimpleString(s) => s.parse::<i128>()?,
             Value::Array(a) => i128::from(single_integer(a)?),
@@ -177,7 +196,11 @@ impl<'de> Deserializer<'de> for &'de Value {
                 u128::try_from(*i).map_err(|_| Error::from(ClientError::CannotParseInteger))?
             }
             Value::Double(d) => double_to_int::<u128>(*d)?,
-            Value::Null => 0,
+            Value::Null => {
+                return Err(Error::from(ClientError::UnexpectedNil {
+                    target: "an integer",
+                }));
+            }
             Value::BulkString(s) => str::from_utf8(s)?.parse::<u128>()?,
             Value::SimpleString(s) => s.parse::<u128>()?,
             Value::Array(a) => u128::try_from(single_integer(a)?)
@@ -199,7 +222,11 @@ impl<'de> Deserializer<'de> for &'de Value {
         let result = match self {
             Value::Integer(i) => *i,
             Value::Double(d) => double_to_int::<i64>(*d)?,
-            Value::Null => 0,
+            Value::Null => {
+                return Err(Error::from(ClientError::UnexpectedNil {
+                    target: "an integer",
+                }));
+            }
             Value::BulkString(s) => str::from_utf8(s)?.parse::<i64>()?,
             Value::SimpleString(s) => s.parse::<i64>()?,
             Value::Array(a) => single_integer(a)?,
@@ -221,7 +248,11 @@ impl<'de> Deserializer<'de> for &'de Value {
                 u8::try_from(*i).map_err(|_| Error::from(ClientError::CannotParseInteger))?
             }
             Value::Double(d) => double_to_int::<u8>(*d)?,
-            Value::Null => 0,
+            Value::Null => {
+                return Err(Error::from(ClientError::UnexpectedNil {
+                    target: "an integer",
+                }));
+            }
             Value::BulkString(s) => str::from_utf8(s)?.parse::<u8>()?,
             Value::SimpleString(s) => s.parse::<u8>()?,
             Value::Array(a) => u8::try_from(single_integer(a)?)
@@ -244,7 +275,11 @@ impl<'de> Deserializer<'de> for &'de Value {
                 u16::try_from(*i).map_err(|_| Error::from(ClientError::CannotParseInteger))?
             }
             Value::Double(d) => double_to_int::<u16>(*d)?,
-            Value::Null => 0,
+            Value::Null => {
+                return Err(Error::from(ClientError::UnexpectedNil {
+                    target: "an integer",
+                }));
+            }
             Value::BulkString(s) => str::from_utf8(s)?.parse::<u16>()?,
             Value::SimpleString(s) => s.parse::<u16>()?,
             Value::Array(a) => u16::try_from(single_integer(a)?)
@@ -267,7 +302,11 @@ impl<'de> Deserializer<'de> for &'de Value {
                 u32::try_from(*i).map_err(|_| Error::from(ClientError::CannotParseInteger))?
             }
             Value::Double(d) => double_to_int::<u32>(*d)?,
-            Value::Null => 0,
+            Value::Null => {
+                return Err(Error::from(ClientError::UnexpectedNil {
+                    target: "an integer",
+                }));
+            }
             Value::BulkString(s) => str::from_utf8(s)?.parse::<u32>()?,
             Value::SimpleString(s) => s.parse::<u32>()?,
             Value::Array(a) => u32::try_from(single_integer(a)?)
@@ -290,7 +329,11 @@ impl<'de> Deserializer<'de> for &'de Value {
                 u64::try_from(*i).map_err(|_| Error::from(ClientError::CannotParseInteger))?
             }
             Value::Double(d) => double_to_int::<u64>(*d)?,
-            Value::Null => 0,
+            Value::Null => {
+                return Err(Error::from(ClientError::UnexpectedNil {
+                    target: "an integer",
+                }));
+            }
             Value::BulkString(s) => str::from_utf8(s)?.parse::<u64>()?,
             Value::SimpleString(s) => s.parse::<u64>()?,
             Value::Array(a) => u64::try_from(single_integer(a)?)
@@ -324,7 +367,11 @@ impl<'de> Deserializer<'de> for &'de Value {
             )]
             Value::Double(d) => *d as f32,
             Value::BulkString(bs) => str::from_utf8(bs)?.parse::<f32>()?,
-            Value::Null => 0.,
+            Value::Null => {
+                return Err(Error::from(ClientError::UnexpectedNil {
+                    target: "a floating-point number",
+                }));
+            }
             Value::SimpleString(s) => s.parse::<f32>()?,
             Value::Error(e) => return Err(Error::from(ErrorKind::Redis(e.clone()))),
             _ => {
@@ -349,7 +396,11 @@ impl<'de> Deserializer<'de> for &'de Value {
             Value::Integer(i) => *i as f64,
             Value::Double(d) => *d,
             Value::BulkString(bs) => str::from_utf8(bs)?.parse::<f64>()?,
-            Value::Null => 0.,
+            Value::Null => {
+                return Err(Error::from(ClientError::UnexpectedNil {
+                    target: "a floating-point number",
+                }));
+            }
             Value::SimpleString(s) => s.parse::<f64>()?,
             Value::Error(e) => return Err(Error::from(ErrorKind::Redis(e.clone()))),
             _ => {
@@ -367,7 +418,9 @@ impl<'de> Deserializer<'de> for &'de Value {
         let result: char = match self {
             Value::BulkString(bs) => single_char(str::from_utf8(bs)?)?,
             Value::SimpleString(str) => single_char(str)?,
-            Value::Null => '\0',
+            Value::Null => {
+                return Err(Error::from(ClientError::UnexpectedNil { target: "a char" }));
+            }
             Value::Error(e) => return Err(Error::from(ErrorKind::Redis(e.clone()))),
             _ => return Err(Error::from(ClientError::CannotParseChar)),
         };
@@ -381,7 +434,11 @@ impl<'de> Deserializer<'de> for &'de Value {
     {
         let result = match self {
             Value::BulkString(s) => str::from_utf8(s)?,
-            Value::Null => "",
+            Value::Null => {
+                return Err(Error::from(ClientError::UnexpectedNil {
+                    target: "a string",
+                }));
+            }
             Value::SimpleString(s) => s.as_str(),
             Value::Error(e) => return Err(Error::from(ErrorKind::Redis(e.clone()))),
             // Nothing to borrow: a number or a boolean holds no text of its own,
@@ -422,7 +479,9 @@ impl<'de> Deserializer<'de> for &'de Value {
             }
             Value::Double(d) => visitor.visit_string(d.to_string()),
             Value::Boolean(b) => visitor.visit_str(if *b { "true" } else { "false" }),
-            Value::Null => visitor.visit_borrowed_str(""),
+            Value::Null => Err(Error::from(ClientError::UnexpectedNil {
+                target: "a string",
+            })),
             Value::Error(e) => Err(Error::from(ErrorKind::Redis(e.clone()))),
             _ => Err(Error::from(ClientError::CannotParseString)),
         }

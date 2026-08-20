@@ -394,8 +394,11 @@ async fn ft_config_get_set() -> Result<()> {
     let result: SmallVec<[(String, u64); 1]> = client.ft_config_get("TIMEOUT").await?;
     assert_eq!(("TIMEOUT".to_owned(), 42), result[0]);
 
-    let result: HashMap<String, String> = client.ft_config_get("*").await?;
+    // Options that carry no value — `EXTLOAD`, `FRISOINI` — answer nil, so the
+    // value type has to hold the absence.
+    let result: HashMap<String, Option<String>> = client.ft_config_get("*").await?;
     assert!(!result.is_empty());
+    assert_eq!(Some(&None), result.get("EXTLOAD"));
 
     Ok(())
 }

@@ -160,8 +160,12 @@ fn integer() {
     let result: i64 = deserialize(":12\r\n").unwrap(); // 12
     assert_eq!(12, result);
 
-    let result: i64 = deserialize("_\r\n").unwrap(); // null
-    assert_eq!(0, result);
+    // A nil is not an integer: `0` is a value a key can hold.
+    let result: Result<i64> = deserialize("_\r\n");
+    assert!(matches!(
+        result.unwrap_err().kind(),
+        ErrorKind::Client(ClientError::UnexpectedNil { .. })
+    ));
 
     let result: i64 = deserialize("$2\r\n12\r\n").unwrap(); // b"12"
     assert_eq!(12, result);
@@ -218,8 +222,12 @@ fn float() -> Result<()> {
     let result: f64 = deserialize(",12.12\r\n")?; // 12.12
     assert_eq!(12.12, result);
 
-    let result: f64 = deserialize("_\r\n")?; // null
-    assert_eq!(0.0, result);
+    // A nil is not a number: `0.0` is a value a key can hold.
+    let result: Result<f64> = deserialize("_\r\n");
+    assert!(matches!(
+        result.unwrap_err().kind(),
+        ErrorKind::Client(ClientError::UnexpectedNil { .. })
+    ));
 
     let result: f64 = deserialize("$5\r\n12.12\r\n")?; // b"12.12"
     assert_eq!(12.12, result);
@@ -529,8 +537,12 @@ fn a_boolean_reply_read_as_a_string_renders_as_true_or_false() -> Result<()> {
     let result: String = deserialize("#f\r\n")?;
     assert_eq!("false", result);
 
-    let result: String = deserialize("_\r\n")?;
-    assert_eq!("", result);
+    // A nil is not a string: `""` is a value a key can hold.
+    let result: Result<String> = deserialize("_\r\n");
+    assert!(matches!(
+        result.unwrap_err().kind(),
+        ErrorKind::Client(ClientError::UnexpectedNil { .. })
+    ));
 
     Ok(())
 }
@@ -1150,13 +1162,17 @@ fn i64_min_is_parsed_not_rejected() {
 }
 
 #[test]
-fn null_still_deserializes_to_integer_default() {
+fn null_does_not_deserialize_to_an_integer_default() {
     log_try_init();
 
-    // Documented ergonomic coercion: a nil reply deserializes to 0. This is
-    // deliberate and preserved by the lossy-cast fix.
-    let value: i32 = deserialize("_\r\n").unwrap();
-    assert_eq!(0, value);
+    // A nil reply carries the absence to the caller. `Option<i32>` accepts it;
+    // `i32` cannot, `0` being a value a key can hold.
+    let result: Result<i32> = deserialize("_\r\n");
+    assert!(matches!(
+        result.unwrap_err().kind(),
+        ErrorKind::Client(ClientError::UnexpectedNil { .. })
+    ));
+    assert_eq!(None, deserialize::<Option<i32>>("_\r\n").unwrap());
 }
 
 #[test]
@@ -1277,6 +1293,80 @@ fn a_map_keeps_the_reply_order_and_its_duplicate_keys() -> Result<()> {
         ],
         entries
     );
+
+    Ok(())
+}
+
+/// A nil read as a scalar is refused, not coerced.
+///
+/// Redis answers nil for a key that does not exist. Read as a number it used to
+/// be `0`, as a string `""`, as a char `'\0'` — each indistinguishable from the
+/// value a present key holds, and each returned forever without a signal.
+#[test]
+fn a_nil_read_as_a_scalar_is_an_error() -> Result<()> {
+    log_try_init();
+
+    fn refused<T: serde::de::DeserializeOwned + std::fmt::Debug>(target: &str) {
+        let result: Result<T> = deserialize("_\r\n");
+        let error = result.expect_err("a nil is not a {target}");
+        assert!(
+            matches!(
+                error.kind(),
+                ErrorKind::Client(ClientError::UnexpectedNil { target: named }) if *named == target
+            ),
+            "reading a nil as {target} gave {error:?}"
+        );
+    }
+
+    refused::<i8>("an integer");
+    refused::<i16>("an integer");
+    refused::<i32>("an integer");
+    refused::<i64>("an integer");
+    refused::<i128>("an integer");
+    refused::<u8>("an integer");
+    refused::<u16>("an integer");
+    refused::<u32>("an integer");
+    refused::<u64>("an integer");
+    refused::<u128>("an integer");
+    refused::<f32>("a floating-point number");
+    refused::<f64>("a floating-point number");
+    refused::<char>("a char");
+    refused::<String>("a string");
+
+    Ok(())
+}
+
+/// `Option<R>` is the type that accepts the absence, and the escape hatch the
+/// error message names. `Value` keeps carrying it as `Value::Nil`.
+#[test]
+fn a_nil_still_reads_as_an_option_or_a_value() -> Result<()> {
+    log_try_init();
+
+    assert_eq!(None, deserialize::<Option<i64>>("_\r\n")?);
+    assert_eq!(None, deserialize::<Option<f64>>("_\r\n")?);
+    assert_eq!(None, deserialize::<Option<String>>("_\r\n")?);
+    assert_eq!(None, deserialize::<Option<char>>("_\r\n")?);
+    assert_eq!(Value::Null, deserialize::<Value>("_\r\n")?);
+
+    Ok(())
+}
+
+/// The two deserializers must refuse it alike, the rule being one rule.
+#[test]
+fn a_nil_reads_the_same_off_the_wire_and_off_a_value() -> Result<()> {
+    log_try_init();
+
+    let value: Value = deserialize("_\r\n")?;
+
+    let from_wire = deserialize::<i64>("_\r\n").unwrap_err();
+    let from_value = i64::deserialize(&value).unwrap_err();
+    assert_eq!(from_wire.to_string(), from_value.to_string());
+
+    let from_wire = deserialize::<String>("_\r\n").unwrap_err();
+    let from_value = String::deserialize(&value).unwrap_err();
+    assert_eq!(from_wire.to_string(), from_value.to_string());
+
+    assert_eq!(None, Option::<i64>::deserialize(&value)?);
 
     Ok(())
 }

@@ -19,12 +19,17 @@ The upgrade checklist. Each item is stated in the section it belongs to below.
 - **Five deprecated string commands are removed**: `getset`, `psetex`, `setex`,
   `setnx` and `substr`.
 
-- **Seven commands now route on a key they only named before.** In Cluster mode a
-  cross-slot call to `sdiffstore`, `sinterstore`, `zdiffstore`, `zinterstore`,
-  `zunionstore`, `sort_and_store` or `lcs` was sent and refused by the server with
-  `CROSSSLOT`; it is now refused locally with
-  `ClientError::MismatchedKeySlots`. Code matching on the server error must also
-  accept the client one. Stated in full under Fixed.
+- **A `nil` reply read as a scalar is now an error, not `0` / `""` / `'\0'`.** Declare
+  the response as an `Option` to accept the absence. The rule reaches inside a reply,
+  so `hmget` is read as `Vec<Option<String>>`, and three public fields become
+  `Option<String>`: `TsInfo::source_key`, `FunctionInfo::description`,
+  `XPendingResult::{smallest_id, greatest_id}`. Collections, `Value` and `bool` keep
+  reading a `nil`.
+
+- **Seven commands now route on a key they only named before.** A cross-slot call to
+  `sdiffstore`, `sinterstore`, `zdiffstore`, `zinterstore`, `zunionstore`,
+  `sort_and_store` or `lcs` was refused by the server with `CROSSSLOT`, and is now
+  refused locally with `ClientError::MismatchedKeySlots`.
 
 - **The queue memory budget now covers what is in flight.** A command was charged
   to `BackpressureConfig::max_queued_bytes` until it was written, and is now charged
@@ -63,6 +68,9 @@ The upgrade checklist. Each item is stated in the section it belongs to below.
 `cargo semver-checks` reports 11 removed trait methods and 4 removed structs.
 
 ### Added
+
+- **`ClientError::UnexpectedNil`**, raised when a `nil` reply is read as a type that
+  cannot hold an absence. The message names the target type and points at `Option`.
 
 - **A key argument that is not a single key fails the command**, with
   `ClientError::InvalidKeyArity` naming the command and the argument count. Command
@@ -190,14 +198,16 @@ The upgrade checklist. Each item is stated in the section it belongs to below.
 
 ### Fixed
 
-- **Seven commands did not route on a key they name.** `sdiffstore`, `sinterstore`,
-  `zdiffstore`, `zinterstore`, `zunionstore` and `sort_and_store` added their
-  destination as a plain argument, and `lcs` did the same with its second key, so
-  the key took no part in slot computation. In Cluster mode the command routed on
-  its remaining keys alone, and the client-side `MismatchedKeySlots` check could not
-  see the unmarked key: a cross-slot pair was sent and refused by the server instead
-  of being refused locally. `sunionstore` and the two other `lcs` forms were already
-  correct.
+- **Seven commands did not route on a key they name.** Six store commands added their
+  destination as a plain argument, and `lcs` did the same with its second key, so the
+  key took no part in slot computation: the command routed on its remaining keys
+  alone, and the local cross-slot check could not see the unmarked one.
+
+- **Four replies reported an absence as a value.** `TS.INFO` on a series that is not a
+  compaction target answered `""` for its source key, `FUNCTION LIST` did the same for
+  a function with no description, `FT.CONFIG GET` for an option carrying no value, and
+  `XPENDING` on an empty group for its smallest and greatest ids. All four now answer
+  `None`.
 
 - **A client-side cache key that serialized to several arguments filed the entry
   under the first of them.** `Cache::get` on a struct key kept one entry for every

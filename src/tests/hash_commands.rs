@@ -4,7 +4,7 @@ use std::{
 };
 
 use crate::{
-    ErrorKind, RedisError, RedisErrorKind, Result,
+    ClientError, ErrorKind, RedisError, RedisErrorKind, Result,
     commands::{
         ExpireOption, FlushingMode, GenericCommands, GetExOptions, HScanOptions, HScanResult,
         HSetExCondition, HashCommands, ServerCommands, SetExpiration,
@@ -394,11 +394,13 @@ async fn hmget() -> Result<()> {
     client
         .hset("key", [("field1", "Hello"), ("field2", "World")])
         .await?;
-    let values: Vec<String> = client.hmget("key", ["field1", "field2", "nofield"]).await?;
-    assert_eq!(3, values.len());
-    assert_eq!("Hello".to_owned(), values[0]);
-    assert_eq!("World".to_owned(), values[1]);
-    assert_eq!("".to_owned(), values[2]);
+    // A field the hash does not hold answers nil, so the element type carries
+    // the hole: `String` would read it as `""`, which a present field can hold.
+    let values: Vec<Option<String>> = client.hmget("key", ["field1", "field2", "nofield"]).await?;
+    assert_eq!(
+        vec![Some("Hello".to_owned()), Some("World".to_owned()), None],
+        values
+    );
 
     Ok(())
 }
@@ -913,8 +915,16 @@ async fn hget_missing_field() -> Result<()> {
     let missing: Option<u32> = client.hget("key", "unknown").await?;
     assert_eq!(None, missing);
 
-    let missing: u32 = client.hget("key", "unknown").await?;
-    assert_eq!(0, missing);
+    // Asking for the value of an absent field as a bare `u32` has no honest
+    // answer: `0` is the value a present field can hold.
+    let error = client
+        .hget::<u32>("key", "unknown")
+        .await
+        .expect_err("a missing field is not a u32");
+    assert!(matches!(
+        error.kind(),
+        ErrorKind::Client(ClientError::UnexpectedNil { .. })
+    ));
 
     Ok(())
 }

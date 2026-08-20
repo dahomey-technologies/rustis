@@ -77,9 +77,8 @@ pub trait StringCommands<'a>: Sized {
     /// the value of key, or `nil` when key does not exist.
     ///
     /// # Warning
-    /// Unless `R` is an [`Option`], a `nil` reply decodes as the neutral value of `R`:
-    /// `""` for a `String`, `0` for an integer, `0.0` for a float, `false` for a `bool`.
-    /// A missing key is then indistinguishable from a key holding that value. See
+    /// A missing key answers `nil`, which no scalar `R` can hold: `""` and `0` are
+    /// values a present key holds. Declare `R` as an [`Option`] to accept it. See
     /// [Command results](crate::resp#command-results).
     ///
     /// # Example
@@ -96,18 +95,13 @@ pub trait StringCommands<'a>: Sized {
     ///     let client = Client::connect("127.0.0.1:6379").await?;
     ///     client.flushall(FlushingMode::Sync).await?;
     ///
-    ///     // an Option keeps `nil` apart from a value...
+    ///     // an Option accepts the absence...
     ///     let value: Option<String> = client.get("key").await?;
     ///     assert_eq!(None, value);
     ///
-    ///     // ... while a bare type hides it: `nil` becomes an empty String,
-    ///     // as if the key held one
-    ///     let value: String = client.get("key").await?;
-    ///     assert_eq!("", value);
-    ///
-    ///     // same trap on numbers: a missing counter reads as 0
-    ///     let counter: i64 = client.get("counter").await?;
-    ///     assert_eq!(0, counter);
+    ///     // ... while a bare type has no honest value for it
+    ///     assert!(client.get::<String>("key").await.is_err());
+    ///     assert!(client.get::<i64>("counter").await.is_err());
     ///
     ///     client.set("key", "value").await?;
     ///     let value: String = client.get("key").await?;

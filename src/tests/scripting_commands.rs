@@ -303,7 +303,10 @@ async fn function_list() -> Result<()> {
     assert_eq!("LUA", libs[0].engine);
     assert_eq!(1, libs[0].functions.len());
     assert_eq!("myfunc", libs[0].functions[0].name);
-    assert_eq!("My description", libs[0].functions[0].description);
+    assert_eq!(
+        Some("My description".to_owned()),
+        libs[0].functions[0].description
+    );
     assert_eq!(1, libs[0].functions[0].flags.len());
     assert_eq!("no-writes", libs[0].functions[0].flags[0]);
     assert_eq!(None, libs[0].library_code);
@@ -316,7 +319,10 @@ async fn function_list() -> Result<()> {
     assert_eq!("LUA", libs[0].engine);
     assert_eq!(1, libs[0].functions.len());
     assert_eq!("myfunc", libs[0].functions[0].name);
-    assert_eq!("My description", libs[0].functions[0].description);
+    assert_eq!(
+        Some("My description".to_owned()),
+        libs[0].functions[0].description
+    );
     assert_eq!(1, libs[0].functions[0].flags.len());
     assert_eq!("no-writes", libs[0].functions[0].flags[0]);
     assert_eq!(Some(code.to_owned()), libs[0].library_code);

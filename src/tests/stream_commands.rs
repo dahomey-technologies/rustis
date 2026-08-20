@@ -843,8 +843,8 @@ async fn xreadgroup() -> Result<()> {
 
     let result = client.xpending("mystream", "mygroup").await?;
     assert_eq!(5, result.num_pending_messages);
-    assert_eq!(id1, result.smallest_id);
-    assert_eq!(id5, result.greatest_id);
+    assert_eq!(Some(id1.clone()), result.smallest_id);
+    assert_eq!(Some(id5.clone()), result.greatest_id);
     assert_eq!(2, result.consumers.len());
     assert_eq!("Alice", result.consumers[0].consumer);
     assert_eq!(2, result.consumers[0].num_messages);

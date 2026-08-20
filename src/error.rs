@@ -70,6 +70,19 @@ pub enum ClientError {
     /// Raised when cannot parse nil from the RESP buffer
     #[error("protocol: cannot parse nil")]
     CannotParseNil,
+    /// Raised when a nil reply is read as a type that cannot hold an absence.
+    ///
+    /// Redis answers nil for a key that does not exist, so reading it as a
+    /// number, a string or a char would hand back `0`, `""` or `'\0'` — a value
+    /// no different from the one a present key holds. The absent key is carried
+    /// to the caller instead, and `Option<R>` is the type that accepts it.
+    #[error(
+        "the server answered nil, which cannot be read as {target}; declare the response as an `Option` to accept it"
+    )]
+    UnexpectedNil {
+        /// The type the reply was being read as, as it reads in the message.
+        target: &'static str,
+    },
     /// Raised when cannot parse boolean from the RESP buffer
     #[error("protocol: cannot parse boolean")]
     CannotParseBoolean,
@@ -316,6 +329,7 @@ impl ClientError {
             // caller's type, while routing, or on the caller's own input — so
             // exactly one command fails and the stream stays usable.
             ClientError::ExpectedArrayForMGet
+            | ClientError::UnexpectedNil { .. }
             | ClientError::CannotParseNil
             | ClientError::CannotParseChar
             | ClientError::CannotParseStr

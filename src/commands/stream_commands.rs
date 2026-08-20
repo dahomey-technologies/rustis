@@ -1368,8 +1368,12 @@ impl<'a> XPendingOptions<'a> {
 #[non_exhaustive]
 pub struct XPendingResult {
     pub num_pending_messages: usize,
-    pub smallest_id: String,
-    pub greatest_id: String,
+    /// `None` when the group has no pending entry, which the server reports as
+    /// nil rather than as an id.
+    pub smallest_id: Option<String>,
+    /// `None` under the same condition as
+    /// [`smallest_id`](Self::smallest_id).
+    pub greatest_id: Option<String>,
     pub consumers: Vec<XPendingConsumer>,
 }
 

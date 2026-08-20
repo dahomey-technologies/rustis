@@ -653,7 +653,8 @@ async fn json_resp() -> Result<()> {
     assert_eq!("prop3", iter.next().unwrap().into::<String>()?);
     assert_eq!("true", iter.next().unwrap().into::<String>()?);
     assert_eq!("prop4", iter.next().unwrap().into::<String>()?);
-    assert_eq!("", iter.next().unwrap().into::<String>()?);
+    // A JSON null is a RESP nil, which is not a string of any kind.
+    assert_eq!(Value::Null, iter.next().unwrap());
     assert_eq!("prop5", iter.next().unwrap().into::<String>()?);
     let prop5_values: Vec<Value> = iter.next().unwrap().into()?;
     assert_eq!(3, prop5_values.len());

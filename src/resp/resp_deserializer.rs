@@ -64,6 +64,9 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
             RespView::Error(e) => {
                 return Err(Error::from(ErrorKind::Redis(RedisError::try_from(e)?)));
             }
+            // The one scalar a nil reads as: the server answers nil to say a
+            // conditional write did not happen, which is `false` and not an
+            // absence. Every other scalar refuses it.
             RespView::Null => false,
             _ => return Err(Error::from(ClientError::CannotParseBoolean)),
         };
@@ -90,7 +93,11 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
             RespView::Error(e) => {
                 return Err(Error::from(ErrorKind::Redis(RedisError::try_from(e)?)));
             }
-            RespView::Null => 0,
+            RespView::Null => {
+                return Err(Error::from(ClientError::UnexpectedNil {
+                    target: "an integer",
+                }));
+            }
             _ => return Err(Error::from(ClientError::CannotParseInteger)),
         };
         visitor.visit_i128(result)
@@ -119,7 +126,11 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
             RespView::Error(e) => {
                 return Err(Error::from(ErrorKind::Redis(RedisError::try_from(e)?)));
             }
-            RespView::Null => 0,
+            RespView::Null => {
+                return Err(Error::from(ClientError::UnexpectedNil {
+                    target: "an integer",
+                }));
+            }
             _ => return Err(Error::from(ClientError::CannotParseInteger)),
         };
         visitor.visit_u128(result)
@@ -144,7 +155,11 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
             RespView::Error(e) => {
                 return Err(Error::from(ErrorKind::Redis(RedisError::try_from(e)?)));
             }
-            RespView::Null => 0,
+            RespView::Null => {
+                return Err(Error::from(ClientError::UnexpectedNil {
+                    target: "an integer",
+                }));
+            }
             _ => return Err(Error::from(ClientError::CannotParseInteger)),
         };
         visitor.visit_i64(result)
@@ -173,7 +188,11 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
             RespView::Error(e) => {
                 return Err(Error::from(ErrorKind::Redis(RedisError::try_from(e)?)));
             }
-            RespView::Null => 0,
+            RespView::Null => {
+                return Err(Error::from(ClientError::UnexpectedNil {
+                    target: "an integer",
+                }));
+            }
             _ => return Err(Error::from(ClientError::CannotParseInteger)),
         };
         visitor.visit_u64(result)
@@ -202,7 +221,11 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
             RespView::Error(e) => {
                 return Err(Error::from(ErrorKind::Redis(RedisError::try_from(e)?)));
             }
-            RespView::Null => 0,
+            RespView::Null => {
+                return Err(Error::from(ClientError::UnexpectedNil {
+                    target: "an integer",
+                }));
+            }
             _ => return Err(Error::from(ClientError::CannotParseInteger)),
         };
         visitor.visit_i32(result)
@@ -231,7 +254,11 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
             RespView::Error(e) => {
                 return Err(Error::from(ErrorKind::Redis(RedisError::try_from(e)?)));
             }
-            RespView::Null => 0,
+            RespView::Null => {
+                return Err(Error::from(ClientError::UnexpectedNil {
+                    target: "an integer",
+                }));
+            }
             _ => return Err(Error::from(ClientError::CannotParseInteger)),
         };
         visitor.visit_u32(result)
@@ -260,7 +287,11 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
             RespView::Error(e) => {
                 return Err(Error::from(ErrorKind::Redis(RedisError::try_from(e)?)));
             }
-            RespView::Null => 0,
+            RespView::Null => {
+                return Err(Error::from(ClientError::UnexpectedNil {
+                    target: "an integer",
+                }));
+            }
             _ => return Err(Error::from(ClientError::CannotParseInteger)),
         };
         visitor.visit_i16(result)
@@ -289,7 +320,11 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
             RespView::Error(e) => {
                 return Err(Error::from(ErrorKind::Redis(RedisError::try_from(e)?)));
             }
-            RespView::Null => 0,
+            RespView::Null => {
+                return Err(Error::from(ClientError::UnexpectedNil {
+                    target: "an integer",
+                }));
+            }
             _ => return Err(Error::from(ClientError::CannotParseInteger)),
         };
         visitor.visit_u16(result)
@@ -318,7 +353,11 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
             RespView::Error(e) => {
                 return Err(Error::from(ErrorKind::Redis(RedisError::try_from(e)?)));
             }
-            RespView::Null => 0,
+            RespView::Null => {
+                return Err(Error::from(ClientError::UnexpectedNil {
+                    target: "an integer",
+                }));
+            }
             _ => return Err(Error::from(ClientError::CannotParseInteger)),
         };
         visitor.visit_i8(result)
@@ -347,7 +386,11 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
             RespView::Error(e) => {
                 return Err(Error::from(ErrorKind::Redis(RedisError::try_from(e)?)));
             }
-            RespView::Null => 0,
+            RespView::Null => {
+                return Err(Error::from(ClientError::UnexpectedNil {
+                    target: "an integer",
+                }));
+            }
             _ => return Err(Error::from(ClientError::CannotParseInteger)),
         };
         visitor.visit_u8(result)
@@ -375,7 +418,11 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
                 RespView::Error(e) => {
                     return Err(Error::from(ErrorKind::Redis(RedisError::try_from(e)?)));
                 }
-                RespView::Null => 0.0,
+                RespView::Null => {
+                    return Err(Error::from(ClientError::UnexpectedNil {
+                        target: "a floating-point number",
+                    }));
+                }
                 _ => return Err(Error::from(ClientError::CannotParseDouble)),
             };
         visitor.visit_f64(result)
@@ -409,7 +456,11 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
                 RespView::Error(e) => {
                     return Err(Error::from(ErrorKind::Redis(RedisError::try_from(e)?)));
                 }
-                RespView::Null => 0.0,
+                RespView::Null => {
+                    return Err(Error::from(ClientError::UnexpectedNil {
+                        target: "a floating-point number",
+                    }));
+                }
                 _ => return Err(Error::from(ClientError::CannotParseDouble)),
             };
         visitor.visit_f32(result)
@@ -428,7 +479,9 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
                     _ => return Err(Error::from(ClientError::CannotParseChar)),
                 }
             }
-            RespView::Null => '\0',
+            RespView::Null => {
+                return Err(Error::from(ClientError::UnexpectedNil { target: "a char" }));
+            }
             RespView::Error(e) => {
                 return Err(Error::from(ErrorKind::Redis(RedisError::try_from(e)?)));
             }
@@ -452,7 +505,11 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
             RespView::Integer(_, raw) | RespView::Double(_, raw) if !raw.is_empty() => {
                 str::from_utf8(raw)?
             }
-            RespView::Null => "",
+            RespView::Null => {
+                return Err(Error::from(ClientError::UnexpectedNil {
+                    target: "a string",
+                }));
+            }
             RespView::Error(e) => {
                 return Err(Error::from(ErrorKind::Redis(RedisError::try_from(e)?)));
             }
@@ -498,7 +555,9 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
             }
             RespView::Double(d, _) => visitor.visit_string(d.to_string()),
             RespView::Boolean(b) => visitor.visit_str(if b { "true" } else { "false" }),
-            RespView::Null => visitor.visit_borrowed_str(""),
+            RespView::Null => Err(Error::from(ClientError::UnexpectedNil {
+                target: "a string",
+            })),
             RespView::Error(e) => Err(Error::from(ErrorKind::Redis(RedisError::try_from(e)?))),
             _ => Err(Error::from(ClientError::CannotParseString)),
         }

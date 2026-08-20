@@ -99,8 +99,12 @@ fn i64() -> Result<()> {
     let result = i64::deserialize(&Value::BulkString(b"12".to_vec()))?;
     assert_eq!(12, result);
 
-    let result = i64::deserialize(&Value::Null)?;
-    assert_eq!(0, result);
+    // A nil carries an absence, which i64 cannot hold.
+    let error = i64::deserialize(&Value::Null).unwrap_err();
+    assert!(matches!(
+        error.kind(),
+        ErrorKind::Client(ClientError::UnexpectedNil { .. })
+    ));
 
     let result = i64::deserialize(&Value::Array(vec![Value::Integer(12)]))?;
     assert_eq!(12, result);
@@ -124,8 +128,12 @@ fn u64() -> Result<()> {
     let result = u64::deserialize(&Value::BulkString(b"12".to_vec()))?;
     assert_eq!(12, result);
 
-    let result = u64::deserialize(&Value::Null)?;
-    assert_eq!(0, result);
+    // A nil carries an absence, which u64 cannot hold.
+    let error = u64::deserialize(&Value::Null).unwrap_err();
+    assert!(matches!(
+        error.kind(),
+        ErrorKind::Client(ClientError::UnexpectedNil { .. })
+    ));
 
     let result = u64::deserialize(&Value::Array(vec![Value::Integer(12)]))?;
     assert_eq!(12, result);
@@ -149,8 +157,12 @@ fn f32() -> Result<()> {
     let result = f32::deserialize(&Value::BulkString(b"12.12".to_vec()))?;
     assert_eq!(12.12, result);
 
-    let result = f32::deserialize(&Value::Null)?;
-    assert_eq!(0., result);
+    // A nil carries an absence, which f32 cannot hold.
+    let error = f32::deserialize(&Value::Null).unwrap_err();
+    assert!(matches!(
+        error.kind(),
+        ErrorKind::Client(ClientError::UnexpectedNil { .. })
+    ));
 
     Ok(())
 }
@@ -171,8 +183,12 @@ fn f64() -> Result<()> {
     let result = f64::deserialize(&Value::BulkString(b"12.12".to_vec()))?;
     assert_eq!(12.12, result);
 
-    let result = f64::deserialize(&Value::Null)?;
-    assert_eq!(0., result);
+    // A nil carries an absence, which f64 cannot hold.
+    let error = f64::deserialize(&Value::Null).unwrap_err();
+    assert!(matches!(
+        error.kind(),
+        ErrorKind::Client(ClientError::UnexpectedNil { .. })
+    ));
 
     Ok(())
 }
@@ -187,8 +203,12 @@ fn char() -> Result<()> {
     let result = char::deserialize(&Value::BulkString(b"a".to_vec()))?;
     assert_eq!('a', result);
 
-    let result = char::deserialize(&Value::Null)?;
-    assert_eq!('\0', result);
+    // A nil carries an absence, which char cannot hold.
+    let error = char::deserialize(&Value::Null).unwrap_err();
+    assert!(matches!(
+        error.kind(),
+        ErrorKind::Client(ClientError::UnexpectedNil { .. })
+    ));
 
     Ok(())
 }
@@ -205,8 +225,12 @@ fn str() -> Result<()> {
     let result = <&str>::deserialize(&value)?;
     assert_eq!("foo", result);
 
-    let result = <&str>::deserialize(&Value::Null)?;
-    assert_eq!("", result);
+    // A nil carries an absence, which <&str> cannot hold.
+    let error = <&str>::deserialize(&Value::Null).unwrap_err();
+    assert!(matches!(
+        error.kind(),
+        ErrorKind::Client(ClientError::UnexpectedNil { .. })
+    ));
 
     Ok(())
 }
@@ -224,8 +248,12 @@ fn string() -> Result<()> {
     let result = String::deserialize(&Value::Double(12.))?;
     assert_eq!("12", result);
 
-    let result = String::deserialize(&Value::Null)?;
-    assert_eq!("", result);
+    // A nil carries an absence, which String cannot hold.
+    let error = String::deserialize(&Value::Null).unwrap_err();
+    assert!(matches!(
+        error.kind(),
+        ErrorKind::Client(ClientError::UnexpectedNil { .. })
+    ));
 
     Ok(())
 }
@@ -788,9 +816,9 @@ fn out_of_range_integer_errors_instead_of_truncating() {
         "u32 from -1 should error, got {error:?}"
     );
 
-    // In-range values and the nil-to-default coercion are preserved.
+    // In-range values are preserved; a nil is refused, not defaulted.
     assert_eq!(42u8, u8::deserialize(&Value::Integer(42)).unwrap());
-    assert_eq!(0i32, i32::deserialize(&Value::Null).unwrap());
+    assert!(i32::deserialize(&Value::Null).is_err());
 }
 
 #[test]
@@ -901,7 +929,7 @@ fn integers_128_are_supported() {
         u128::deserialize(&Value::BulkString(b"12".to_vec())).unwrap()
     );
     assert_eq!(12i128, i128::deserialize(&Value::Double(12.)).unwrap());
-    assert_eq!(0i128, i128::deserialize(&Value::Null).unwrap());
+    assert!(i128::deserialize(&Value::Null).is_err());
     let error = u128::deserialize(&Value::Integer(-1)).unwrap_err();
     assert!(matches!(
         error.kind(),

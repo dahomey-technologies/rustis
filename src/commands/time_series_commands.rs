@@ -1009,8 +1009,11 @@ pub struct TsInfoResult {
     /// A map of label-value pairs that represent the metadata labels of this time series
     pub labels: HashMap<String, String>,
     /// Key name for source time series in case the current series is a target
-    ///  of a [`compaction rule`](https://redis.io/commands/ts.createrule/)
-    pub source_key: String,
+    ///  of a [`compaction rule`](https://redis.io/commands/ts.createrule/).
+    ///
+    /// `None` when the series is not a compaction target, which the server
+    /// reports as nil.
+    pub source_key: Option<String>,
     /// A nested array of the [`compaction rules`](https://redis.io/commands/ts.createrule/)
     /// defined in this time series, with these elements for each rule:
     /// * The compaction key

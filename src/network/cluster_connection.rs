@@ -1,7 +1,8 @@
 use super::cluster_request::{
     RequestInfo, RequestQueue, SubRequest, collect_redirections, is_pub_sub_command,
 };
-use super::cluster_topology::{ClusterTopology, NodeId, NodeReach};
+use super::cluster_send_batch::SendBatch;
+use super::cluster_topology::{ClusterNodeAddress, ClusterTopology, NodeId, NodeReach};
 use super::pub_sub_push::PubSubPush;
 use crate::{
     ClientError, ConnectionState, Error, ErrorKind, Result, RetryReason,
@@ -122,6 +123,18 @@ fn is_broadcast_pub_sub_command(command: &Command) -> bool {
     )
 }
 
+/// The `ASK` redirections among the retry reasons, as the slot they name and the
+/// node that is importing it.
+fn ask_reasons(retry_reasons: &[RetryReason]) -> Vec<(u16, ClusterNodeAddress)> {
+    retry_reasons
+        .iter()
+        .filter_map(|r| match r {
+            RetryReason::Ask { hash_slot, address } => Some((*hash_slot, address.clone())),
+            _ => None,
+        })
+        .collect()
+}
+
 /// Whether a push frame is a subscription command's acknowledgement, as opposed
 /// to a published message.
 ///
@@ -226,12 +239,11 @@ pub(crate) struct ClusterConnection {
     next_topology_refresh: Option<Instant>,
     /// Whether the topology has already been refreshed during the send batch
     /// currently being fed. Reset by `flush`, which ends that batch.
-    refreshed_in_current_batch: bool,
     /// Whether the transient-error delay has already been awaited during the
     /// send batch currently being fed. Reset by `flush`, like the flag above:
     /// every command of a retried batch carries the same reasons, and the delay
     /// is owed once, not once per command.
-    delayed_in_current_batch: bool,
+    send_batch: SendBatch,
     #[cfg(test)]
     test_hook: Option<ClusterTestHook>,
 }
@@ -261,8 +273,7 @@ impl ClusterConnection {
             pending_reply_skip: None,
             transaction_state: TransactionState::default(),
             next_topology_refresh: cluster_config.topology_refresh_interval.map(deadline_after),
-            refreshed_in_current_batch: false,
-            delayed_in_current_batch: false,
+            send_batch: SendBatch::default(),
             #[cfg(test)]
             test_hook: config.cluster_test_hook.clone(),
         };
@@ -327,100 +338,11 @@ impl ClusterConnection {
         command: &Command,
         retry_reasons: &[RetryReason],
     ) -> Result<()> {
-        if retry_reasons.iter().any(|r| {
-            matches!(
-                r,
-                RetryReason::Moved {
-                    hash_slot: _,
-                    address: _
-                }
-            )
-        }) {
-            // The retry reasons are carried by the message, so every command of
-            // a retried batch is fed with them. One refresh per send batch is
-            // enough: it reloads the whole topology, which covers them all.
-            if !self.refreshed_in_current_batch {
-                self.refreshed_in_current_batch = true;
-                self.refresh_nodes_and_slot_ranges().await?;
-            }
-        }
+        self.absorb_retry_reasons(retry_reasons).await?;
 
-        // A transient cluster error means the command never ran: the slot is
-        // mid-migration (`TRYAGAIN`) or the shard is briefly unavailable
-        // (`CLUSTERDOWN`). The cluster spec asks the client to replay it after a
-        // short pause, which is what this awaits. It holds the whole send batch,
-        // and that is the point: the cluster just said it cannot serve this
-        // slot, so racing back at it would only burn the message's attempts.
-        if let Some(delay) = retry_reasons
-            .iter()
-            .filter_map(|r| match r {
-                RetryReason::TryAgain { delay, .. } => Some(*delay),
-                _ => None,
-            })
-            .max()
-            && !self.delayed_in_current_batch
-        {
-            self.delayed_in_current_batch = true;
-            debug!("waiting {delay:?} before replaying a transient cluster error");
-            sleep(delay).await;
-
-            if !self.refreshed_in_current_batch
-                && retry_reasons.iter().any(|r| {
-                    matches!(
-                        r,
-                        RetryReason::TryAgain {
-                            refresh_topology: true,
-                            ..
-                        }
-                    )
-                })
-            {
-                self.refreshed_in_current_batch = true;
-                // A cluster that is still down answers nothing usable; the
-                // replay then goes to the topology already known and earns
-                // another `CLUSTERDOWN`, which is a retry rather than a failure.
-                if let Err(e) = self.refresh_nodes_and_slot_ranges().await {
-                    warn!("Cannot refresh the topology after a CLUSTERDOWN: {e}");
-                }
-            }
-        }
-
-        let ask_reasons = retry_reasons
-            .iter()
-            .filter_map(|r| {
-                if let RetryReason::Ask { hash_slot, address } = r {
-                    Some((*hash_slot, address.clone()))
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
-
-        // An ASK points at the node importing the slot, which the local topology
-        // may not know: it may have joined, or only been learned about, after
-        // the last discovery. Unlike a MOVED, an ASK invalidates nothing, so
-        // nothing else would ever bring that node in and the command would fail
-        // outright, where the cluster spec requires the redirection to be
-        // followed. Reload the topology so the target becomes reachable.
-        if !self.refreshed_in_current_batch
-            && ask_reasons
-                .iter()
-                .any(|(_hash_slot, address)| !self.topology.holds_address(address))
-        {
-            self.refreshed_in_current_batch = true;
-            self.refresh_nodes_and_slot_ranges().await?;
-        }
-
-        // A held skip belongs to the caller's command, not to the `MULTI` released
-        // here on its behalf, so it is set aside across that injection.
-        let held_skip = self.pending_reply_skip.take();
-        if let Some(multi_cmd) = self.transaction_state.pending_multi.take() {
-            let (node_idx, _) = self.get_no_request_policy_node(command, &ask_reasons)?;
-            self.feed_no_request_policy(&multi_cmd, node_idx, false)
-                .await?;
-            self.transaction_state.node_index = Some(node_idx);
-        }
-        self.pending_reply_skip = held_skip;
+        let ask_reasons = ask_reasons(retry_reasons);
+        self.reach_unknown_ask_targets(&ask_reasons).await?;
+        self.release_pending_multi(command, &ask_reasons).await?;
 
         match command.name() {
             b"MULTI" => {
@@ -429,16 +351,128 @@ impl ClusterConnection {
                 self.transaction_state.pending_multi = Some(command.clone());
             }
             b"EXEC" => {
-                if let Some(node_idx) = self.transaction_state.node_index {
-                    self.feed_no_request_policy(command, node_idx, false)
-                        .await?;
-                    self.transaction_state = TransactionState::default();
-                } else {
+                let Some(node_idx) = self.transaction_state.node_index else {
                     return Err(Error::from(ClientError::ExecCalledWithoutMulti));
-                }
+                };
+                self.feed_no_request_policy(command, node_idx, false)
+                    .await?;
+                self.transaction_state = TransactionState::default();
             }
             _ => self.internal_feed(command, &ask_reasons).await?,
         }
+
+        Ok(())
+    }
+
+    /// Pays what the retry reasons ask for before the command is routed again:
+    /// a stale slot map is reloaded, a transient failure is waited out.
+    ///
+    /// Both are owed once per send batch, not once per command — see
+    /// [`SendBatch`].
+    async fn absorb_retry_reasons(&mut self, retry_reasons: &[RetryReason]) -> Result<()> {
+        // A `MOVED` says the slot map is stale, so reload it before routing
+        // anything else: without this every later command on that slot earns
+        // its own redirection.
+        if retry_reasons
+            .iter()
+            .any(|r| matches!(r, RetryReason::Moved { .. }))
+            && self.send_batch.claim_topology_refresh()
+        {
+            self.refresh_nodes_and_slot_ranges().await?;
+        }
+
+        // A transient cluster error means the command never ran: the slot is
+        // mid-migration (`TRYAGAIN`) or the shard is briefly unavailable
+        // (`CLUSTERDOWN`). The cluster spec asks the client to replay it after a
+        // short pause, which is what this awaits. It holds the whole send batch,
+        // and that is the point: the cluster just said it cannot serve this
+        // slot, so racing back at it would only burn the message's attempts.
+        let Some(delay) = retry_reasons
+            .iter()
+            .filter_map(|r| match r {
+                RetryReason::TryAgain { delay, .. } => Some(*delay),
+                _ => None,
+            })
+            .max()
+        else {
+            return Ok(());
+        };
+
+        if !self.send_batch.claim_transient_delay() {
+            return Ok(());
+        }
+
+        debug!("waiting {delay:?} before replaying a transient cluster error");
+        sleep(delay).await;
+
+        let asks_for_reload = retry_reasons.iter().any(|r| {
+            matches!(
+                r,
+                RetryReason::TryAgain {
+                    refresh_topology: true,
+                    ..
+                }
+            )
+        });
+
+        if asks_for_reload
+            && self.send_batch.claim_topology_refresh()
+            // A cluster that is still down answers nothing usable; the replay
+            // then goes to the topology already known and earns another
+            // `CLUSTERDOWN`, which is a retry rather than a failure.
+            && let Err(e) = self.refresh_nodes_and_slot_ranges().await
+        {
+            warn!("Cannot refresh the topology after a CLUSTERDOWN: {e}");
+        }
+
+        Ok(())
+    }
+
+    /// Reloads the topology when an `ASK` points at a node it does not know.
+    ///
+    /// An `ASK` names the node importing the slot, which may have joined, or
+    /// only been learned about, after the last discovery. Unlike a `MOVED` it
+    /// invalidates nothing, so nothing else would ever bring that node in and
+    /// the command would fail outright, where the cluster spec requires the
+    /// redirection to be followed.
+    async fn reach_unknown_ask_targets(
+        &mut self,
+        ask_reasons: &[(u16, ClusterNodeAddress)],
+    ) -> Result<()> {
+        let unknown = ask_reasons
+            .iter()
+            .any(|(_hash_slot, address)| !self.topology.holds_address(address));
+
+        if unknown && self.send_batch.claim_topology_refresh() {
+            self.refresh_nodes_and_slot_ranges().await?;
+        }
+
+        Ok(())
+    }
+
+    /// Sends the `MULTI` held back until a command named the shard that owns the
+    /// transaction, and locks that node for the rest of the block.
+    ///
+    /// The held skip belongs to the caller's command, not to the `MULTI` released
+    /// here on its behalf, so it is set aside across that injection.
+    async fn release_pending_multi(
+        &mut self,
+        command: &Command,
+        ask_reasons: &[(u16, ClusterNodeAddress)],
+    ) -> Result<()> {
+        let Some(multi_cmd) = self.transaction_state.pending_multi.take() else {
+            return Ok(());
+        };
+
+        let held_skip = self.pending_reply_skip.take();
+        let (node_idx, _) = self.get_no_request_policy_node(command, ask_reasons)?;
+        let result = self
+            .feed_no_request_policy(&multi_cmd, node_idx, false)
+            .await;
+        self.pending_reply_skip = held_skip;
+
+        result?;
+        self.transaction_state.node_index = Some(node_idx);
 
         Ok(())
     }
@@ -496,10 +530,8 @@ impl ClusterConnection {
 
     #[inline]
     pub(crate) async fn flush(&mut self) -> Result<()> {
-        // End of the send batch: allow the next one to refresh and delay again
-        // if needed.
-        self.refreshed_in_current_batch = false;
-        self.delayed_in_current_batch = false;
+        // End of the send batch: the next one owes its refresh and its delay again.
+        self.send_batch.end();
 
         self.topology.flush_fed_nodes().await
     }

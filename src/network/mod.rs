@@ -36,6 +36,8 @@ mod version;
 
 pub(crate) use async_executor_strategy::*;
 pub(crate) use cluster_connection::*;
+#[cfg(test)]
+pub(crate) use cluster_topology::convert_from_legacy_shard_description;
 pub(crate) use connection::*;
 pub(crate) use connection_state::*;
 pub(crate) use network_handler::*;

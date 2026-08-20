@@ -9,7 +9,7 @@ use crate::{
         InternalCommands, LegacyClusterNodeResult, LegacyClusterShardResult, MigrateOptions,
         ScriptingCommands, ServerCommands, StringCommands,
     },
-    network::{ClusterConnection, ClusterTestHook, Version, timeout},
+    network::{ClusterTestHook, Version, convert_from_legacy_shard_description, timeout},
     resp::cmd,
     sleep, spawn,
     tests::{
@@ -204,7 +204,7 @@ async fn moved() -> Result<()> {
     let version: Version = hello_result.version.as_str().try_into()?;
 
     let shard_info_list: Vec<ClusterShardResult> = if version.major < 7 {
-        ClusterConnection::convert_from_legacy_shard_description(client.cluster_slots().await?)
+        convert_from_legacy_shard_description(client.cluster_slots().await?)
     } else {
         client.cluster_shards().await?
     };
@@ -255,7 +255,7 @@ async fn ask() -> Result<()> {
     let version: Version = hello_result.version.as_str().try_into()?;
 
     let shard_info_list: Vec<ClusterShardResult> = if version.major < 7 {
-        ClusterConnection::convert_from_legacy_shard_description(client.cluster_slots().await?)
+        convert_from_legacy_shard_description(client.cluster_slots().await?)
     } else {
         client.cluster_shards().await?
     };
@@ -456,7 +456,7 @@ async fn mid_batch_redirection_does_not_desync_following_responses() -> Result<(
     let hello_result = client.hello(HelloOptions::new(3)).await?;
     let version: Version = hello_result.version.as_str().try_into()?;
     let shard_info_list: Vec<ClusterShardResult> = if version.major < 7 {
-        ClusterConnection::convert_from_legacy_shard_description(client.cluster_slots().await?)
+        convert_from_legacy_shard_description(client.cluster_slots().await?)
     } else {
         client.cluster_shards().await?
     };
@@ -536,7 +536,7 @@ async fn partial_redirection_keeps_the_sub_results_already_obtained() -> Result<
     let hello_result = client.hello(HelloOptions::new(3)).await?;
     let version: Version = hello_result.version.as_str().try_into()?;
     let shard_info_list: Vec<ClusterShardResult> = if version.major < 7 {
-        ClusterConnection::convert_from_legacy_shard_description(client.cluster_slots().await?)
+        convert_from_legacy_shard_description(client.cluster_slots().await?)
     } else {
         client.cluster_shards().await?
     };
@@ -596,7 +596,7 @@ async fn ask_to_an_unknown_node_is_followed_instead_of_failing() -> Result<()> {
     let hello_result = probe.hello(HelloOptions::new(3)).await?;
     let version: Version = hello_result.version.as_str().try_into()?;
     let shard_info_list: Vec<ClusterShardResult> = if version.major < 7 {
-        ClusterConnection::convert_from_legacy_shard_description(probe.cluster_slots().await?)
+        convert_from_legacy_shard_description(probe.cluster_slots().await?)
     } else {
         probe.cluster_shards().await?
     };
@@ -685,7 +685,7 @@ async fn empty_topology_discovery_is_rejected_instead_of_killing_the_client() ->
     let hello_result = client.hello(HelloOptions::new(3)).await?;
     let version: Version = hello_result.version.as_str().try_into()?;
     let shard_info_list: Vec<ClusterShardResult> = if version.major < 7 {
-        ClusterConnection::convert_from_legacy_shard_description(client.cluster_slots().await?)
+        convert_from_legacy_shard_description(client.cluster_slots().await?)
     } else {
         client.cluster_shards().await?
     };
@@ -914,7 +914,7 @@ fn a_legacy_shard_without_any_node_is_skipped_rather_than_indexed() {
     // conversion reads each entry's first node to group slots by master, both
     // while sorting and while grouping — on the network task, where a panic
     // would take the whole client down with it.
-    let converted = ClusterConnection::convert_from_legacy_shard_description(vec![
+    let converted = convert_from_legacy_shard_description(vec![
         LegacyClusterShardResult {
             slot: (0, 100),
             nodes: vec![],
@@ -937,7 +937,7 @@ fn legacy_shards_sharing_a_master_are_merged_into_one_shard() {
     // The grouping the skip above must not disturb: consecutive entries with the
     // same master accumulate their slot ranges, and the first node of each entry
     // is the master while the rest are replicas.
-    let converted = ClusterConnection::convert_from_legacy_shard_description(vec![
+    let converted = convert_from_legacy_shard_description(vec![
         LegacyClusterShardResult {
             slot: (0, 100),
             nodes: vec![legacy_node("node-a", 7000), legacy_node("node-b", 7001)],

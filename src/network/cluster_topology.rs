@@ -9,18 +9,25 @@
 //! node or a slot range where the search will find it.
 
 use crate::{
-    StandaloneConnection,
+    ClientError, ConnectionState, Error, StandaloneConnection,
+    client::{ClusterConfig, Config, ReadPreference},
+    commands::{
+        ClusterCommands, ClusterHealthStatus, ClusterNodeResult, ClusterShardResult,
+        InternalCommands, LegacyClusterShardResult,
+    },
+    network::Version,
     resp::{Command, RespResponse},
 };
 use futures_util::{FutureExt, future};
 use rand::RngExt;
-use smallvec::SmallVec;
+use smallvec::{SmallVec, smallvec};
 use std::{
     cmp::Ordering,
     fmt::{Debug, Formatter},
     sync::Arc,
     task::Poll,
 };
+use tracing::{debug, warn};
 
 /// Host and port, as the discovery reply names a node and as a redirection
 /// points at one.
@@ -132,15 +139,16 @@ impl ClusterTopology {
         self.nodes.iter().all(|n| n.is_master)
     }
 
-    /// The addresses of the nodes held, which a rediscovery starts from: they
-    /// are the ones known to have answered, ahead of the configured seeds.
-    pub(super) fn addresses(&self) -> Vec<ClusterNodeAddress> {
-        self.nodes.iter().map(|n| n.address.clone()).collect()
-    }
-
     #[cfg(test)]
     pub(super) fn node_count(&self) -> usize {
         self.nodes.len()
+    }
+
+    /// Test-only: removes one node, reproducing what a refresh leaves behind
+    /// when a node disappears while requests are in flight against it.
+    #[cfg(test)]
+    pub(super) fn drop_node(&mut self, id: &NodeId) {
+        self.retain_nodes(|node| node.id != *id);
     }
 
     #[cfg(test)]
@@ -154,7 +162,7 @@ impl ClusterTopology {
     }
 
     /// Adds a node where the id search will find it.
-    pub(super) fn insert_node(&mut self, node: Node) {
+    fn insert_node(&mut self, node: Node) {
         let position = self
             .nodes
             .binary_search_by(|n| n.id.cmp(&node.id))
@@ -163,7 +171,7 @@ impl ClusterTopology {
     }
 
     /// Adds a slot range where the slot search will find it.
-    pub(super) fn insert_slot_range(&mut self, slot_range: SlotRange) {
+    fn insert_slot_range(&mut self, slot_range: SlotRange) {
         let position = self
             .slot_ranges
             .binary_search_by_key(&slot_range.slot_range.0, |s| s.slot_range.0)
@@ -173,11 +181,11 @@ impl ClusterTopology {
 
     /// Drops the nodes a refreshed topology no longer describes. Order-preserving,
     /// so the id search stays valid.
-    pub(super) fn retain_nodes(&mut self, keep: impl FnMut(&Node) -> bool) {
+    fn retain_nodes(&mut self, keep: impl FnMut(&Node) -> bool) {
         self.nodes.retain(keep);
     }
 
-    pub(super) fn clear_slot_ranges(&mut self) {
+    fn clear_slot_ranges(&mut self) {
         self.slot_ranges.clear();
     }
 
@@ -231,6 +239,305 @@ impl ClusterTopology {
         Ok(fed)
     }
 
+    /// Asks each address in turn for the cluster's shape, and returns the first
+    /// answer. A node that cannot be reached, cannot state its version, or
+    /// refuses the query is skipped: discovery only needs one node to answer.
+    pub(super) async fn discover_shards(
+        addresses: &[ClusterNodeAddress],
+        config: &Config,
+    ) -> Option<Vec<ClusterShardResult>> {
+        debug!("Discovering cluster shards and slots...");
+
+        for (host, port) in addresses {
+            // A dedicated, short-lived discovery connection is not the caller's:
+            // it must not replay their database, name or tracking mode.
+            let mut connection =
+                match StandaloneConnection::connect_control(host, *port, config).await {
+                    Ok(connection) => connection,
+                    Err(e) => {
+                        warn!("Cannot connect to node ({host}:{port}): {e}");
+                        continue;
+                    }
+                };
+
+            let version: crate::Result<Version> = connection.get_version().try_into();
+            let Ok(version) = version else {
+                warn!(node = %connection.tag(), "Cannot get Redis version");
+                continue;
+            };
+
+            // From Redis 7.x CLUSTER SLOTS is deprecated in favor of CLUSTER SHARDS
+            let shard_info_list = if version.major < 7 {
+                connection
+                    .cluster_slots()
+                    .await
+                    .map(convert_from_legacy_shard_description)
+            } else {
+                connection.cluster_shards().await
+            };
+
+            match shard_info_list {
+                Ok(shard_info_list) => return Some(shard_info_list),
+                Err(e) => warn!(
+                    node = %connection.tag(),
+                    "Cannot discover cluster shards on node ({host}:{port}): {e}"
+                ),
+            }
+        }
+
+        None
+    }
+
+    /// Addresses to try for topology discovery: the nodes currently held —
+    /// known to have answered — then the configured seeds as a fallback.
+    pub(super) fn discovery_addresses(
+        &self,
+        cluster_config: &ClusterConfig,
+    ) -> Vec<ClusterNodeAddress> {
+        let mut addresses: Vec<ClusterNodeAddress> =
+            self.nodes.iter().map(|n| n.address.clone()).collect();
+        addresses.extend(cluster_config.nodes.iter().cloned());
+        addresses
+    }
+
+    /// Discovers the cluster from the configured seeds and connects one master
+    /// per shard. Replicas are brought in later, by `connect_replicas`.
+    pub(super) async fn discover(
+        cluster_config: &ClusterConfig,
+        config: &Config,
+        connection_state: &mut ConnectionState,
+    ) -> crate::Result<ClusterTopology> {
+        #[cfg_attr(not(test), allow(unused_mut))]
+        let Some(mut shard_info_list) = Self::discover_shards(&cluster_config.nodes, config).await
+        else {
+            return Err(Error::from(ClientError::ClusterConfig));
+        };
+
+        // Test-only: build a topology that ignores a node the cluster does know.
+        #[cfg(test)]
+        if let Some(hook) = &config.cluster_test_hook
+            && let Some(hidden_node_id) = hook.take_hidden_node_id()
+        {
+            shard_info_list.retain(|s| !s.nodes.iter().any(|n| n.id == hidden_node_id));
+        }
+
+        let mut topology = ClusterTopology::default();
+
+        for shard_info in shard_info_list.into_iter() {
+            let Some(master_info) = shard_info
+                .nodes
+                .into_iter()
+                .find(|n| n.role == "master" && n.health == ClusterHealthStatus::Online)
+            else {
+                return Err(Error::from(ClientError::ClusterConfig));
+            };
+            let master_id: NodeId = master_info.id.as_str().into();
+
+            let port = master_info.get_port()?;
+
+            let connection =
+                StandaloneConnection::connect(&master_info.ip, port, config, connection_state)
+                    .await?;
+
+            for slot_range in shard_info.slots.iter().map(|s| SlotRange {
+                slot_range: *s,
+                node_ids: smallvec![master_id.clone()],
+                next_replica: 0,
+            }) {
+                topology.insert_slot_range(slot_range);
+            }
+
+            topology.insert_node(Node {
+                id: master_id.clone(),
+                is_master: true,
+                address: (master_info.ip, port),
+                connection,
+                is_dirty: false,
+            });
+        }
+
+        debug!("Cluster connected: {topology:?}");
+
+        Ok(topology)
+    }
+
+    /// Puts a replica connection in `READONLY` mode, which is what makes the node
+    /// serve a read instead of answering it with a `MOVED` to its master.
+    ///
+    /// Nothing is sent when reads stay on the masters: the mode would advertise a
+    /// capability the routing never uses. A refusal is logged rather than
+    /// propagated — the node then answers reads with a `MOVED`, which the client
+    /// follows, so the cluster keeps working.
+    async fn set_replica_read_mode(
+        connection: &mut StandaloneConnection,
+        read_preference: ReadPreference,
+    ) {
+        if read_preference == ReadPreference::Master {
+            return;
+        }
+
+        if let Err(e) = connection.readonly().await {
+            warn!(node = %connection.tag(), "Cannot enter readonly mode: {e}");
+        }
+    }
+
+    /// Same, for a node whose role has just changed: a master must be back in
+    /// read-write mode.
+    async fn set_read_mode_for_role(
+        connection: &mut StandaloneConnection,
+        is_master: bool,
+        read_preference: ReadPreference,
+    ) {
+        if read_preference == ReadPreference::Master {
+            return;
+        }
+
+        if is_master {
+            if let Err(e) = connection.readwrite().await {
+                warn!(node = %connection.tag(), "Cannot leave readonly mode: {e}");
+            }
+        } else {
+            Self::set_replica_read_mode(connection, read_preference).await;
+        }
+    }
+
+    /// Connects the replicas the cluster describes and files them against the
+    /// slot ranges their shard owns, so reads can be routed to them.
+    pub(super) async fn connect_replicas(
+        &mut self,
+        cluster_config: &ClusterConfig,
+        config: &Config,
+        state_snapshot: &ConnectionState,
+    ) -> crate::Result<()> {
+        debug!("Connecting replicas...");
+
+        let addresses = self.discovery_addresses(cluster_config);
+        let Some(shard_info_list) = Self::discover_shards(&addresses, config).await else {
+            return Err(Error::from(ClientError::ClusterConfig));
+        };
+
+        for shard_info in shard_info_list {
+            for node_info in shard_info.nodes.into_iter().filter(|n| n.role == "replica") {
+                let port = node_info.get_port()?;
+                let node_id: NodeId = node_info.id.as_str().into();
+
+                // Opened without state, then brought up to the state its siblings
+                // are in: `connect` would need the handler's registry, which this
+                // path does not have.
+                let mut connection =
+                    StandaloneConnection::connect_control(&node_info.ip, port, config).await?;
+                connection.restore_from_snapshot(state_snapshot).await;
+
+                for slot_range_info in &shard_info.slots {
+                    if let Some(slot_range) = self.slot_range_by_slot_mut(slot_range_info.0)
+                        && slot_range.slot_range.1 == slot_range_info.1
+                    {
+                        slot_range.node_ids.push(node_id.clone())
+                    }
+                }
+
+                Self::set_replica_read_mode(&mut connection, cluster_config.read_preference).await;
+
+                self.insert_node(Node {
+                    id: node_id,
+                    is_master: false,
+                    address: (node_info.ip.clone(), port),
+                    connection,
+                    is_dirty: false,
+                });
+            }
+        }
+
+        debug!("Cluster replicas connected: {self:?}");
+
+        Ok(())
+    }
+
+    /// Applies a discovered topology: keeps the connections still described,
+    /// drops the nodes that vanished, connects the ones that joined and rebuilds
+    /// the slot map from scratch.
+    ///
+    /// `shard_info_list` must not be empty — the caller refuses an empty
+    /// discovery before reaching here, since applying it would leave the routing
+    /// with no node to resolve to.
+    pub(super) async fn apply(
+        &mut self,
+        shard_info_list: Vec<ClusterShardResult>,
+        cluster_config: &ClusterConfig,
+        config: &Config,
+        state_snapshot: &ConnectionState,
+    ) -> crate::Result<()> {
+        let known = known_node_ids(&shard_info_list);
+        self.retain_nodes(|node| {
+            known
+                .binary_search_by(|id| id.as_str().cmp(node.id.as_ref()))
+                .is_ok()
+        });
+
+        // create slot_ranges from scratch
+        self.clear_slot_ranges();
+
+        // add missing nodes and connect them
+        for shard_info in shard_info_list {
+            let shard_info = with_master_first(shard_info)?;
+
+            for slot_range in slot_ranges_of(&shard_info) {
+                self.insert_slot_range(slot_range);
+            }
+
+            for node_info in shard_info.nodes {
+                let node_id: NodeId = node_info.id.as_str().into();
+                if let Some(node) = self.node_by_id_mut(&node_id) {
+                    // refresh is_master flag in case a failover happened
+                    let is_master = node_info.role == "master";
+                    if is_master != node.is_master {
+                        // The connection carries the read mode of the role the node
+                        // has just left: a promoted replica would keep advertising a
+                        // capability it no longer has, a demoted master would refuse
+                        // the reads now routed to it.
+                        Self::set_read_mode_for_role(
+                            &mut node.connection,
+                            is_master,
+                            cluster_config.read_preference,
+                        )
+                        .await;
+                    }
+                    node.is_master = is_master;
+                } else {
+                    // add missing node
+                    let port = node_info.get_port()?;
+
+                    // A node joining the topology must reach the state its siblings
+                    // are in before anything is sent on it, or the caller's tracking,
+                    // name and exemptions would silently not apply to its shard.
+                    let mut connection =
+                        StandaloneConnection::connect_control(&node_info.ip, port, config).await?;
+                    connection.restore_from_snapshot(state_snapshot).await;
+
+                    if node_info.role != "master" {
+                        Self::set_replica_read_mode(
+                            &mut connection,
+                            cluster_config.read_preference,
+                        )
+                        .await;
+                    }
+
+                    self.insert_node(Node {
+                        id: node_id,
+                        is_master: node_info.role == "master",
+                        address: (node_info.ip, port),
+                        connection,
+                        is_dirty: false,
+                    });
+                }
+            }
+        }
+
+        debug!("Cluster new setup: {self:?}");
+
+        Ok(())
+    }
+
     /// Awaits the first reply any node has, with the index of the node that sent
     /// it. `None` when the topology holds no node — `select_all` panics on an
     /// empty set, and the network task owns all routing state, so an empty
@@ -273,7 +580,7 @@ impl ClusterTopology {
         self.nodes.binary_search_by_key(&id, |n| &n.id).ok()
     }
 
-    pub(super) fn node_by_id_mut(&mut self, id: &NodeId) -> Option<&mut Node> {
+    fn node_by_id_mut(&mut self, id: &NodeId) -> Option<&mut Node> {
         let index = self.node_index_by_id(id)?;
         self.nodes.get_mut(index)
     }
@@ -322,7 +629,7 @@ impl ClusterTopology {
     }
 
     #[inline]
-    pub(super) fn slot_range_by_slot_mut(&mut self, slot: u16) -> Option<&mut SlotRange> {
+    fn slot_range_by_slot_mut(&mut self, slot: u16) -> Option<&mut SlotRange> {
         self.slot_range_index(slot)
             .and_then(|idx| self.slot_ranges.get_mut(idx))
     }
@@ -383,6 +690,108 @@ impl ClusterTopology {
 
         Some(node_index)
     }
+}
+
+/// The ids a discovered topology describes, sorted so the retention filter can
+/// binary-search them once per node held instead of scanning the whole reply.
+fn known_node_ids(shard_info_list: &[ClusterShardResult]) -> Vec<String> {
+    let mut ids = shard_info_list
+        .iter()
+        .flat_map(|s| s.nodes.iter().map(|n| n.id.clone()))
+        .collect::<Vec<_>>();
+    ids.sort();
+    ids
+}
+
+/// Puts the shard's master at index 0, which every later read of the shard
+/// relies on: a slot range names its master first, and that is who a command
+/// routed by slot is fed to. A shard the server describes with no node, or with
+/// no master among them, is a malformed topology rather than something to index.
+fn with_master_first(mut shard_info: ClusterShardResult) -> crate::Result<ClusterShardResult> {
+    let first_is_master = match shard_info.nodes.first() {
+        Some(first) => first.role == "master",
+        None => return Err(Error::from(ClientError::ClusterConfig)),
+    };
+
+    if !first_is_master {
+        let Some(master_idx) = shard_info.nodes.iter().position(|n| n.role == "master") else {
+            return Err(Error::from(ClientError::ClusterConfig));
+        };
+        shard_info.nodes.swap(0, master_idx);
+    }
+
+    Ok(shard_info)
+}
+
+/// The slot ranges a shard owns, each naming the shard's nodes with the master
+/// first. Requires [`with_master_first`] to have run.
+fn slot_ranges_of(shard_info: &ClusterShardResult) -> impl Iterator<Item = SlotRange> {
+    let node_ids: SmallVec<[NodeId; 6]> = shard_info
+        .nodes
+        .iter()
+        .map(|n| n.id.as_str().into())
+        .collect();
+
+    shard_info.slots.iter().map(move |slot_range| SlotRange {
+        slot_range: *slot_range,
+        node_ids: node_ids.clone(),
+        next_replica: 0,
+    })
+}
+
+/// Rebuilds the modern `CLUSTER SHARDS` shape from a `CLUSTER SLOTS` reply,
+/// which Redis before 7 is the only source for. The legacy reply lists one
+/// entry per slot range, master first, so entries are grouped by master id.
+pub(crate) fn convert_from_legacy_shard_description(
+    mut legacy_shards: Vec<LegacyClusterShardResult>,
+) -> Vec<ClusterShardResult> {
+    // Group by master id, which the legacy reply lists first for each shard.
+    // A shard the server sent with no node at all sorts to the front and is
+    // skipped below rather than indexed into.
+    legacy_shards.sort_by(|s1, s2| {
+        s1.nodes
+            .first()
+            .map(|n| &n.id)
+            .cmp(&s2.nodes.first().map(|n| &n.id))
+    });
+
+    let mut last_master_id = String::new();
+    let mut shards = Vec::new();
+    for legacy_shard in legacy_shards {
+        let Some(master_id) = legacy_shard.nodes.first().map(|node| node.id.clone()) else {
+            continue;
+        };
+        if master_id != last_master_id {
+            last_master_id = master_id;
+            shards.push(ClusterShardResult {
+                slots: vec![legacy_shard.slot],
+                nodes: legacy_shard
+                    .nodes
+                    .into_iter()
+                    .enumerate()
+                    .map(|(idx, node)| ClusterNodeResult {
+                        id: node.id,
+                        endpoint: node.preferred_endpoint.clone(),
+                        ip: node.ip,
+                        port: Some(node.port),
+                        hostname: node.hostname,
+                        tls_port: None,
+                        role: if idx == 0 {
+                            "master".to_owned()
+                        } else {
+                            "replica".to_owned()
+                        },
+                        replication_offset: 0,
+                        health: ClusterHealthStatus::Online,
+                    })
+                    .collect(),
+            });
+        } else if let Some(shard) = shards.last_mut() {
+            shard.slots.push(legacy_shard.slot);
+        }
+    }
+
+    shards
 }
 
 /// Picks the next replica of a shard, starting at `cursor` and advancing it past
@@ -546,5 +955,182 @@ mod tests {
         assert_eq!(None, topology.random_node_index());
         assert_eq!(None, topology.node_index_by_slot(0, &[], false));
         assert_eq!(None, topology.node_index_by_id(&"m".into()));
+    }
+}
+
+#[cfg(test)]
+mod discovery_tests {
+    #![allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        reason = "test code: a panic is how a test reports failure"
+    )]
+    use super::{
+        convert_from_legacy_shard_description, known_node_ids, slot_ranges_of, with_master_first,
+    };
+    use crate::commands::{
+        ClusterHealthStatus, ClusterNodeResult, ClusterShardResult, LegacyClusterNodeResult,
+        LegacyClusterShardResult,
+    };
+
+    fn node(id: &str, role: &str) -> ClusterNodeResult {
+        ClusterNodeResult {
+            id: id.to_owned(),
+            endpoint: "127.0.0.1".to_owned(),
+            ip: "127.0.0.1".to_owned(),
+            port: Some(6379),
+            hostname: None,
+            tls_port: None,
+            role: role.to_owned(),
+            replication_offset: 0,
+            health: ClusterHealthStatus::Online,
+        }
+    }
+
+    fn shard(slots: Vec<(u16, u16)>, nodes: Vec<ClusterNodeResult>) -> ClusterShardResult {
+        ClusterShardResult { slots, nodes }
+    }
+
+    /// A slot range names its master first, and that is who a command routed by
+    /// slot is fed to. A reply listing a replica first would silently send every
+    /// write of the shard to a node that answers `MOVED`.
+    #[test]
+    fn a_shard_is_normalised_with_its_master_first() {
+        let normalised = with_master_first(shard(
+            vec![(0, 100)],
+            vec![
+                node("r1", "replica"),
+                node("m", "master"),
+                node("r2", "replica"),
+            ],
+        ))
+        .expect("a shard with a master is usable");
+
+        let ids = normalised
+            .nodes
+            .iter()
+            .map(|n| n.id.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!("m", ids.first().copied().unwrap());
+        assert_eq!(3, ids.len(), "no node may be lost by the reordering");
+    }
+
+    /// A shard already in order is left alone rather than rotated.
+    #[test]
+    fn a_shard_already_in_order_is_untouched() {
+        let normalised = with_master_first(shard(
+            vec![(0, 100)],
+            vec![node("m", "master"), node("r1", "replica")],
+        ))
+        .unwrap();
+
+        let ids = normalised
+            .nodes
+            .iter()
+            .map(|n| n.id.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(vec!["m", "r1"], ids);
+    }
+
+    /// A shard with no master, or no node at all, is refused rather than
+    /// indexed: the slot map would name a master that is not one, and every
+    /// command for those slots would go to a replica forever.
+    #[test]
+    fn a_shard_without_a_master_is_refused() {
+        assert!(with_master_first(shard(vec![(0, 100)], vec![])).is_err());
+        assert!(
+            with_master_first(shard(
+                vec![(0, 100)],
+                vec![node("r1", "replica"), node("r2", "replica")]
+            ))
+            .is_err()
+        );
+    }
+
+    /// Every slot range of a shard is served by the same node list, master
+    /// first — that is what the replica round-robin reads.
+    #[test]
+    fn a_shard_owns_each_of_its_slot_ranges_with_the_same_nodes() {
+        let shard = with_master_first(shard(
+            vec![(0, 100), (500, 600)],
+            vec![node("m", "master"), node("r1", "replica")],
+        ))
+        .unwrap();
+
+        let ranges = slot_ranges_of(&shard).collect::<Vec<_>>();
+        assert_eq!(2, ranges.len());
+        for range in &ranges {
+            let ids = range
+                .node_ids
+                .iter()
+                .map(|id| id.as_ref())
+                .collect::<Vec<_>>();
+            assert_eq!(vec!["m", "r1"], ids);
+            assert_eq!(0, range.next_replica);
+        }
+        assert_eq!(
+            vec![(0, 100), (500, 600)],
+            ranges.iter().map(|r| r.slot_range).collect::<Vec<_>>()
+        );
+    }
+
+    /// The retention filter binary-searches this list, so it has to be sorted.
+    /// Unsorted, a node the cluster still holds would be reported gone and its
+    /// connection dropped on every refresh.
+    #[test]
+    fn the_known_ids_are_sorted_for_the_search_that_reads_them() {
+        let ids = known_node_ids(&[
+            shard(
+                vec![(0, 100)],
+                vec![node("m2", "master"), node("r9", "replica")],
+            ),
+            shard(vec![(101, 200)], vec![node("m1", "master")]),
+        ]);
+
+        assert_eq!(vec!["m1", "m2", "r9"], ids);
+    }
+
+    /// `CLUSTER SLOTS` lists one entry per slot range, so a shard owning several
+    /// appears several times. They must fold into one shard, or the slot map
+    /// would hold a separate shard per range and lose the replica list of all
+    /// but the first.
+    #[test]
+    fn a_legacy_reply_folds_a_shard_s_ranges_into_one_shard() {
+        let legacy_node = |id: &str, port: u16| LegacyClusterNodeResult {
+            ip: "127.0.0.1".to_owned(),
+            port,
+            id: id.to_owned(),
+            preferred_endpoint: "127.0.0.1".to_owned(),
+            hostname: None,
+        };
+
+        let shards = convert_from_legacy_shard_description(vec![
+            LegacyClusterShardResult {
+                slot: (0, 100),
+                nodes: vec![legacy_node("m1", 7000), legacy_node("r1", 7001)],
+            },
+            LegacyClusterShardResult {
+                slot: (500, 600),
+                nodes: vec![legacy_node("m1", 7000), legacy_node("r1", 7001)],
+            },
+            LegacyClusterShardResult {
+                slot: (101, 200),
+                nodes: vec![legacy_node("m2", 7002)],
+            },
+        ]);
+
+        assert_eq!(2, shards.len());
+
+        let m1 = shards
+            .iter()
+            .find(|s| s.nodes.first().map(|n| n.id.as_str()) == Some("m1"))
+            .expect("the shard whose master is m1");
+        assert_eq!(vec![(0, 100), (500, 600)], m1.slots);
+        assert_eq!(2, m1.nodes.len());
+        // The legacy reply says nothing about roles: the first node listed is
+        // the master, everything after it a replica.
+        assert_eq!("master", m1.nodes.first().unwrap().role);
+        assert_eq!("replica", m1.nodes.get(1).unwrap().role);
     }
 }

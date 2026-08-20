@@ -1,4 +1,4 @@
-use super::cluster_request::{RequestInfo, SubRequest, collect_redirections};
+use super::cluster_request::{RequestInfo, SubRequest, collect_redirections, is_pub_sub_command};
 use super::cluster_topology::{ClusterTopology, Node, NodeId, NodeReach, SlotRange};
 use super::pub_sub_push::PubSubPush;
 use crate::{
@@ -114,22 +114,6 @@ impl ClusterTestHook {
     fn take_transient_error(&self) -> Option<Bytes> {
         self.transient_error.lock().unwrap().take()
     }
-}
-
-/// A subscription command is acknowledged by a push frame, not by an ordinary
-/// reply: `read` hands it to the network handler, which matches it against the
-/// caller itself. Nothing therefore ever fills the sub-request the connection
-/// filed for it.
-fn is_pub_sub_command(command: &Command) -> bool {
-    matches!(
-        command.name(),
-        b"SUBSCRIBE"
-            | b"PSUBSCRIBE"
-            | b"SSUBSCRIBE"
-            | b"UNSUBSCRIBE"
-            | b"PUNSUBSCRIBE"
-            | b"SUNSUBSCRIBE"
-    )
 }
 
 /// Whether the command subscribes to, or unsubscribes from, a plain channel or
@@ -518,17 +502,7 @@ impl ClusterConnection {
             .map(SubRequest::keyless)
             .collect();
 
-        let request_info = RequestInfo {
-            response_policy: command.response_policy(),
-            sub_requests,
-            keys: command.keys().collect(),
-            command: None,
-            is_pub_sub: is_pub_sub_command(command),
-            #[cfg(test)]
-            command_seq: command.command_seq,
-        };
-
-        self.file_request(request_info);
+        self.file_request(RequestInfo::new(command, sub_requests));
 
         Ok(())
     }
@@ -550,17 +524,7 @@ impl ClusterConnection {
             .map(SubRequest::keyless)
             .collect();
 
-        let request_info = RequestInfo {
-            response_policy: command.response_policy(),
-            sub_requests,
-            keys: command.keys().collect(),
-            command: None,
-            is_pub_sub: is_pub_sub_command(command),
-            #[cfg(test)]
-            command_seq: command.command_seq,
-        };
-
-        self.file_request(request_info);
+        self.file_request(RequestInfo::new(command, sub_requests));
 
         Ok(())
     }
@@ -655,16 +619,7 @@ impl ClusterConnection {
             result: None,
         });
 
-        let sub_requests_len = sub_requests.len();
-        let request_info = RequestInfo {
-            response_policy: command.response_policy(),
-            keys: command.keys().collect(),
-            sub_requests,
-            command: (sub_requests_len > 1).then(|| command.clone()),
-            is_pub_sub: is_pub_sub_command(command),
-            #[cfg(test)]
-            command_seq: command.command_seq,
-        };
+        let request_info = RequestInfo::new(command, sub_requests).replayable_per_shard(command);
 
         trace!("{request_info:?}");
 
@@ -721,17 +676,7 @@ impl ClusterConnection {
             sub_requests.push(SubRequest::keyless(node.id.clone()));
         }
 
-        let request_info = RequestInfo {
-            response_policy: command.response_policy(),
-            sub_requests,
-            keys: smallvec![],
-            command: None,
-            is_pub_sub: true,
-            #[cfg(test)]
-            command_seq: command.command_seq,
-        };
-
-        self.file_request(request_info);
+        self.file_request(RequestInfo::new(command, sub_requests));
 
         Ok(())
     }
@@ -788,21 +733,12 @@ impl ClusterConnection {
             node.connection.asking().await?;
         }
         node.feed(command, reply_skip.as_ref()).await?;
-        let keys: SmallVec<[Bytes; 10]> = command.keys().collect();
-        let request_info = RequestInfo {
-            response_policy: command.response_policy(),
-            sub_requests: smallvec![SubRequest {
-                node_id: node.id.clone(),
-                keys: keys.clone(),
-                result: None,
-            }],
-            keys,
-            command: None,
-            is_pub_sub: is_pub_sub_command(command),
-            #[cfg(test)]
-            command_seq: command.command_seq,
+        let sub_request = SubRequest {
+            node_id: node.id.clone(),
+            keys: command.keys().collect(),
+            result: None,
         };
-        self.file_request(request_info);
+        self.file_request(RequestInfo::new(command, smallvec![sub_request]));
         Ok(())
     }
 

@@ -125,7 +125,56 @@ pub(super) fn collect_redirections(
     redirections
 }
 
+/// A subscription command is acknowledged by a push frame, not by an ordinary
+/// reply: `read` hands it to the network handler, which matches it against the
+/// caller itself. Nothing therefore ever fills the sub-request the connection
+/// filed for it.
+pub(super) fn is_pub_sub_command(command: &Command) -> bool {
+    matches!(
+        command.name(),
+        b"SUBSCRIBE"
+            | b"PSUBSCRIBE"
+            | b"SSUBSCRIBE"
+            | b"UNSUBSCRIBE"
+            | b"PUNSUBSCRIBE"
+            | b"SUNSUBSCRIBE"
+    )
+}
+
 impl RequestInfo {
+    /// The bookkeeping a routed command owes, once routing has said which nodes
+    /// it reached.
+    ///
+    /// Everything but the sub-requests is read off the command here, so the five
+    /// routing policies cannot describe the same command differently — which
+    /// they would have no way of noticing, each field being read by a different
+    /// part of the reassembly.
+    pub(super) fn new(command: &Command, sub_requests: SmallVec<[SubRequest; 10]>) -> Self {
+        Self {
+            response_policy: command.response_policy(),
+            keys: command.keys().collect(),
+            sub_requests,
+            command: None,
+            is_pub_sub: is_pub_sub_command(command),
+            #[cfg(test)]
+            command_seq: command.command_seq,
+        }
+    }
+
+    /// Keeps the command, so that a sub-request redirected on its own can be
+    /// re-sent without replaying the whole thing.
+    ///
+    /// Only worth the clone when the command was actually split: a single
+    /// sub-request is retried as a whole by the caller. The shards that already
+    /// answered must not run it twice — a replayed `DEL` reports 0 for the keys
+    /// it deleted the first time.
+    pub(super) fn replayable_per_shard(mut self, command: &Command) -> Self {
+        if self.sub_requests.len() > 1 {
+            self.command = Some(command.clone());
+        }
+        self
+    }
+
     /// Turns the collected sub-replies into the single answer the caller is
     /// owed, or into the retry reasons that say the command never ran.
     ///
@@ -699,5 +748,68 @@ mod tests {
         );
 
         assert!(matches!(request.into_reply(), Some(Err(_))));
+    }
+}
+
+#[cfg(test)]
+mod construction_tests {
+    #![allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        reason = "test code: a panic is how a test reports failure"
+    )]
+    use super::{RequestInfo, SubRequest};
+    use crate::resp::{Command, cmd};
+    use smallvec::SmallVec;
+
+    fn sub_requests(count: usize) -> SmallVec<[SubRequest; 10]> {
+        (0..count)
+            .map(|i| SubRequest::keyless(format!("n{i}").as_str().into()))
+            .collect()
+    }
+
+    /// A channel is not a key. Filing one as such would make the reassembly
+    /// treat a subscription reply as a keyed one and try to line it up against
+    /// a key list the caller never sent.
+    #[test]
+    fn a_subscription_names_channels_not_keys() {
+        for name in ["SUBSCRIBE", "PSUBSCRIBE", "UNSUBSCRIBE", "PUNSUBSCRIBE"] {
+            // Built the way the command families build it: a channel is passed
+            // as a plain argument, never through `key`.
+            let command: Command = cmd(name).arg("some-channel").into();
+            let request = RequestInfo::new(&command, sub_requests(1));
+            assert!(
+                request.keys.is_empty(),
+                "{name} must file no key, got {:?}",
+                request.keys
+            );
+            assert!(request.is_pub_sub, "{name} is answered by a push frame");
+        }
+    }
+
+    /// A keyed command files its keys, which is what the reassembly orders the
+    /// answer by.
+    #[test]
+    fn a_keyed_command_files_the_keys_it_names() {
+        let command: Command = cmd("MGET").key("a").key("b").key("c").into();
+        let request = RequestInfo::new(&command, sub_requests(2));
+
+        assert_eq!(3, request.keys.len());
+        assert!(!request.is_pub_sub);
+    }
+
+    /// The command is kept only when it was split, since that is the only case
+    /// where one sub-request can be re-sent without replaying what the other
+    /// shards already applied.
+    #[test]
+    fn only_a_split_command_is_kept_for_a_partial_replay() {
+        let command: Command = cmd("MGET").key("a").key("b").into();
+
+        let one_shard = RequestInfo::new(&command, sub_requests(1)).replayable_per_shard(&command);
+        assert!(one_shard.command.is_none());
+
+        let two_shards = RequestInfo::new(&command, sub_requests(2)).replayable_per_shard(&command);
+        assert!(two_shards.command.is_some());
     }
 }

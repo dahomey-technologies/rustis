@@ -1,7 +1,8 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{Response, cmd},
+    resp::cmd,
 };
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 /// A group of Redis commands related to [`Count-min Sketch`](https://redis.io/docs/stack/bloom/)
@@ -25,7 +26,7 @@ pub trait CountMinSketchCommands<'a>: Sized {
     /// # See Also
     /// * [<https://redis.io/commands/cms.incrby/>](https://redis.io/commands/cms.incrby/)
     #[must_use]
-    fn cms_incrby<R: Response>(
+    fn cms_incrby<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         items: impl Serialize,
@@ -139,7 +140,7 @@ pub trait CountMinSketchCommands<'a>: Sized {
     /// # See Also
     /// * [<https://redis.io/commands/cms.query/>](https://redis.io/commands/cms.query/)
     #[must_use]
-    fn cms_query<R: Response>(
+    fn cms_query<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         items: impl Serialize,

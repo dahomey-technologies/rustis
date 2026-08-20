@@ -1,7 +1,7 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
     commands::{ExpireOption, GetExOptions, SetExpiration},
-    resp::{FastPathCommandBuilder, Response, cmd, deserialize_vec_of_pairs},
+    resp::{FastPathCommandBuilder, cmd, deserialize_vec_of_pairs},
 };
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
@@ -59,7 +59,7 @@ pub trait HashCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/hexpire/>](https://redis.io/commands/hexpire/)
     #[must_use]
-    fn hexpire<R: Response>(
+    fn hexpire<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         seconds: u64,
@@ -99,7 +99,7 @@ pub trait HashCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/hexpireat/>](https://redis.io/commands/hexpireat/)
     #[must_use]
-    fn hexpireat<R: Response>(
+    fn hexpireat<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         unix_time_seconds: u64,
@@ -132,7 +132,7 @@ pub trait HashCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/hexpiretime/>](https://redis.io/commands/hexpiretime/)
     #[must_use]
-    fn hexpiretime<R: Response>(
+    fn hexpiretime<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         fields: impl Serialize,
@@ -155,7 +155,7 @@ pub trait HashCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/hget/>](https://redis.io/commands/hget/)
     #[must_use]
-    fn hget<R: Response>(
+    fn hget<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         field: impl Serialize,
@@ -171,7 +171,7 @@ pub trait HashCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/hgetall/>](https://redis.io/commands/hgetall/)
     #[must_use]
-    fn hgetall<R: Response>(self, key: impl Serialize) -> PreparedCommand<'a, Self, R> {
+    fn hgetall<R: DeserializeOwned>(self, key: impl Serialize) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("HGETALL").key(key).readonly())
     }
 
@@ -189,7 +189,7 @@ pub trait HashCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/hgetdel/>](https://redis.io/commands/hgetdel/)
     #[must_use]
-    fn hgetdel<R: Response>(
+    fn hgetdel<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         fields: impl Serialize,
@@ -214,7 +214,7 @@ pub trait HashCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/hgetex/>](https://redis.io/commands/hgetex/)
     #[must_use]
-    fn hgetex<R: Response>(
+    fn hgetex<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         options: GetExOptions,
@@ -273,7 +273,7 @@ pub trait HashCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/hkeys/>](https://redis.io/commands/hkeys/)
     #[must_use]
-    fn hkeys<R: Response>(self, key: impl Serialize) -> PreparedCommand<'a, Self, R> {
+    fn hkeys<R: DeserializeOwned>(self, key: impl Serialize) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("HKEYS").key(key).readonly())
     }
 
@@ -297,7 +297,7 @@ pub trait HashCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/hmget/>](https://redis.io/commands/hmget/)
     #[must_use]
-    fn hmget<R: Response>(
+    fn hmget<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         fields: impl Serialize,
@@ -318,7 +318,7 @@ pub trait HashCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/hpersist/>](https://redis.io/commands/hpersist/)
     #[must_use]
-    fn hpersist<R: Response>(
+    fn hpersist<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         fields: impl Serialize,
@@ -350,7 +350,7 @@ pub trait HashCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/hpexpire/>](https://redis.io/commands/hpexpire/)
     #[must_use]
-    fn hpexpire<R: Response>(
+    fn hpexpire<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         milliseconds: u64,
@@ -388,7 +388,7 @@ pub trait HashCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/hpexpireat/>](https://redis.io/commands/hpexpireat/)
     #[must_use]
-    fn hpexpireat<R: Response>(
+    fn hpexpireat<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         unix_time_milliseconds: u64,
@@ -422,7 +422,7 @@ pub trait HashCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/hpexpiretime/>](https://redis.io/commands/hpexpiretime/)
     #[must_use]
-    fn hpexpiretime<R: Response>(
+    fn hpexpiretime<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         fields: impl Serialize,
@@ -452,7 +452,7 @@ pub trait HashCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/hpttl/>](https://redis.io/commands/hpttl/)
     #[must_use]
-    fn hpttl<R: Response>(
+    fn hpttl<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         fields: impl Serialize,
@@ -475,7 +475,7 @@ pub trait HashCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/hrandfield/>](https://redis.io/commands/hrandfield/)
     #[must_use]
-    fn hrandfield<R: Response>(self, key: impl Serialize) -> PreparedCommand<'a, Self, R> {
+    fn hrandfield<R: DeserializeOwned>(self, key: impl Serialize) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("HRANDFIELD").key(key).readonly())
     }
 
@@ -490,7 +490,7 @@ pub trait HashCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/hrandfield/>](https://redis.io/commands/hrandfield/)
     #[must_use]
-    fn hrandfields<R: Response>(
+    fn hrandfields<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         count: isize,
@@ -510,7 +510,7 @@ pub trait HashCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/hrandfield/>](https://redis.io/commands/hrandfield/)
     #[must_use]
-    fn hrandfields_with_values<R: Response>(
+    fn hrandfields_with_values<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         count: isize,
@@ -534,7 +534,7 @@ pub trait HashCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/hlen/>](https://redis.io/commands/hscan/)
     #[must_use]
-    fn hscan<F: Response + DeserializeOwned, V: Response + DeserializeOwned>(
+    fn hscan<F: DeserializeOwned, V: DeserializeOwned>(
         self,
         key: impl Serialize,
         cursor: u64,
@@ -554,7 +554,7 @@ pub trait HashCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/hscan/>](https://redis.io/commands/hscan/)
     #[must_use]
-    fn hscan_no_values<R: Response + DeserializeOwned>(
+    fn hscan_no_values<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         cursor: u64,
@@ -663,7 +663,7 @@ pub trait HashCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/httl/>](https://redis.io/commands/httl/)
     #[must_use]
-    fn httl<R: Response>(
+    fn httl<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         fields: impl Serialize,
@@ -686,7 +686,7 @@ pub trait HashCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/hvals/>](https://redis.io/commands/hvals/)
     #[must_use]
-    fn hvals<R: Response>(self, key: impl Serialize) -> PreparedCommand<'a, Self, R> {
+    fn hvals<R: DeserializeOwned>(self, key: impl Serialize) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("HVALS").key(key).readonly())
     }
 }
@@ -718,7 +718,7 @@ impl<'a> HScanOptions<'a> {
 /// Result for the [`hscan`](HashCommands::hscan) command.
 #[derive(Debug, Deserialize)]
 #[non_exhaustive]
-pub struct HScanResult<F: Response + DeserializeOwned, V: Response + DeserializeOwned> {
+pub struct HScanResult<F: DeserializeOwned, V: DeserializeOwned> {
     pub cursor: u64,
     #[serde(deserialize_with = "deserialize_vec_of_pairs")]
     pub elements: Vec<(F, V)>,

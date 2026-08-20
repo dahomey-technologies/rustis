@@ -1,7 +1,8 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{Response, Value, cmd, serialize_flag},
+    resp::{Value, cmd, serialize_flag},
 };
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -50,7 +51,7 @@ pub trait TDigestCommands<'a> {
     /// # See Also
     /// * [<https://redis.io/commands/tdigest.byrank/>](https://redis.io/commands/tdigest.byrank/)
     #[must_use]
-    fn tdigest_byrank<R: Response>(
+    fn tdigest_byrank<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         ranks: impl Serialize,
@@ -81,7 +82,7 @@ pub trait TDigestCommands<'a> {
     /// # See Also
     /// * [<https://redis.io/commands/tdigest.byrevrank/>](https://redis.io/commands/tdigest.byrevrank/)
     #[must_use]
-    fn tdigest_byrevrank<R: Response>(
+    fn tdigest_byrevrank<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         ranks: impl Serialize,
@@ -112,7 +113,7 @@ pub trait TDigestCommands<'a> {
     /// # See Also
     /// * [<https://redis.io/commands/tdigest.cdf/>](https://redis.io/commands/tdigest.cdf/)
     #[must_use]
-    fn tdigest_cdf<R: Response>(
+    fn tdigest_cdf<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         values: impl Serialize,
@@ -257,7 +258,7 @@ pub trait TDigestCommands<'a> {
     /// # See Also
     /// * [<https://redis.io/commands/tdigest.quantile/>](https://redis.io/commands/tdigest.quantile/)
     #[must_use]
-    fn tdigest_quantile<R: Response>(
+    fn tdigest_quantile<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         quantiles: impl Serialize,
@@ -295,7 +296,7 @@ pub trait TDigestCommands<'a> {
     /// # See Also
     /// * [<https://redis.io/commands/tdigest.rank/>](https://redis.io/commands/tdigest.rank/)
     #[must_use]
-    fn tdigest_rank<R: Response>(
+    fn tdigest_rank<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         values: impl Serialize,
@@ -345,7 +346,7 @@ pub trait TDigestCommands<'a> {
     /// # See Also
     /// * [<https://redis.io/commands/tdigest.revrank/>](https://redis.io/commands/tdigest.revrank/)
     #[must_use]
-    fn tdigest_revrank<R: Response>(
+    fn tdigest_revrank<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         values: impl Serialize,

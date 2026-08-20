@@ -16,8 +16,8 @@ use crate::{
     commands::{
         GenericCommands, SetCommands, SortOptions, SortedSetCommands, StringCommands, ZAggregate,
     },
-    resp::Response,
 };
+use serde::de::DeserializeOwned;
 
 /// Stands in for the executor a command is prepared against. The traits are
 /// implemented for any `Sized` receiver, and nothing here reaches the network.
@@ -29,7 +29,7 @@ impl<'a> GenericCommands<'a> for &'a Executor {}
 impl<'a> StringCommands<'a> for &'a Executor {}
 
 /// The keys a prepared command marks for routing, in the order it wrote them.
-fn keys<E, R: Response>(prepared: PreparedCommand<'_, E, R>) -> Vec<String> {
+fn keys<E, R: DeserializeOwned>(prepared: PreparedCommand<'_, E, R>) -> Vec<String> {
     prepared
         .command()
         .keys()

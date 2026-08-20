@@ -1,6 +1,6 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{Response, cmd, deserialize_vec_of_pairs},
+    resp::{cmd, deserialize_vec_of_pairs},
 };
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
@@ -25,7 +25,7 @@ pub trait TopKCommands<'a>: Sized {
     /// # See Also
     /// * [<https://redis.io/commands/topk.add/>](https://redis.io/commands/topk.add/)
     #[must_use]
-    fn topk_add<R: Response>(
+    fn topk_add<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         items: impl Serialize,
@@ -52,7 +52,7 @@ pub trait TopKCommands<'a>: Sized {
     /// # See Also
     /// * [<https://redis.io/commands/topk.incrby/>](https://redis.io/commands/topk.incrby/)
     #[must_use]
-    fn topk_incrby<R: Response>(
+    fn topk_incrby<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         items: impl Serialize,
@@ -86,7 +86,7 @@ pub trait TopKCommands<'a>: Sized {
     /// # See Also
     /// * [<https://redis.io/commands/topk.list/>](https://redis.io/commands/topk.list/)
     #[must_use]
-    fn topk_list<R: Response>(self, key: impl Serialize) -> PreparedCommand<'a, Self, R> {
+    fn topk_list<R: DeserializeOwned>(self, key: impl Serialize) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("TOPK.LIST").key(key).readonly())
     }
 
@@ -103,7 +103,7 @@ pub trait TopKCommands<'a>: Sized {
     /// # See Also
     /// * [<https://redis.io/commands/topk.list/>](https://redis.io/commands/topk.list/)
     #[must_use]
-    fn topk_list_with_count<R: Response + DeserializeOwned>(
+    fn topk_list_with_count<R: DeserializeOwned>(
         self,
         key: impl Serialize,
     ) -> PreparedCommand<'a, Self, TopKListWithCountResult<R>> {
@@ -124,7 +124,7 @@ pub trait TopKCommands<'a>: Sized {
     /// # See Also
     /// * [<https://redis.io/commands/topk.query/>](https://redis.io/commands/topk.query/)
     #[must_use]
-    fn topk_query<R: Response>(
+    fn topk_query<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         items: impl Serialize,
@@ -147,7 +147,7 @@ pub trait TopKCommands<'a>: Sized {
     /// # See Also
     /// * [<https://redis.io/commands/topk.count/>](https://redis.io/commands/topk.count/)
     #[must_use]
-    fn topk_count<R: Response>(
+    fn topk_count<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         items: impl Serialize,
@@ -205,11 +205,11 @@ pub struct TopKInfoResult {
 
 #[derive(Debug)]
 #[non_exhaustive]
-pub struct TopKListWithCountResult<R: Response> {
+pub struct TopKListWithCountResult<R: DeserializeOwned> {
     pub items: Vec<(R, usize)>,
 }
 
-impl<'de, R: Response + DeserializeOwned> Deserialize<'de> for TopKListWithCountResult<R> {
+impl<'de, R: DeserializeOwned> Deserialize<'de> for TopKListWithCountResult<R> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,

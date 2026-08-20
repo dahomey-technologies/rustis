@@ -1,6 +1,6 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{FastPathCommandBuilder, Response, cmd},
+    resp::{FastPathCommandBuilder, cmd},
 };
 use serde::{Serialize, de::DeserializeOwned};
 
@@ -45,7 +45,7 @@ pub trait SetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/sdiff/>](https://redis.io/commands/sdiff/)
     #[must_use]
-    fn sdiff<R: Response>(self, keys: impl Serialize) -> PreparedCommand<'a, Self, R> {
+    fn sdiff<R: DeserializeOwned>(self, keys: impl Serialize) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("SDIFF").keys(keys).readonly())
     }
 
@@ -74,7 +74,7 @@ pub trait SetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/sinter/>](https://redis.io/commands/sinter/)
     #[must_use]
-    fn sinter<R: Response>(self, keys: impl Serialize) -> PreparedCommand<'a, Self, R> {
+    fn sinter<R: DeserializeOwned>(self, keys: impl Serialize) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("SINTER").keys(keys).readonly())
     }
 
@@ -140,7 +140,7 @@ pub trait SetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/smembers/>](https://redis.io/commands/smembers/)
     #[must_use]
-    fn smembers<R: Response>(self, key: impl Serialize) -> PreparedCommand<'a, Self, R> {
+    fn smembers<R: DeserializeOwned>(self, key: impl Serialize) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("SMEMBERS").key(key).readonly())
     }
 
@@ -152,7 +152,7 @@ pub trait SetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/smismember/>](https://redis.io/commands/smismember/)
     #[must_use]
-    fn smismember<R: Response>(
+    fn smismember<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         members: impl Serialize,
@@ -186,7 +186,11 @@ pub trait SetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/spop/>](https://redis.io/commands/spop/)
     #[must_use]
-    fn spop<R: Response>(self, key: impl Serialize, count: usize) -> PreparedCommand<'a, Self, R> {
+    fn spop<R: DeserializeOwned>(
+        self,
+        key: impl Serialize,
+        count: usize,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("SPOP").key(key).arg(count))
     }
 
@@ -198,7 +202,7 @@ pub trait SetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/srandmember/>](https://redis.io/commands/srandmember/)
     #[must_use]
-    fn srandmember<R: Response>(
+    fn srandmember<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         count: usize,
@@ -230,7 +234,7 @@ pub trait SetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/sscan/>](https://redis.io/commands/sscan/)
     #[must_use]
-    fn sscan<R: Response + DeserializeOwned>(
+    fn sscan<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         cursor: u64,
@@ -250,7 +254,7 @@ pub trait SetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/sunion/>](https://redis.io/commands/sunion/)
     #[must_use]
-    fn sunion<R: Response>(self, keys: impl Serialize) -> PreparedCommand<'a, Self, R> {
+    fn sunion<R: DeserializeOwned>(self, keys: impl Serialize) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("SUNION").keys(keys).readonly())
     }
 

@@ -1,7 +1,7 @@
 use crate::{
     Result,
     client::{Client, PreparedCommand, command_traits::*},
-    resp::{Command, RespBatchDeserializer, Response},
+    resp::{Command, RespBatchDeserializer},
 };
 use serde::de::DeserializeOwned;
 use smallvec::SmallVec;
@@ -165,7 +165,9 @@ pub trait BatchPreparedCommand<R = ()> {
     fn forget(self);
 }
 
-impl<'a, R: Response> BatchPreparedCommand for PreparedCommand<'a, &'a mut Pipeline<'_>, R> {
+impl<'a, R: DeserializeOwned> BatchPreparedCommand
+    for PreparedCommand<'a, &'a mut Pipeline<'_>, R>
+{
     /// Queue a command.
     #[inline]
     fn queue(self) {

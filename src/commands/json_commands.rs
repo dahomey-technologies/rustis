@@ -1,9 +1,10 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
     commands::SetCondition,
-    resp::{CommandArgsMut, Response, cmd},
+    resp::{CommandArgsMut, cmd},
 };
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 
 /// A group of Redis commands related to [`RedisJson`](https://redis.io/docs/stack/json/)
 ///
@@ -24,7 +25,7 @@ pub trait JsonCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/json.arrappend/>](https://redis.io/commands/json.arrappend/)
     #[must_use]
-    fn json_arrappend<R: Response>(
+    fn json_arrappend<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         path: impl Serialize,
@@ -49,7 +50,7 @@ pub trait JsonCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/json.arrindex/>](https://redis.io/commands/json.arrindex/)
     #[must_use]
-    fn json_arrindex<R: Response>(
+    fn json_arrindex<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         path: impl Serialize,
@@ -86,7 +87,7 @@ pub trait JsonCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/json.arrinsert/>](https://redis.io/commands/json.arrinsert/)
     #[must_use]
-    fn json_arrinsert<R: Response>(
+    fn json_arrinsert<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         path: impl Serialize,
@@ -116,7 +117,7 @@ pub trait JsonCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/json.arrlen/>](https://redis.io/commands/json.arrlen/)
     #[must_use]
-    fn json_arrlen<R: Response>(
+    fn json_arrlen<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         path: impl Serialize,
@@ -141,7 +142,7 @@ pub trait JsonCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/json.arrpop/>](https://redis.io/commands/json.arrpop/)
     #[must_use]
-    fn json_arrpop<R: Response>(
+    fn json_arrpop<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         path: impl Serialize,
@@ -166,7 +167,7 @@ pub trait JsonCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/json.arrtrim/>](https://redis.io/commands/json.arrtrim/)
     #[must_use]
-    fn json_arrtrim<R: Response>(
+    fn json_arrtrim<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         path: impl Serialize,
@@ -211,7 +212,7 @@ pub trait JsonCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/json.debug-memory/>](https://redis.io/commands/json.debug-memory/)
     #[must_use]
-    fn json_debug_memory<R: Response>(
+    fn json_debug_memory<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         path: impl Serialize,
@@ -278,7 +279,7 @@ pub trait JsonCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/json.get/>](https://redis.io/commands/json.get/)
     #[must_use]
-    fn json_get<R: Response>(
+    fn json_get<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         options: JsonGetOptions,
@@ -298,7 +299,7 @@ pub trait JsonCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/json.mget/>](https://redis.io/commands/json.mget/)
     #[must_use]
-    fn json_mget<R: Response>(
+    fn json_mget<R: DeserializeOwned>(
         self,
         keys: impl Serialize,
         path: impl Serialize,
@@ -361,7 +362,7 @@ pub trait JsonCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/json.numincrby/>](https://redis.io/commands/json.numincrby/)
     #[must_use]
-    fn json_numincrby<R: Response>(
+    fn json_numincrby<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         path: impl Serialize,
@@ -384,7 +385,7 @@ pub trait JsonCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/json.nummultby/>](https://redis.io/commands/json.nummultby/)
     #[must_use]
-    fn json_nummultby<R: Response>(
+    fn json_nummultby<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         path: impl Serialize,
@@ -407,7 +408,7 @@ pub trait JsonCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/json.objkeys/>](https://redis.io/commands/json.objkeys/)
     #[must_use]
-    fn json_objkeys<R: Response>(
+    fn json_objkeys<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         path: impl Serialize,
@@ -428,7 +429,7 @@ pub trait JsonCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/json.objlen/>](https://redis.io/commands/json.objlen/)
     #[must_use]
-    fn json_objlen<R: Response>(
+    fn json_objlen<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         path: impl Serialize,
@@ -458,7 +459,7 @@ pub trait JsonCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/json.resp/>](https://redis.io/commands/json.resp/)
     #[must_use]
-    fn json_resp<R: Response>(
+    fn json_resp<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         path: impl Serialize,
@@ -510,7 +511,7 @@ pub trait JsonCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/json.strappend/>](https://redis.io/commands/json.strappend/)
     #[must_use]
-    fn json_strappend<R: Response>(
+    fn json_strappend<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         path: impl Serialize,
@@ -532,7 +533,7 @@ pub trait JsonCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/json.strlen/>](https://redis.io/commands/json.strlen/)
     #[must_use]
-    fn json_strlen<R: Response>(
+    fn json_strlen<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         path: impl Serialize,
@@ -553,7 +554,7 @@ pub trait JsonCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/json.toggle/>](https://redis.io/commands/json.toggle/)
     #[must_use]
-    fn json_toggle<R: Response>(
+    fn json_toggle<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         path: impl Serialize,
@@ -573,7 +574,7 @@ pub trait JsonCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/json.type/>](https://redis.io/commands/json.type/)
     #[must_use]
-    fn json_type<R: Response>(
+    fn json_type<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         path: impl Serialize,

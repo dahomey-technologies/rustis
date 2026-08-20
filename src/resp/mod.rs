@@ -165,11 +165,12 @@ Values are not checked: a struct or a map as a value is the point of `HSET`
 **rustis** provides an idiomatic way to convert command results into Rust types with the help of [serde](serde.rs)
 
 You will notice that each built-in command returns a [`PreparedCommand<R>`](crate::client::PreparedCommand)
-struct where `R` represents the [`Response`] of the command.
+struct where `R` is the response type the caller declares.
 
-The different command traits implementations ([`Client`](crate::client::Client), [`Pipeline`](crate::client::Pipeline)
- or [`Transaction`](crate::client::Transaction)) add a constraint on the reponse `R`:
- it must implement serde [`Deserialize`](https://docs.rs/serde/latest/serde/trait.Deserialize.html) trait.
+`R` must implement serde
+[`DeserializeOwned`](https://docs.rs/serde/latest/serde/de/trait.DeserializeOwned.html), which is
+the only constraint there is: nothing relates it at compile time to what the server actually
+answers.
 
  Indeed, **rustis** provides a serde deserializer over the RESP wire format.
  Each custom struct or enum defined as a response of a built-command implements
@@ -257,7 +258,6 @@ pub(crate) use resp_response::*;
 pub(crate) use resp_scalar::*;
 pub(crate) use resp_tags::*;
 pub(crate) use resp_tape::*;
-pub use response::*;
 pub use util::*;
 pub use value::*;
 pub(crate) use value_deserialize::*;
@@ -282,7 +282,6 @@ mod resp_response;
 mod resp_scalar;
 mod resp_tags;
 mod resp_tape;
-mod response;
 mod util;
 mod value;
 mod value_deserialize;

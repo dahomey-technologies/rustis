@@ -1,8 +1,9 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
     commands::{HelloOptions, HelloResult},
-    resp::{Response, cmd},
+    resp::cmd,
 };
+use serde::de::DeserializeOwned;
 
 /// The commands that drive the connection, sent by the client and not by the caller.
 ///
@@ -38,7 +39,7 @@ pub(crate) trait InternalCommands<'a>: Sized {
     ///
     /// # See Also
     /// [<https://redis.io/commands/cluster-slots/>](https://redis.io/commands/cluster-slots/)
-    fn cluster_slots<R: Response>(self) -> PreparedCommand<'a, Self, R> {
+    fn cluster_slots<R: DeserializeOwned>(self) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("CLUSTER").arg("SLOTS"))
     }
 

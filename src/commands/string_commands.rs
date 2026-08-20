@@ -1,8 +1,9 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
     commands::{RequestPolicy, ResponsePolicy},
-    resp::{FastPathCommandBuilder, Response, cmd, serialize_flag},
+    resp::{FastPathCommandBuilder, cmd, serialize_flag},
 };
+use serde::de::DeserializeOwned;
 use serde::{
     Deserialize, Deserializer, Serialize,
     de::{self, SeqAccess, Visitor},
@@ -114,7 +115,7 @@ pub trait StringCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/get/>](https://redis.io/commands/get/)
     #[must_use]
-    fn get<R: Response>(self, key: impl Serialize) -> PreparedCommand<'a, Self, R> {
+    fn get<R: DeserializeOwned>(self, key: impl Serialize) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, FastPathCommandBuilder::get(key))
     }
 
@@ -129,7 +130,7 @@ pub trait StringCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/getdel/>](https://redis.io/commands/getdel/)
     #[must_use]
-    fn getdel<R: Response>(self, key: impl Serialize) -> PreparedCommand<'a, Self, R> {
+    fn getdel<R: DeserializeOwned>(self, key: impl Serialize) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("GETDEL").key(key))
     }
 
@@ -145,7 +146,7 @@ pub trait StringCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/digest/>](https://redis.io/commands/digest/)
     #[must_use]
-    fn digest<R: Response>(self, key: impl Serialize) -> PreparedCommand<'a, Self, R> {
+    fn digest<R: DeserializeOwned>(self, key: impl Serialize) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("DIGEST").key(key).readonly())
     }
 
@@ -209,7 +210,7 @@ pub trait StringCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/getex/>](https://redis.io/commands/getex/)
     #[must_use]
-    fn getex<R: Response>(
+    fn getex<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         options: GetExOptions,
@@ -253,7 +254,7 @@ pub trait StringCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/getrange/>](https://redis.io/commands/getrange/)
     #[must_use]
-    fn getrange<R: Response>(
+    fn getrange<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         start: isize,
@@ -328,7 +329,7 @@ pub trait StringCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/increx/>](https://redis.io/commands/increx/)
     #[must_use]
-    fn increx<R: Response>(
+    fn increx<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         options: IncrExOptions,
@@ -374,7 +375,7 @@ pub trait StringCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/lcs/>](https://redis.io/commands/lcs/)
     #[must_use]
-    fn lcs<R: Response>(
+    fn lcs<R: DeserializeOwned>(
         self,
         key1: impl Serialize,
         key2: impl Serialize,
@@ -438,7 +439,7 @@ pub trait StringCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/mget/>](https://redis.io/commands/mget/)
     #[must_use]
-    fn mget<R: Response>(self, keys: impl Serialize) -> PreparedCommand<'a, Self, R> {
+    fn mget<R: DeserializeOwned>(self, keys: impl Serialize) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
             cmd("MGET")
@@ -573,7 +574,7 @@ pub trait StringCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/set/>](https://redis.io/commands/set/)
     #[must_use]
-    fn set_get_with_options<'b, R: Response>(
+    fn set_get_with_options<'b, R: DeserializeOwned>(
         self,
         key: impl Serialize,
         value: impl Serialize,

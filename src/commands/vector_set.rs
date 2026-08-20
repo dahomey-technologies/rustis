@@ -1,7 +1,8 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{Response, cmd, serialize_flag},
+    resp::{cmd, serialize_flag},
 };
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
 
@@ -72,7 +73,7 @@ pub trait VectorSetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/vemb/>](https://redis.io/commands/vemb/)
     #[must_use]
-    fn vemb<R: Response>(
+    fn vemb<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         element: impl Serialize,
@@ -85,7 +86,7 @@ pub trait VectorSetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/vemb/>](https://redis.io/commands/vemb/)
     #[must_use]
-    fn vgetattr<R: Response>(
+    fn vgetattr<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         element: impl Serialize,
@@ -112,7 +113,7 @@ pub trait VectorSetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/vlinks/>](https://redis.io/commands/vlinks/)
     #[must_use]
-    fn vlinks<R: Response>(
+    fn vlinks<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         element: impl Serialize,
@@ -130,7 +131,7 @@ pub trait VectorSetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/vlinks/>](https://redis.io/commands/vlinks/)
     #[must_use]
-    fn vlinks_with_score<R: Response>(
+    fn vlinks_with_score<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         element: impl Serialize,
@@ -182,7 +183,7 @@ pub trait VectorSetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/vrange/>](https://redis.io/commands/vrange/)
     #[must_use]
-    fn vrange<R: Response>(
+    fn vrange<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         start: impl Serialize,
@@ -218,7 +219,7 @@ pub trait VectorSetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/vrandmember/>](https://redis.io/commands/vrandmember/)
     #[must_use]
-    fn vrandmember<R: Response>(
+    fn vrandmember<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         count: isize,
@@ -268,7 +269,7 @@ pub trait VectorSetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/vsim/>](https://redis.io/commands/vsim/)
     #[must_use]
-    fn vsim<R: Response>(
+    fn vsim<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         vector_or_element: VectorOrElement,

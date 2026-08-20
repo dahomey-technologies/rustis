@@ -1,11 +1,12 @@
-use crate::resp::{Command, Response};
+use crate::resp::Command;
+use serde::de::DeserializeOwned;
 use std::marker::PhantomData;
 
 /// Wrapper around a command about to be send with a marker for the response type
 /// and a few options to decide how the response send back by Redis should be processed.
 pub struct PreparedCommand<'a, E, R = ()>
 where
-    R: Response,
+    R: DeserializeOwned,
 {
     /// Marker of the type in which the command response will be transformed
     phantom: PhantomData<fn(&'a ()) -> R>,
@@ -20,7 +21,7 @@ where
 
 impl<'a, E, R> PreparedCommand<'a, E, R>
 where
-    R: Response,
+    R: DeserializeOwned,
 {
     /// Create a new prepared command.
     #[must_use]
@@ -78,7 +79,7 @@ where
 /// Add Redis keys with [`CommandBuilder::key`](crate::resp::CommandBuilder::key),
 /// everything else with `arg`. Cluster routing reads the keys, so a key passed as
 /// an argument is sent to the wrong node.
-pub fn prepare_command<'a, E, R: Response>(
+pub fn prepare_command<'a, E, R: DeserializeOwned>(
     executor: E,
     command: impl Into<Command>,
 ) -> PreparedCommand<'a, E, R> {

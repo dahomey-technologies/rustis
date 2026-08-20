@@ -1,7 +1,8 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{Response, cmd, serialize_flag},
+    resp::{cmd, serialize_flag},
 };
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
 
@@ -70,7 +71,11 @@ pub trait ArrayCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/arget/>](https://redis.io/commands/arget/)
     #[must_use]
-    fn arget<R: Response>(self, key: impl Serialize, index: usize) -> PreparedCommand<'a, Self, R> {
+    fn arget<R: DeserializeOwned>(
+        self,
+        key: impl Serialize,
+        index: usize,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("ARGET").key(key).arg(index).readonly())
     }
 
@@ -83,7 +88,7 @@ pub trait ArrayCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/argetrange/>](https://redis.io/commands/argetrange/)
     #[must_use]
-    fn argetrange<R: Response>(
+    fn argetrange<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         start: usize,
@@ -109,7 +114,7 @@ pub trait ArrayCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/argrep/>](https://redis.io/commands/argrep/)
     #[must_use]
-    fn argrep<R: Response>(
+    fn argrep<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         start: impl Serialize,
@@ -162,7 +167,7 @@ pub trait ArrayCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/arlastitems/>](https://redis.io/commands/arlastitems/)
     #[must_use]
-    fn arlastitems<R: Response>(
+    fn arlastitems<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         count: usize,
@@ -199,7 +204,7 @@ pub trait ArrayCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/armget/>](https://redis.io/commands/armget/)
     #[must_use]
-    fn armget<R: Response>(
+    fn armget<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         indices: impl Serialize,
@@ -246,7 +251,7 @@ pub trait ArrayCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/arop/>](https://redis.io/commands/arop/)
     #[must_use]
-    fn arop<R: Response>(
+    fn arop<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         start: usize,
@@ -293,7 +298,7 @@ pub trait ArrayCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/arscan/>](https://redis.io/commands/arscan/)
     #[must_use]
-    fn arscan<R: Response>(
+    fn arscan<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         start: usize,

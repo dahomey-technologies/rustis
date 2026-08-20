@@ -1,9 +1,10 @@
+use serde::de::DeserializeOwned;
 use std::{collections::HashMap, fmt};
 
 use crate::{
     client::{PreparedCommand, prepare_command},
     commands::SortOrder,
-    resp::{Response, cmd, deserialize_vec_of_pairs},
+    resp::{cmd, deserialize_vec_of_pairs},
 };
 use serde::{
     Deserialize, Serialize,
@@ -158,7 +159,7 @@ pub trait ClusterCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/cluster-getkeysinslot/>](https://redis.io/commands/cluster-getkeysinslot/)
     #[must_use]
-    fn cluster_getkeysinslot<R: Response>(
+    fn cluster_getkeysinslot<R: DeserializeOwned>(
         self,
         slot: u16,
         count: usize,
@@ -206,7 +207,7 @@ pub trait ClusterCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/cluster-links/>](https://redis.io/commands/cluster-links/)
     #[must_use]
-    fn cluster_links<R: Response>(self) -> PreparedCommand<'a, Self, R> {
+    fn cluster_links<R: DeserializeOwned>(self) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("CLUSTER").arg("LINKS"))
     }
 
@@ -242,7 +243,7 @@ pub trait ClusterCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/cluster-myid/>](https://redis.io/commands/cluster-myid/)
     #[must_use]
-    fn cluster_myid<R: Response>(self) -> PreparedCommand<'a, Self, R> {
+    fn cluster_myid<R: DeserializeOwned>(self) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("CLUSTER").arg("MYID"))
     }
 
@@ -258,7 +259,7 @@ pub trait ClusterCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/cluster-myshardid/>](https://redis.io/commands/cluster-myshardid/)
     #[must_use]
-    fn cluster_myshardid<R: Response>(self) -> PreparedCommand<'a, Self, R> {
+    fn cluster_myshardid<R: DeserializeOwned>(self) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("CLUSTER").arg("MYSHARDID"))
     }
 
@@ -277,7 +278,7 @@ pub trait ClusterCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/cluster-nodes/>](https://redis.io/commands/cluster-nodes/)
     #[must_use]
-    fn cluster_nodes<R: Response>(self) -> PreparedCommand<'a, Self, R> {
+    fn cluster_nodes<R: DeserializeOwned>(self) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("CLUSTER").arg("NODES"))
     }
 
@@ -289,7 +290,7 @@ pub trait ClusterCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/cluster-replicas/>](https://redis.io/commands/cluster-replicas/)
     #[must_use]
-    fn cluster_replicas<R: Response>(
+    fn cluster_replicas<R: DeserializeOwned>(
         self,
         node_id: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
@@ -361,7 +362,7 @@ pub trait ClusterCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/cluster-shards/>](https://redis.io/commands/cluster-shards/)
     #[must_use]
-    fn cluster_shards<R: Response>(self) -> PreparedCommand<'a, Self, R> {
+    fn cluster_shards<R: DeserializeOwned>(self) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("CLUSTER").arg("SHARDS"))
     }
 
@@ -378,7 +379,7 @@ pub trait ClusterCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/cluster-slot-stats/>](https://redis.io/commands/cluster-slot-stats/)
     #[must_use]
-    fn cluster_slot_stats<R: Response>(
+    fn cluster_slot_stats<R: DeserializeOwned>(
         self,
         filter: ClusterSlotStatsFilter,
     ) -> PreparedCommand<'a, Self, R> {
@@ -414,7 +415,7 @@ pub trait ClusterCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/cluster-migration/>](https://redis.io/commands/cluster-migration/)
     #[must_use]
-    fn cluster_migration_import<R: Response>(
+    fn cluster_migration_import<R: DeserializeOwned>(
         self,
         slot_ranges: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
@@ -455,7 +456,7 @@ pub trait ClusterCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/cluster-migration/>](https://redis.io/commands/cluster-migration/)
     #[must_use]
-    fn cluster_migration_status<R: Response>(
+    fn cluster_migration_status<R: DeserializeOwned>(
         self,
         target: ClusterMigrationTarget,
     ) -> PreparedCommand<'a, Self, R> {

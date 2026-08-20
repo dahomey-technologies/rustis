@@ -1,6 +1,6 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{FastPathCommandBuilder, Response, cmd, deserialize_vec_of_pairs, serialize_flag},
+    resp::{FastPathCommandBuilder, cmd, deserialize_vec_of_pairs, serialize_flag},
 };
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
@@ -99,7 +99,7 @@ pub trait SortedSetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/zdiff/>](https://redis.io/commands/zdiff/)
     #[must_use]
-    fn zdiff<R: Response>(self, keys: impl Serialize) -> PreparedCommand<'a, Self, R> {
+    fn zdiff<R: DeserializeOwned>(self, keys: impl Serialize) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("ZDIFF").key_with_count(keys).readonly())
     }
 
@@ -112,7 +112,10 @@ pub trait SortedSetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/zdiff/>](https://redis.io/commands/zdiff/)
     #[must_use]
-    fn zdiff_with_scores<R: Response>(self, keys: impl Serialize) -> PreparedCommand<'a, Self, R> {
+    fn zdiff_with_scores<R: DeserializeOwned>(
+        self,
+        keys: impl Serialize,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
             cmd("ZDIFF")
@@ -171,7 +174,7 @@ pub trait SortedSetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/zinter/>](https://redis.io/commands/zinter/)
     #[must_use]
-    fn zinter<R: Response>(
+    fn zinter<R: DeserializeOwned>(
         self,
         keys: impl Serialize,
         weights: impl Serialize,
@@ -196,7 +199,7 @@ pub trait SortedSetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/zinter/>](https://redis.io/commands/zinter/)
     #[must_use]
-    fn zinter_with_scores<R: Response>(
+    fn zinter_with_scores<R: DeserializeOwned>(
         self,
         keys: impl Serialize,
         weights: impl Serialize,
@@ -290,7 +293,7 @@ pub trait SortedSetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/zmpop/>](https://redis.io/commands/zmpop/)
     #[must_use]
-    fn zmpop<R: Response + DeserializeOwned>(
+    fn zmpop<R: DeserializeOwned>(
         self,
         keys: impl Serialize,
         where_: ZWhere,
@@ -316,7 +319,7 @@ pub trait SortedSetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/zmscore/>](https://redis.io/commands/zmscore/)
     #[must_use]
-    fn zmscore<R: Response>(
+    fn zmscore<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         members: impl Serialize,
@@ -332,7 +335,7 @@ pub trait SortedSetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/zpopmax/>](https://redis.io/commands/zpopmax/)
     #[must_use]
-    fn zpopmax<R: Response>(
+    fn zpopmax<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         count: usize,
@@ -348,7 +351,7 @@ pub trait SortedSetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/zpopmin/>](https://redis.io/commands/zpopmin/)
     #[must_use]
-    fn zpopmin<R: Response>(
+    fn zpopmin<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         count: usize,
@@ -364,7 +367,7 @@ pub trait SortedSetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/zrandmember/>](https://redis.io/commands/zrandmember/)
     #[must_use]
-    fn zrandmember<R: Response>(self, key: impl Serialize) -> PreparedCommand<'a, Self, R> {
+    fn zrandmember<R: DeserializeOwned>(self, key: impl Serialize) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("ZRANDMEMBER").key(key).readonly())
     }
 
@@ -380,7 +383,7 @@ pub trait SortedSetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/zrandmember/>](https://redis.io/commands/zrandmember/)
     #[must_use]
-    fn zrandmembers<R: Response>(
+    fn zrandmembers<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         count: isize,
@@ -400,7 +403,7 @@ pub trait SortedSetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/zrandmember/>](https://redis.io/commands/zrandmember/)
     #[must_use]
-    fn zrandmembers_with_scores<R: Response>(
+    fn zrandmembers_with_scores<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         count: isize,
@@ -423,7 +426,7 @@ pub trait SortedSetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/zrange/>](https://redis.io/commands/zrange/)
     #[must_use]
-    fn zrange<R: Response>(
+    fn zrange<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         start: impl Serialize,
@@ -449,7 +452,7 @@ pub trait SortedSetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/zrange/>](https://redis.io/commands/zrange/)
     #[must_use]
-    fn zrange_with_scores<R: Response>(
+    fn zrange_with_scores<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         start: impl Serialize,
@@ -660,7 +663,7 @@ pub trait SortedSetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/zscan/>](https://redis.io/commands/zscan/)
     #[must_use]
-    fn zscan<R: Response + DeserializeOwned>(
+    fn zscan<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         cursor: usize,
@@ -697,7 +700,7 @@ pub trait SortedSetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/zunion/>](https://redis.io/commands/zunion/)
     #[must_use]
-    fn zunion<R: Response>(
+    fn zunion<R: DeserializeOwned>(
         self,
         keys: impl Serialize,
         weights: impl Serialize,
@@ -722,7 +725,7 @@ pub trait SortedSetCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/zunion/>](https://redis.io/commands/zunion/)
     #[must_use]
-    fn zunion_with_scores<R: Response>(
+    fn zunion_with_scores<R: DeserializeOwned>(
         self,
         keys: impl Serialize,
         weights: impl Serialize,
@@ -945,7 +948,7 @@ impl<'a> ZScanOptions<'a> {
 /// Result for the [`zscan`](SortedSetCommands::zscan) command.
 #[derive(Debug, Deserialize)]
 #[non_exhaustive]
-pub struct ZScanResult<R: Response + DeserializeOwned> {
+pub struct ZScanResult<R: DeserializeOwned> {
     pub cursor: u64,
     #[serde(deserialize_with = "deserialize_vec_of_pairs")]
     pub elements: Vec<(R, f64)>,

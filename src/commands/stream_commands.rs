@@ -1,6 +1,6 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{Response, cmd, serialize_flag},
+    resp::{cmd, serialize_flag},
 };
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::collections::HashMap;
@@ -77,7 +77,7 @@ pub trait StreamCommands<'a>: Sized {
     ///
     /// # See Also
     /// [<https://redis.io/commands/xadd/>](https://redis.io/commands/xadd/)
-    fn xadd<R: Response>(
+    fn xadd<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         stream_id: impl Serialize,
@@ -132,7 +132,7 @@ pub trait StreamCommands<'a>: Sized {
     ///
     /// # See Also
     /// [<https://redis.io/commands/xautoclaim/>](https://redis.io/commands/xautoclaim/)
-    fn xautoclaim<R: Response + DeserializeOwned>(
+    fn xautoclaim<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         group: impl Serialize,
@@ -166,7 +166,7 @@ pub trait StreamCommands<'a>: Sized {
     ///
     /// # See Also
     /// [<https://redis.io/commands/xclaim/>](https://redis.io/commands/xclaim/)
-    fn xclaim<R: Response>(
+    fn xclaim<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         group: impl Serialize,
@@ -521,7 +521,7 @@ pub trait StreamCommands<'a>: Sized {
     ///
     /// # See Also
     /// [<https://redis.io/commands/xpending/>](https://redis.io/commands/xpending/)
-    fn xpending_with_options<R: Response>(
+    fn xpending_with_options<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         group: impl Serialize,
@@ -544,7 +544,7 @@ pub trait StreamCommands<'a>: Sized {
     ///
     /// # See Also
     /// [<https://redis.io/commands/xrange/>](https://redis.io/commands/xrange/)
-    fn xrange<R: Response>(
+    fn xrange<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         start: impl Serialize,
@@ -570,7 +570,7 @@ pub trait StreamCommands<'a>: Sized {
     ///
     /// # See Also
     /// [<https://redis.io/commands/xread/>](https://redis.io/commands/xread/)
-    fn xread<R: Response>(
+    fn xread<R: DeserializeOwned>(
         self,
         options: XReadOptions,
         keys: impl Serialize,
@@ -595,7 +595,7 @@ pub trait StreamCommands<'a>: Sized {
     ///
     /// # See Also
     /// [<https://redis.io/commands/xreadgroup/>](https://redis.io/commands/xreadgroup/)
-    fn xreadgroup<R: Response>(
+    fn xreadgroup<R: DeserializeOwned>(
         self,
         group: impl Serialize,
         consumer: impl Serialize,
@@ -625,7 +625,7 @@ pub trait StreamCommands<'a>: Sized {
     ///
     /// # See Also
     /// [<https://redis.io/commands/xrevrange/>](https://redis.io/commands/xrevrange/)
-    fn xrevrange<R: Response>(
+    fn xrevrange<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         end: impl Serialize,
@@ -963,7 +963,7 @@ impl XAutoClaimOptions {
 #[non_exhaustive]
 pub struct StreamEntry<V>
 where
-    V: Response,
+    V: DeserializeOwned,
 {
     /// The stream Id
     pub stream_id: String,
@@ -978,7 +978,7 @@ where
 #[non_exhaustive]
 pub struct XAutoClaimResult<V>
 where
-    V: Response,
+    V: DeserializeOwned,
 {
     /// A stream ID to be used as the `start` argument for
     /// the next call to [`xautoclaim`](StreamCommands::xautoclaim).

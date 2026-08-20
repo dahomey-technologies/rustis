@@ -1,7 +1,8 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{Response, Value, cmd, serialize_flag},
+    resp::{Value, cmd, serialize_flag},
 };
+use serde::de::DeserializeOwned;
 use serde::{
     Deserialize, Serialize,
     de::{self, value::SeqAccessDeserializer},
@@ -327,7 +328,7 @@ pub trait TimeSeriesCommands<'a>: Sized {
     /// # See Also
     /// * [<https://redis.io/commands/ts.madd/>](https://redis.io/commands/ts.madd/)
     #[must_use]
-    fn ts_madd<R: Response>(self, items: impl Serialize) -> PreparedCommand<'a, Self, R> {
+    fn ts_madd<R: DeserializeOwned>(self, items: impl Serialize) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
             cmd("TS.MADD")
@@ -359,7 +360,7 @@ pub trait TimeSeriesCommands<'a>: Sized {
     /// # See Also
     /// * [<https://redis.io/commands/ts.mget/>](https://redis.io/commands/ts.mget/)
     #[must_use]
-    fn ts_mget<R: Response>(
+    fn ts_mget<R: DeserializeOwned>(
         self,
         options: TsMGetOptions,
         filters: impl Serialize,
@@ -400,7 +401,7 @@ pub trait TimeSeriesCommands<'a>: Sized {
     /// # See Also
     /// * [<https://redis.io/commands/ts.mrange/>](https://redis.io/commands/ts.mrange/)
     #[must_use]
-    fn ts_mrange<R: Response>(
+    fn ts_mrange<R: DeserializeOwned>(
         self,
         from_timestamp: impl Serialize,
         to_timestamp: impl Serialize,
@@ -447,7 +448,7 @@ pub trait TimeSeriesCommands<'a>: Sized {
     /// # See Also
     /// * [<https://redis.io/commands/ts.mrevrange/>](https://redis.io/commands/ts.mrevrange/)
     #[must_use]
-    fn ts_mrevrange<R: Response>(
+    fn ts_mrevrange<R: DeserializeOwned>(
         self,
         from_timestamp: impl Serialize,
         to_timestamp: impl Serialize,
@@ -491,7 +492,10 @@ pub trait TimeSeriesCommands<'a>: Sized {
     /// # See Also
     /// * [<https://redis.io/commands/ts.queryindex/>](https://redis.io/commands/ts.queryindex/)
     #[must_use]
-    fn ts_queryindex<R: Response>(self, filters: impl Serialize) -> PreparedCommand<'a, Self, R> {
+    fn ts_queryindex<R: DeserializeOwned>(
+        self,
+        filters: impl Serialize,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("TS.QUERYINDEX").arg(filters).readonly())
     }
 
@@ -517,7 +521,7 @@ pub trait TimeSeriesCommands<'a>: Sized {
     /// # See Also
     /// * [<https://redis.io/commands/ts.range/>](https://redis.io/commands/ts.range/)
     #[must_use]
-    fn ts_range<R: Response>(
+    fn ts_range<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         from_timestamp: impl Serialize,
@@ -557,7 +561,7 @@ pub trait TimeSeriesCommands<'a>: Sized {
     /// # See Also
     /// * [<https://redis.io/commands/ts.revrange/>](https://redis.io/commands/ts.revrange/)
     #[must_use]
-    fn ts_revrange<R: Response>(
+    fn ts_revrange<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         from_timestamp: impl Serialize,

@@ -1,7 +1,8 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{Response, Value, cmd},
+    resp::{Value, cmd},
 };
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 /// A group of Redis commands related to [Sentinel](https://redis.io/docs/management/sentinel/)
@@ -13,7 +14,7 @@ pub trait SentinelCommands<'a>: Sized {
     /// The specified name may be a wildcard.
     /// Similar to the Redis [`config_get`](crate::commands::ServerCommands::config_get) command.
     #[must_use]
-    fn sentinel_config_get<R: Response>(
+    fn sentinel_config_get<R: DeserializeOwned>(
         self,
         name: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
@@ -48,7 +49,7 @@ pub trait SentinelCommands<'a>: Sized {
     /// An unreachable quorum is a Redis error, so the count is what the reply
     /// adds: how much margin the deployment has left.
     #[must_use]
-    fn sentinel_ckquorum<R: Response>(
+    fn sentinel_ckquorum<R: DeserializeOwned>(
         self,
         master_name: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
@@ -105,7 +106,7 @@ pub trait SentinelCommands<'a>: Sized {
 
     /// Return cached [`info`](crate::commands::ServerCommands::info) output from masters and replicas.
     #[must_use]
-    fn sentinel_info_cache<R: Response>(
+    fn sentinel_info_cache<R: DeserializeOwned>(
         self,
         master_names: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {

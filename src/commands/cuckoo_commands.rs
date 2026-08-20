@@ -1,7 +1,8 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{BulkString, Response, Value, cmd, serialize_flag},
+    resp::{BulkString, Value, cmd, serialize_flag},
 };
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -200,7 +201,7 @@ pub trait CuckooCommands<'a>: Sized {
     /// # See Also
     /// * [<https://redis.io/commands/cf.insert/>](https://redis.io/commands/cf.insert/)
     #[must_use]
-    fn cf_insertnx<R: Response>(
+    fn cf_insertnx<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         options: CfInsertOptions,
@@ -253,7 +254,7 @@ pub trait CuckooCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/cf.mexists/>](https://redis.io/commands/cf.mexists/)
     #[must_use]
-    fn cf_mexists<R: Response>(
+    fn cf_mexists<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         items: impl Serialize,

@@ -1,7 +1,7 @@
 use crate::{
     ClientError, Error, ErrorKind, Result,
     client::{BatchPreparedCommand, Client, PreparedCommand, command_traits::*},
-    resp::{Command, RespDeserializer, Response, cmd},
+    resp::{Command, RespDeserializer, cmd},
 };
 use serde::{
     Deserializer,
@@ -323,7 +323,7 @@ where
     }
 }
 
-impl<'a, R: Response> BatchPreparedCommand for PreparedCommand<'a, &'a mut Transaction, R> {
+impl<'a, R: DeserializeOwned> BatchPreparedCommand for PreparedCommand<'a, &'a mut Transaction, R> {
     /// Queue a command into the transaction.
     fn queue(self) {
         self.executor.queue_command(self.command)

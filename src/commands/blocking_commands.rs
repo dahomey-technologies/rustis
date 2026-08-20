@@ -2,7 +2,7 @@ use crate::{
     Result,
     client::{MonitorStream, PreparedCommand, prepare_command},
     commands::{LMoveWhere, ZMPopResult, ZWhere},
-    resp::{Response, cmd, deserialize_vec_of_triplets},
+    resp::{cmd, deserialize_vec_of_triplets},
 };
 use serde::{
     Deserialize, Deserializer, Serialize,
@@ -111,7 +111,7 @@ pub trait BlockingCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/blmove/>](https://redis.io/commands/blmove/)
     #[must_use]
-    fn blmove<R: Response>(
+    fn blmove<R: DeserializeOwned>(
         self,
         source: impl Serialize,
         destination: impl Serialize,
@@ -142,7 +142,7 @@ pub trait BlockingCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/blmpop/>](https://redis.io/commands/blmpop/)
     #[must_use]
-    fn blmpop<R: Response + DeserializeOwned>(
+    fn blmpop<R: DeserializeOwned>(
         self,
         timeout: f64,
         keys: impl Serialize,
@@ -179,7 +179,7 @@ pub trait BlockingCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/blpop/>](https://redis.io/commands/blpop/)
     #[must_use]
-    fn blpop<R1: Response + DeserializeOwned, R2: Response + DeserializeOwned>(
+    fn blpop<R1: DeserializeOwned, R2: DeserializeOwned>(
         self,
         keys: impl Serialize,
         timeout: f64,
@@ -206,7 +206,7 @@ pub trait BlockingCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/brpop/>](https://redis.io/commands/brpop/)
     #[must_use]
-    fn brpop<R1: Response + DeserializeOwned, R2: Response + DeserializeOwned>(
+    fn brpop<R1: DeserializeOwned, R2: DeserializeOwned>(
         self,
         keys: impl Serialize,
         timeout: f64,
@@ -228,7 +228,7 @@ pub trait BlockingCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/bzmpop/>](https://redis.io/commands/bzmpop/)
     #[must_use]
-    fn bzmpop<R: Response + DeserializeOwned>(
+    fn bzmpop<R: DeserializeOwned>(
         self,
         timeout: f64,
         keys: impl Serialize,
@@ -261,7 +261,7 @@ pub trait BlockingCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/bzpopmax/>](https://redis.io/commands/bzpopmax/)
     #[must_use]
-    fn bzpopmax<R1: Response + DeserializeOwned, R2: Response + DeserializeOwned>(
+    fn bzpopmax<R1: DeserializeOwned, R2: DeserializeOwned>(
         self,
         keys: impl Serialize,
         timeout: f64,
@@ -284,7 +284,7 @@ pub trait BlockingCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/bzpopmin/>](https://redis.io/commands/bzpopmin/)
     #[must_use]
-    fn bzpopmin<R1: Response + DeserializeOwned, R2: Response + DeserializeOwned>(
+    fn bzpopmin<R1: DeserializeOwned, R2: DeserializeOwned>(
         self,
         keys: impl Serialize,
         timeout: f64,

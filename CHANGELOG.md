@@ -65,6 +65,25 @@ The upgrade checklist. Each item is stated in the section it belongs to below.
   forms (`key_with_count` and the stepped variants) are unchanged and may still
   declare zero keys, as `EVAL` does.
 
+- **`resp::Response` is deleted.** The trait was `pub trait Response {}` with a blanket
+  impl for every `Deserialize` type, so the `R: Response` bound on ~230 command
+  signatures constrained nothing and `IntoFuture` re-required `DeserializeOwned`
+  behind it. The bound is now `R: DeserializeOwned`, which is what it always meant.
+  A caller who named the trait in a `where` clause replaces it with
+  `serde::de::DeserializeOwned`.
+
+- **`Client::close` returns `CloseOutcome` instead of `()`.** A connection is shared
+  by every clone of a client, so a `close` that finds a clone alive shuts nothing down
+  and used to report that as `Ok(())`. `CloseOutcome::Closed` and `StillShared` now
+  tell the two apart. `ExclusiveClient::close` follows.
+
+- **`resp::Response` is deleted.** The trait was `pub trait Response {}` with a blanket
+  impl for every `Deserialize` type, so the `R: Response` bound on ~230 command
+  signatures constrained nothing and `IntoFuture` re-required `DeserializeOwned`
+  behind it. The bound is now `R: DeserializeOwned`, which is what it always meant.
+  A caller who named the trait in a `where` clause replaces it with
+  `serde::de::DeserializeOwned`.
+
 - **`RedisError::description` is a method, not a field, and the bytes are kept.** A
   server error reply is bytes and can echo a key or an argument, which
   `String::from_utf8_lossy` used to mangle on the way in.
@@ -72,14 +91,11 @@ The upgrade checklist. Each item is stated in the section it belongs to below.
   `RedisError::description_bytes()` answers the exact bytes. `kind` stays a public
   field.
 
-- **`Client::close` returns `CloseOutcome` instead of `()`.** A connection is shared
-  by every clone of a client, so a `close` that finds a clone alive shuts nothing down
-  and used to report that as `Ok(())`. `CloseOutcome::Closed` and `StillShared` now
-  tell the two apart. `ExclusiveClient::close` follows.
-
 - **`ClientError::InvalidTag` is removed.** No code path could produce it.
 
-`cargo semver-checks` reports 11 removed trait methods and 4 removed structs.
+`cargo semver-checks` against `0.24.0` reports 9 failing major checks, among them 11
+removed trait methods, 4 removed structs, the `resp::Response` trait, the
+`ClientError::InvalidTag` variant and the `RedisError::description` field.
 
 ### Added
 

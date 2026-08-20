@@ -1,7 +1,8 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{Response, cmd, serialize_flag},
+    resp::{cmd, serialize_flag},
 };
+use serde::de::DeserializeOwned;
 use serde::{
     Deserialize, Deserializer, Serialize,
     de::{
@@ -78,7 +79,7 @@ pub trait GeoCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/geohash/>](https://redis.io/commands/geohash/)
     #[must_use]
-    fn geohash<R: Response>(
+    fn geohash<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         members: impl Serialize,
@@ -115,7 +116,7 @@ pub trait GeoCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/geosearch/>](https://redis.io/commands/geosearch/)
     #[must_use]
-    fn geosearch<'b, R: Response>(
+    fn geosearch<'b, R: DeserializeOwned>(
         self,
         key: impl Serialize,
         from: GeoSearchFrom<'b>,
@@ -306,7 +307,7 @@ impl GeoSearchOptions {
 /// Result of the [`geosearch`](GeoCommands::geosearch) command.
 #[derive(Debug)]
 #[non_exhaustive]
-pub struct GeoSearchResult<R: Response> {
+pub struct GeoSearchResult<R: DeserializeOwned> {
     /// The matched member.
     pub member: R,
 
@@ -320,7 +321,7 @@ pub struct GeoSearchResult<R: Response> {
     pub coordinates: Option<(f64, f64)>,
 }
 
-impl<'de, R: Response + Deserialize<'de>> Deserialize<'de> for GeoSearchResult<R> {
+impl<'de, R: DeserializeOwned> Deserialize<'de> for GeoSearchResult<R> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -388,11 +389,11 @@ impl<'de, R: Response + Deserialize<'de>> Deserialize<'de> for GeoSearchResult<R
             }
         }
 
-        pub(crate) struct GeoSearchResultVisitor<R: Response> {
+        pub(crate) struct GeoSearchResultVisitor<R: DeserializeOwned> {
             phantom: PhantomData<R>,
         }
 
-        impl<'de, R: Response + Deserialize<'de>> Visitor<'de> for GeoSearchResultVisitor<R> {
+        impl<'de, R: DeserializeOwned> Visitor<'de> for GeoSearchResultVisitor<R> {
             type Value = GeoSearchResult<R>;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {

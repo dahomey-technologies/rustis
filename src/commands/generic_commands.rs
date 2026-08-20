@@ -1,8 +1,9 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
     commands::{RequestPolicy, ResponsePolicy},
-    resp::{BulkString, CommandArgsMut, FastPathCommandBuilder, Response, cmd, serialize_flag},
+    resp::{BulkString, CommandArgsMut, FastPathCommandBuilder, cmd, serialize_flag},
 };
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 /// A group of generic Redis commands
@@ -156,7 +157,7 @@ pub trait GenericCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/keys/>](https://redis.io/commands/keys/)
     #[must_use]
-    fn keys<R: Response>(self, pattern: impl Serialize) -> PreparedCommand<'a, Self, R> {
+    fn keys<R: DeserializeOwned>(self, pattern: impl Serialize) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
             cmd("KEYS")
@@ -217,7 +218,10 @@ pub trait GenericCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/object-encoding/>](https://redis.io/commands/object-encoding/)
     #[must_use]
-    fn object_encoding<R: Response>(self, key: impl Serialize) -> PreparedCommand<'a, Self, R> {
+    fn object_encoding<R: DeserializeOwned>(
+        self,
+        key: impl Serialize,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("OBJECT").arg("ENCODING").key(key).readonly())
     }
 
@@ -258,7 +262,7 @@ pub trait GenericCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/docs/latest/commands/object-help/>](https://redis.io/docs/latest/commands/object-help/)
     #[must_use]
-    fn object_help<R: Response>(self) -> PreparedCommand<'a, Self, R> {
+    fn object_help<R: DeserializeOwned>(self) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("OBJECT").arg("HELP"))
     }
 
@@ -384,7 +388,7 @@ pub trait GenericCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/randomkey/>](https://redis.io/commands/randomkey/)
     #[must_use]
-    fn randomkey<R: Response>(self) -> PreparedCommand<'a, Self, R> {
+    fn randomkey<R: DeserializeOwned>(self) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
             cmd("RANDOMKEY")
@@ -453,7 +457,11 @@ pub trait GenericCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/scan/>](https://redis.io/commands/scan/)
     #[must_use]
-    fn scan<R: Response>(self, cursor: u64, options: ScanOptions) -> PreparedCommand<'a, Self, R> {
+    fn scan<R: DeserializeOwned>(
+        self,
+        cursor: u64,
+        options: ScanOptions,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
             cmd("SCAN")
@@ -472,7 +480,7 @@ pub trait GenericCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/sort/>](https://redis.io/commands/sort/)
     #[must_use]
-    fn sort<R: Response>(
+    fn sort<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         options: SortOptions,
@@ -515,7 +523,7 @@ pub trait GenericCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/sort_ro/>](https://redis.io/commands/sort_ro/)
     #[must_use]
-    fn sort_readonly<R: Response>(
+    fn sort_readonly<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         options: SortOptions,
@@ -565,7 +573,7 @@ pub trait GenericCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/type/>](https://redis.io/commands/type/)
     #[must_use]
-    fn type_<R: Response>(self, key: impl Serialize) -> PreparedCommand<'a, Self, R> {
+    fn type_<R: DeserializeOwned>(self, key: impl Serialize) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("TYPE").key(key).readonly())
     }
 

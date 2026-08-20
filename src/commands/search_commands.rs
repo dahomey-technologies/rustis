@@ -2,10 +2,11 @@ use crate::{
     client::{PreparedCommand, prepare_command},
     commands::{GeoUnit, SortOrder},
     resp::{
-        RefBulkString, Response, Value, cmd, count_args, serialize_byte_buf_option, serialize_flag,
+        RefBulkString, Value, cmd, count_args, serialize_byte_buf_option, serialize_flag,
         serialize_slice_with_arg_count,
     },
 };
+use serde::de::DeserializeOwned;
 use serde::{
     Deserialize, Deserializer, Serialize,
     de::{self, DeserializeSeed, Visitor, value::MapAccessDeserializer},
@@ -144,7 +145,10 @@ pub trait SearchCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/ft.config-get/>](https://redis.io/commands/ft.config-get/)
     #[must_use]
-    fn ft_config_get<R: Response>(self, option: impl Serialize) -> PreparedCommand<'a, Self, R> {
+    fn ft_config_get<R: DeserializeOwned>(
+        self,
+        option: impl Serialize,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("FT.CONFIG").arg("GET").arg(option).readonly())
     }
 
@@ -289,7 +293,10 @@ pub trait SearchCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/ft.dictdump/>](https://redis.io/commands/ft.dictdump/)
     #[must_use]
-    fn ft_dictdump<R: Response>(self, dict: impl Serialize) -> PreparedCommand<'a, Self, R> {
+    fn ft_dictdump<R: DeserializeOwned>(
+        self,
+        dict: impl Serialize,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("FT.DICTDUMP").arg(dict).readonly())
     }
 
@@ -337,7 +344,7 @@ pub trait SearchCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/ft.explain/>](https://redis.io/commands/ft.explain/)
     #[must_use]
-    fn ft_explain<R: Response>(
+    fn ft_explain<R: DeserializeOwned>(
         self,
         index: impl Serialize,
         query: impl Serialize,
@@ -410,7 +417,7 @@ pub trait SearchCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/ft._list/>](https://redis.io/commands/ft._list/)
     #[must_use]
-    fn ft_list<R: Response>(self) -> PreparedCommand<'a, Self, R> {
+    fn ft_list<R: DeserializeOwned>(self) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("FT._LIST").readonly())
     }
 
@@ -429,7 +436,7 @@ pub trait SearchCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/ft.hybrid/>](https://redis.io/commands/ft.hybrid/)
     #[must_use]
-    fn ft_hybrid<R: Response>(
+    fn ft_hybrid<R: DeserializeOwned>(
         self,
         index: impl Serialize,
         search: FtHybridSearch,
@@ -686,7 +693,10 @@ pub trait SearchCommands<'a>: Sized {
     /// * [<https://redis.io/commands/ft.syndump/>](https://redis.io/commands/ft.syndump/)
     /// * [`Synonym support`](https://redis.io/docs/stack/search/reference/synonyms/)
     #[must_use]
-    fn ft_syndump<R: Response>(self, index: impl Serialize) -> PreparedCommand<'a, Self, R> {
+    fn ft_syndump<R: DeserializeOwned>(
+        self,
+        index: impl Serialize,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("FT.SYNDUMP").arg(index).readonly())
     }
 
@@ -739,7 +749,7 @@ pub trait SearchCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/ft.tagvals/>](https://redis.io/commands/ft.tagvals/)
     #[must_use]
-    fn ft_tagvals<R: Response>(
+    fn ft_tagvals<R: DeserializeOwned>(
         self,
         index: impl Serialize,
         field_name: impl Serialize,
@@ -817,7 +827,7 @@ pub trait SearchCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/ft.sugget/>](https://redis.io/commands/ft.sugget/)
     #[must_use]
-    fn ft_sugget<R: Response>(
+    fn ft_sugget<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         prefix: impl Serialize,

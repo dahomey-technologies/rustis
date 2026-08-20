@@ -1,7 +1,8 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{BulkString, Response, cmd, serialize_flag},
+    resp::{BulkString, cmd, serialize_flag},
 };
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 /// A group of Redis commands related to [`Bloom filters`](https://redis.io/docs/stack/bloom/)
@@ -94,7 +95,7 @@ pub trait BloomCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/bf.info/>](https://redis.io/commands/bf.info/)
     #[must_use]
-    fn bf_info<R: Response>(
+    fn bf_info<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         param: BfInfoParameter,
@@ -120,7 +121,7 @@ pub trait BloomCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/bf.insert/>](https://redis.io/commands/bf.insert/)
     #[must_use]
-    fn bf_insert<R: Response>(
+    fn bf_insert<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         items: impl Serialize,
@@ -175,7 +176,7 @@ pub trait BloomCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/bf.madd/>](https://redis.io/commands/bf.madd/)
     #[must_use]
-    fn bf_madd<R: Response>(
+    fn bf_madd<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         items: impl Serialize,
@@ -196,7 +197,7 @@ pub trait BloomCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/bf.mexists/>](https://redis.io/commands/bf.mexists/)
     #[must_use]
-    fn bf_mexists<R: Response>(
+    fn bf_mexists<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         items: impl Serialize,

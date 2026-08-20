@@ -2,7 +2,7 @@ use serde::{Serialize, de::DeserializeOwned};
 
 use crate::{
     client::{PreparedCommand, prepare_command},
-    resp::{FastPathCommandBuilder, Response, cmd},
+    resp::{FastPathCommandBuilder, cmd},
 };
 
 /// A group of Redis commands related to [`Lists`](https://redis.io/docs/data-types/lists/)
@@ -18,7 +18,7 @@ pub trait ListCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/lindex/>](https://redis.io/commands/lindex/)
     #[must_use]
-    fn lindex<R: Response>(
+    fn lindex<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         index: isize,
@@ -69,7 +69,7 @@ pub trait ListCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/lmove/>](https://redis.io/commands/lmove/)
     #[must_use]
-    fn lmove<R: Response>(
+    fn lmove<R: DeserializeOwned>(
         self,
         source: impl Serialize,
         destination: impl Serialize,
@@ -94,7 +94,7 @@ pub trait ListCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/lmpop/>](https://redis.io/commands/lmpop/)
     #[must_use]
-    fn lmpop<R: Response + DeserializeOwned>(
+    fn lmpop<R: DeserializeOwned>(
         self,
         keys: impl Serialize,
         where_: LMoveWhere,
@@ -118,7 +118,11 @@ pub trait ListCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/lpop/>](https://redis.io/commands/lpop/)
     #[must_use]
-    fn lpop<R: Response>(self, key: impl Serialize, count: u32) -> PreparedCommand<'a, Self, R> {
+    fn lpop<R: DeserializeOwned>(
+        self,
+        key: impl Serialize,
+        count: u32,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, FastPathCommandBuilder::lpop(key, count))
     }
 
@@ -157,7 +161,7 @@ pub trait ListCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/lpos/>](https://redis.io/commands/lpos/)
     #[must_use]
-    fn lpos_with_count<R: Response>(
+    fn lpos_with_count<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         element: impl Serialize,
@@ -219,7 +223,7 @@ pub trait ListCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/lrange/>](https://redis.io/commands/lrange/)
     #[must_use]
-    fn lrange<R: Response>(
+    fn lrange<R: DeserializeOwned>(
         self,
         key: impl Serialize,
         start: isize,
@@ -281,7 +285,11 @@ pub trait ListCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/rpop/>](https://redis.io/commands/rpop/)
     #[must_use]
-    fn rpop<R: Response>(self, key: impl Serialize, count: u32) -> PreparedCommand<'a, Self, R> {
+    fn rpop<R: DeserializeOwned>(
+        self,
+        key: impl Serialize,
+        count: u32,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, FastPathCommandBuilder::rpop(key, count))
     }
 

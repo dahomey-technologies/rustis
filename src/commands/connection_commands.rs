@@ -2,8 +2,9 @@ use crate::{
     Result,
     client::{PreparedCommand, prepare_command},
     commands::{ModuleInfo, RequestPolicy, ResponsePolicy},
-    resp::{Response, cmd, serialize_flag},
+    resp::{cmd, serialize_flag},
 };
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize, de};
 use std::collections::HashMap;
 
@@ -70,7 +71,7 @@ pub trait ConnectionCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/client-getname/>](https://redis.io/commands/client-getname/)
     #[must_use]
-    fn client_getname<R: Response>(self) -> PreparedCommand<'a, Self, R> {
+    fn client_getname<R: DeserializeOwned>(self) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("CLIENT").arg("GETNAME"))
     }
 
@@ -113,7 +114,7 @@ pub trait ConnectionCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/client-help/>](https://redis.io/commands/client-help/)
     #[must_use]
-    fn client_help<R: Response>(self) -> PreparedCommand<'a, Self, R> {
+    fn client_help<R: DeserializeOwned>(self) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("CLIENT").arg("HELP"))
     }
 
@@ -401,7 +402,7 @@ pub trait ConnectionCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/echo/>](https://redis.io/commands/echo/)
     #[must_use]
-    fn echo<R: Response>(self, message: impl Serialize) -> PreparedCommand<'a, Self, R> {
+    fn echo<R: DeserializeOwned>(self, message: impl Serialize) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("ECHO").arg(message))
     }
 
@@ -413,7 +414,7 @@ pub trait ConnectionCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/ping/>](https://redis.io/commands/ping/)
     #[must_use]
-    fn ping<R: Response>(self, message: impl Serialize) -> PreparedCommand<'a, Self, R> {
+    fn ping<R: DeserializeOwned>(self, message: impl Serialize) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
             cmd("PING").arg(message).cluster_info(

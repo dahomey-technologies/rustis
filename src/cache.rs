@@ -9,8 +9,7 @@ use crate::{
     },
     network::{JoinHandle, spawn},
     resp::{
-        BulkString, Command, CommandArgsMut, FastPathCommandBuilder, RespDeserializer,
-        RespResponse, Response,
+        BulkString, Command, CommandArgsMut, FastPathCommandBuilder, RespDeserializer, RespResponse,
     },
 };
 use bytes::Bytes;
@@ -255,13 +254,13 @@ impl<S: CacheStore> Cache<S> {
     }
 
     /// Executes the `GET` command with client-side caching.
-    pub async fn get<R: Response + DeserializeOwned>(&self, key: impl Serialize) -> Result<R> {
+    pub async fn get<R: DeserializeOwned>(&self, key: impl Serialize) -> Result<R> {
         self.process_prepared_command(key_to_bulk_string(&key)?, self.client.get(key))
             .await
     }
 
     /// Executes the `MGET` command with client-side caching.
-    pub async fn mget<R: Response + DeserializeOwned>(&self, keys: impl Serialize) -> Result<R> {
+    pub async fn mget<R: DeserializeOwned>(&self, keys: impl Serialize) -> Result<R> {
         let prepared_command = self.client.mget::<R>(keys);
         let mut responses = Vec::with_capacity(prepared_command.command.num_args());
         let mut missing_indices = Vec::new();
@@ -340,7 +339,7 @@ impl<S: CacheStore> Cache<S> {
     }
 
     /// Executes the `GETRANGE` command with client-side caching.
-    pub async fn getrange<R: Response + DeserializeOwned>(
+    pub async fn getrange<R: DeserializeOwned>(
         &self,
         key: impl Serialize,
         start: isize,
@@ -369,7 +368,7 @@ impl<S: CacheStore> Cache<S> {
     }
 
     /// Executes the `HGET` command with client-side caching.
-    pub async fn hget<R: Response + DeserializeOwned>(
+    pub async fn hget<R: DeserializeOwned>(
         &self,
         key: impl Serialize,
         field: impl Serialize,
@@ -379,7 +378,7 @@ impl<S: CacheStore> Cache<S> {
     }
 
     /// Executes the `HGETALL` command with client-side caching.
-    pub async fn hgetall<R: Response + DeserializeOwned>(&self, key: impl Serialize) -> Result<R> {
+    pub async fn hgetall<R: DeserializeOwned>(&self, key: impl Serialize) -> Result<R> {
         self.process_prepared_command(key_to_bulk_string(&key)?, self.client.hgetall(key))
             .await
     }
@@ -391,13 +390,13 @@ impl<S: CacheStore> Cache<S> {
     }
 
     /// Executes the `HKEYS` command with client-side caching.
-    pub async fn hkeys<R: Response + DeserializeOwned>(&self, key: impl Serialize) -> Result<R> {
+    pub async fn hkeys<R: DeserializeOwned>(&self, key: impl Serialize) -> Result<R> {
         self.process_prepared_command(key_to_bulk_string(&key)?, self.client.hkeys(key))
             .await
     }
 
     /// Executes the `HKEYS` command with client-side caching.
-    pub async fn hvals<R: Response + DeserializeOwned>(&self, key: impl Serialize) -> Result<R> {
+    pub async fn hvals<R: DeserializeOwned>(&self, key: impl Serialize) -> Result<R> {
         self.process_prepared_command(key_to_bulk_string(&key)?, self.client.hvals(key))
             .await
     }
@@ -409,7 +408,7 @@ impl<S: CacheStore> Cache<S> {
     }
 
     /// Executes the `HMGET` command with client-side caching.
-    pub async fn hmget<R: Response + DeserializeOwned>(
+    pub async fn hmget<R: DeserializeOwned>(
         &self,
         key: impl Serialize,
         fields: impl Serialize,
@@ -419,7 +418,7 @@ impl<S: CacheStore> Cache<S> {
     }
 
     /// Executes the `LRANGE` command with client-side caching.
-    pub async fn lrange<R: Response + DeserializeOwned>(
+    pub async fn lrange<R: DeserializeOwned>(
         &self,
         key: impl Serialize,
         start: isize,
@@ -439,7 +438,7 @@ impl<S: CacheStore> Cache<S> {
     }
 
     /// Executes the `LINDEX` command with client-side caching.
-    pub async fn lindex<R: Response + DeserializeOwned>(
+    pub async fn lindex<R: DeserializeOwned>(
         &self,
         key: impl Serialize,
         index: isize,
@@ -449,7 +448,7 @@ impl<S: CacheStore> Cache<S> {
     }
 
     /// Executes the `SMEMBERS` command with client-side caching.
-    pub async fn smembers<R: Response + DeserializeOwned>(&self, key: impl Serialize) -> Result<R> {
+    pub async fn smembers<R: DeserializeOwned>(&self, key: impl Serialize) -> Result<R> {
         self.process_prepared_command(key_to_bulk_string(&key)?, self.client.smembers(key))
             .await
     }
@@ -501,7 +500,7 @@ impl<S: CacheStore> Cache<S> {
     }
 
     /// Executes the `ZRANGE` command with client-side caching.
-    pub async fn zrange<R: Response + DeserializeOwned>(
+    pub async fn zrange<R: DeserializeOwned>(
         &self,
         key: impl Serialize,
         start: impl Serialize,
@@ -581,14 +580,14 @@ impl<S: CacheStore> Cache<S> {
         prepared_command: PreparedCommand<'a, &'a Client, R>,
     ) -> Result<R>
     where
-        R: Response + DeserializeOwned,
+        R: DeserializeOwned,
     {
         self.process_command(key, prepared_command.command).await
     }
 
     async fn process_command<R>(&self, key: BulkString, command: Command) -> Result<R>
     where
-        R: Response + DeserializeOwned,
+        R: DeserializeOwned,
     {
         if let Some(response) = self.cache.get(&key, command.bytes()).await {
             tracing::debug!(

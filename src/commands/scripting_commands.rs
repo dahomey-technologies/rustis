@@ -1,8 +1,9 @@
 use crate::{
     client::{PreparedCommand, prepare_command},
     commands::{FlushingMode, RequestPolicy, ResponsePolicy},
-    resp::{BulkString, Response, cmd, serialize_flag},
+    resp::{BulkString, cmd, serialize_flag},
 };
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -20,7 +21,7 @@ pub trait ScriptingCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/eval/>](https://redis.io/commands/eval/)
     #[must_use]
-    fn eval<R: Response>(
+    fn eval<R: DeserializeOwned>(
         self,
         script: impl Serialize,
         keys: impl Serialize,
@@ -38,7 +39,7 @@ pub trait ScriptingCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/eval_ro/>](https://redis.io/commands/eval_ro/)
     #[must_use]
-    fn eval_readonly<R: Response>(
+    fn eval_readonly<R: DeserializeOwned>(
         self,
         script: impl Serialize,
         keys: impl Serialize,
@@ -62,7 +63,7 @@ pub trait ScriptingCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/eval/>](https://redis.io/commands/eval/)
     #[must_use]
-    fn evalsha<R: Response>(
+    fn evalsha<R: DeserializeOwned>(
         self,
         sha1: impl Serialize,
         keys: impl Serialize,
@@ -83,7 +84,7 @@ pub trait ScriptingCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/evalsha_ro/>](https://redis.io/commands/evalsha_ro/)
     #[must_use]
-    fn evalsha_readonly<R: Response>(
+    fn evalsha_readonly<R: DeserializeOwned>(
         self,
         sha1: impl Serialize,
         keys: impl Serialize,
@@ -107,7 +108,7 @@ pub trait ScriptingCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/fcall/>](https://redis.io/commands/fcall/)
     #[must_use]
-    fn fcall<R: Response>(
+    fn fcall<R: DeserializeOwned>(
         self,
         function: impl Serialize,
         keys: impl Serialize,
@@ -127,7 +128,7 @@ pub trait ScriptingCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/fcall-ro/>](https://redis.io/commands/fcall_ro/)
     #[must_use]
-    fn fcall_readonly<R: Response>(
+    fn fcall_readonly<R: DeserializeOwned>(
         self,
         function: impl Serialize,
         keys: impl Serialize,
@@ -252,7 +253,7 @@ pub trait ScriptingCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/function-load/>](https://redis.io/commands/function-load/)
     #[must_use]
-    fn function_load<R: Response>(
+    fn function_load<R: DeserializeOwned>(
         self,
         replace: bool,
         function_code: impl Serialize,
@@ -372,7 +373,10 @@ pub trait ScriptingCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/script-load/>](https://redis.io/commands/script-load/)
     #[must_use]
-    fn script_load<R: Response>(self, script: impl Serialize) -> PreparedCommand<'a, Self, R> {
+    fn script_load<R: DeserializeOwned>(
+        self,
+        script: impl Serialize,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
             cmd("SCRIPT").arg("LOAD").arg(script).cluster_info(

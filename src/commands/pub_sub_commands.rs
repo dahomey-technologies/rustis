@@ -1,9 +1,10 @@
 use crate::{
     Result,
     client::{PreparedCommand, PubSubStream, prepare_command},
-    resp::{FastPathCommandBuilder, Response, cmd},
+    resp::{FastPathCommandBuilder, cmd},
 };
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 
 /// A group of Redis commands related to [`Pub/Sub`](https://redis.io/docs/manual/pubsub/)
 /// # See Also
@@ -76,7 +77,7 @@ pub trait PubSubCommands<'a>: Sized {
     ///
     /// # See Also
     /// [<https://redis.io/commands/pubsub-channels/>](https://redis.io/commands/pubsub-channels/)
-    fn pub_sub_channels<R: Response>(
+    fn pub_sub_channels<R: DeserializeOwned>(
         self,
         pattern: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
@@ -132,7 +133,10 @@ pub trait PubSubCommands<'a>: Sized {
     ///
     /// # See Also
     /// [<https://redis.io/commands/pubsub-numsub/>](https://redis.io/commands/pubsub-numsub/)
-    fn pub_sub_numsub<R: Response>(self, channels: impl Serialize) -> PreparedCommand<'a, Self, R> {
+    fn pub_sub_numsub<R: DeserializeOwned>(
+        self,
+        channels: impl Serialize,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("PUBSUB").arg("NUMSUB").arg(channels))
     }
 
@@ -146,7 +150,7 @@ pub trait PubSubCommands<'a>: Sized {
     ///
     /// # See Also
     /// [<https://redis.io/commands/pubsub-shardchannels/>](https://redis.io/commands/pubsub-shardchannels/)
-    fn pub_sub_shardchannels<R: Response>(
+    fn pub_sub_shardchannels<R: DeserializeOwned>(
         self,
         pattern: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
@@ -160,7 +164,7 @@ pub trait PubSubCommands<'a>: Sized {
     ///
     /// # See Also
     /// [<https://redis.io/commands/pubsub-shardnumsub/>](https://redis.io/commands/pubsub-shardnumsub/)
-    fn pub_sub_shardnumsub<R: Response>(
+    fn pub_sub_shardnumsub<R: DeserializeOwned>(
         self,
         channels: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {

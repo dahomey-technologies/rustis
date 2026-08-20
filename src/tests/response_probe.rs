@@ -1,8 +1,8 @@
 //! Records the shape of every reply the suite observes, next to the response
 //! type the caller declared for it.
 //!
-//! `Response` is a blanket impl over every `Deserialize` type, so nothing at
-//! compile time relates a command's declared `R` to what the server answers,
+//! A response type is any `DeserializeOwned` type, so nothing at compile time
+//! relates a command's declared `R` to what the server answers,
 //! and `RespDeserializer` coerces rather than refuses: a `Null` read as `bool`
 //! is `false`, read as an integer it is `0`. A wrong `R` therefore returns a
 //! plausible value instead of failing, and no amount of reading the command

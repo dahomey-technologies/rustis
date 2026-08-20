@@ -1,8 +1,9 @@
 use crate::{
     ClientError, Error, Result,
     client::{PreparedCommand, prepare_command},
-    resp::{CommandArgsMut, Response, cmd, deserialize_vec_of_pairs, serialize_flag},
+    resp::{CommandArgsMut, cmd, deserialize_vec_of_pairs, serialize_flag},
 };
+use serde::de::DeserializeOwned;
 use serde::{
     Deserialize, Deserializer, Serialize,
     de::{self, SeqAccess, Visitor},
@@ -26,7 +27,7 @@ pub trait ServerCommands<'a>: Sized {
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-cat/>](https://redis.io/commands/acl-cat/)
-    fn acl_cat<R: Response>(self, options: AclCatOptions) -> PreparedCommand<'a, Self, R> {
+    fn acl_cat<R: DeserializeOwned>(self, options: AclCatOptions) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("ACL").arg("CAT").arg(options))
     }
 
@@ -100,7 +101,7 @@ pub trait ServerCommands<'a>: Sized {
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-dryrun/>](https://redis.io/commands/acl-dryrun/)
-    fn acl_dryrun<R: Response>(
+    fn acl_dryrun<R: DeserializeOwned>(
         self,
         username: impl Serialize,
         command: impl Serialize,
@@ -127,7 +128,10 @@ pub trait ServerCommands<'a>: Sized {
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-genpass/>](https://redis.io/commands/acl-genpass/)
-    fn acl_genpass<R: Response>(self, options: AclGenPassOptions) -> PreparedCommand<'a, Self, R> {
+    fn acl_genpass<R: DeserializeOwned>(
+        self,
+        options: AclGenPassOptions,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("ACL").arg("GENPASS").arg(options))
     }
 
@@ -138,7 +142,10 @@ pub trait ServerCommands<'a>: Sized {
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-getuser/>](https://redis.io/commands/acl-getuser/)
-    fn acl_getuser<R: Response>(self, username: impl Serialize) -> PreparedCommand<'a, Self, R> {
+    fn acl_getuser<R: DeserializeOwned>(
+        self,
+        username: impl Serialize,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("ACL").arg("GETUSER").arg(username))
     }
 
@@ -166,7 +173,7 @@ pub trait ServerCommands<'a>: Sized {
     /// ```
     /// # See Also
     /// [<https://redis.io/commands/acl-help/>](https://redis.io/commands/acl-help/)
-    fn acl_help<R: Response>(self) -> PreparedCommand<'a, Self, R>
+    fn acl_help<R: DeserializeOwned>(self) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
     {
@@ -182,7 +189,7 @@ pub trait ServerCommands<'a>: Sized {
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-list/>](https://redis.io/commands/acl-list/)
-    fn acl_list<R: Response>(self) -> PreparedCommand<'a, Self, R>
+    fn acl_list<R: DeserializeOwned>(self) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
     {
@@ -221,7 +228,7 @@ pub trait ServerCommands<'a>: Sized {
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-log/>](https://redis.io/commands/acl-log/)
-    fn acl_log<R: Response>(self, options: AclLogOptions) -> PreparedCommand<'a, Self, R> {
+    fn acl_log<R: DeserializeOwned>(self, options: AclLogOptions) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("ACL").arg("LOG").arg(options))
     }
 
@@ -278,7 +285,7 @@ pub trait ServerCommands<'a>: Sized {
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-users/>](https://redis.io/commands/acl-users/)
-    fn acl_users<R: Response>(self) -> PreparedCommand<'a, Self, R> {
+    fn acl_users<R: DeserializeOwned>(self) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("ACL").arg("USERS"))
     }
 
@@ -289,7 +296,7 @@ pub trait ServerCommands<'a>: Sized {
     ///
     /// # See Also
     /// [<https://redis.io/commands/acl-whoami/>](https://redis.io/commands/acl-whoami/)
-    fn acl_whoami<R: Response>(self) -> PreparedCommand<'a, Self, R>
+    fn acl_whoami<R: DeserializeOwned>(self) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
     {
@@ -320,7 +327,7 @@ pub trait ServerCommands<'a>: Sized {
     ///
     /// # See Also
     /// [<https://redis.io/docs/latest/commands/bgrewriteaof/>](https://redis.io/docs/latest/commands/bgrewriteaof/)
-    fn bgrewriteaof<R: Response>(self) -> PreparedCommand<'a, Self, R> {
+    fn bgrewriteaof<R: DeserializeOwned>(self) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("BGREWRITEAOF"))
     }
 
@@ -353,7 +360,7 @@ pub trait ServerCommands<'a>: Sized {
     ///
     /// # See Also
     /// [<https://redis.io/commands/bgsave/>](https://redis.io/commands/bgsave/)
-    fn bgsave<R: Response>(self, options: BgsaveOptions) -> PreparedCommand<'a, Self, R> {
+    fn bgsave<R: DeserializeOwned>(self, options: BgsaveOptions) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("BGSAVE").arg(options))
     }
 
@@ -393,7 +400,7 @@ pub trait ServerCommands<'a>: Sized {
     ///
     /// # See Also
     /// [<https://redis.io/commands/command-docs/>](https://redis.io/commands/command-docs/)
-    fn command_docs<R: Response>(
+    fn command_docs<R: DeserializeOwned>(
         self,
         command_names: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
@@ -407,7 +414,10 @@ pub trait ServerCommands<'a>: Sized {
     ///
     /// # See Also
     /// [<https://redis.io/commands/command-_getkeys/>](https://redis.io/commands/command-_getkeys/)
-    fn command_getkeys<R: Response>(self, args: impl Serialize) -> PreparedCommand<'a, Self, R> {
+    fn command_getkeys<R: DeserializeOwned>(
+        self,
+        args: impl Serialize,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("COMMAND").arg("GETKEYS").arg(args))
     }
 
@@ -418,7 +428,7 @@ pub trait ServerCommands<'a>: Sized {
     ///
     /// # See Also
     /// [<https://redis.io/commands/command-getkeysandflags/>](https://redis.io/commands/command-getkeysandflags/)
-    fn command_getkeysandflags<R: Response>(
+    fn command_getkeysandflags<R: DeserializeOwned>(
         self,
         args: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
@@ -449,7 +459,7 @@ pub trait ServerCommands<'a>: Sized {
     ///
     /// # See Also
     /// [<https://redis.io/docs/latest/commands/command-help/>](https://redis.io/docs/latest/commands/command-help/)
-    fn command_help<R: Response>(self) -> PreparedCommand<'a, Self, R>
+    fn command_help<R: DeserializeOwned>(self) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
     {
@@ -477,7 +487,7 @@ pub trait ServerCommands<'a>: Sized {
     ///
     /// # See Also
     /// [<https://redis.io/commands/command-list/>](https://redis.io/commands/command-list/)
-    fn command_list<R: Response>(
+    fn command_list<R: DeserializeOwned>(
         self,
         options: CommandListOptions,
     ) -> PreparedCommand<'a, Self, R> {
@@ -495,7 +505,10 @@ pub trait ServerCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/config-get/>](https://redis.io/commands/config-get/)
     #[must_use]
-    fn config_get<R: Response>(self, params: impl Serialize) -> PreparedCommand<'a, Self, R> {
+    fn config_get<R: DeserializeOwned>(
+        self,
+        params: impl Serialize,
+    ) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("CONFIG").arg("GET").arg(params))
     }
 
@@ -660,7 +673,7 @@ pub trait ServerCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/info/>](https://redis.io/commands/info/)
     #[must_use]
-    fn info<R: Response>(self, sections: impl Serialize) -> PreparedCommand<'a, Self, R> {
+    fn info<R: DeserializeOwned>(self, sections: impl Serialize) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
             cmd("INFO").arg(sections).cluster_info(
@@ -730,7 +743,7 @@ pub trait ServerCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/hotkeys-get/>](https://redis.io/commands/hotkeys-get/)
     #[must_use]
-    fn hotkeys_get<R: Response>(self) -> PreparedCommand<'a, Self, R> {
+    fn hotkeys_get<R: DeserializeOwned>(self) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
             cmd("HOTKEYS").arg("GET").cluster_info(
@@ -767,7 +780,7 @@ pub trait ServerCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/hotkeys/>](https://redis.io/commands/hotkeys/)
     #[must_use]
-    fn hotkeys_help<R: Response>(self) -> PreparedCommand<'a, Self, R> {
+    fn hotkeys_help<R: DeserializeOwned>(self) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("HOTKEYS").arg("HELP"))
     }
 
@@ -791,7 +804,7 @@ pub trait ServerCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/latency-doctor/>](https://redis.io/commands/latency-doctor/)
     #[must_use]
-    fn latency_doctor<R: Response>(self) -> PreparedCommand<'a, Self, R>
+    fn latency_doctor<R: DeserializeOwned>(self) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
     {
@@ -813,7 +826,10 @@ pub trait ServerCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/latency-graph/>](https://redis.io/commands/latency-graph/)
     #[must_use]
-    fn latency_graph<R: Response>(self, event: LatencyHistoryEvent) -> PreparedCommand<'a, Self, R>
+    fn latency_graph<R: DeserializeOwned>(
+        self,
+        event: LatencyHistoryEvent,
+    ) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
     {
@@ -850,7 +866,7 @@ pub trait ServerCommands<'a>: Sized {
     /// ```
     /// # See Also
     /// [<https://redis.io/commands/latency-help/>](https://redis.io/commands/latency-help/)
-    fn latency_help<R: Response>(self) -> PreparedCommand<'a, Self, R>
+    fn latency_help<R: DeserializeOwned>(self) -> PreparedCommand<'a, Self, R>
     where
         Self: Sized,
     {
@@ -866,7 +882,7 @@ pub trait ServerCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/latency-histogram/>](https://redis.io/commands/latency-histogram/)
     #[must_use]
-    fn latency_histogram<R: Response>(
+    fn latency_histogram<R: DeserializeOwned>(
         self,
         commands: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
@@ -890,7 +906,7 @@ pub trait ServerCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/latency-history/>](https://redis.io/commands/latency-history/)
     #[must_use]
-    fn latency_history<R: Response>(
+    fn latency_history<R: DeserializeOwned>(
         self,
         event: LatencyHistoryEvent,
     ) -> PreparedCommand<'a, Self, R> {
@@ -920,7 +936,7 @@ pub trait ServerCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/latency-latest/>](https://redis.io/commands/latency-latest/)
     #[must_use]
-    fn latency_latest<R: Response>(self) -> PreparedCommand<'a, Self, R> {
+    fn latency_latest<R: DeserializeOwned>(self) -> PreparedCommand<'a, Self, R> {
         prepare_command(
             self,
             cmd("LATENCY").arg("LATEST").cluster_info(
@@ -1112,7 +1128,7 @@ pub trait ServerCommands<'a>: Sized {
     /// # See Also
     /// [<https://redis.io/commands/module-list/>](https://redis.io/commands/module-list/)
     #[must_use]
-    fn module_list<R: Response>(self) -> PreparedCommand<'a, Self, R> {
+    fn module_list<R: DeserializeOwned>(self) -> PreparedCommand<'a, Self, R> {
         prepare_command(self, cmd("MODULE").arg("LIST"))
     }
 

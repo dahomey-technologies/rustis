@@ -415,7 +415,7 @@ pub struct Config {
     ///
     /// The default is `true`
     pub auto_remonitor: bool,
-    /// Set the name of the connection to make it easier to identity the connection in client list.
+    /// Set the name of the connection to make it easier to identify the connection in client list.
     ///
     /// See [`client_setname`](crate::commands::ConnectionCommands::client_setname)
     pub connection_name: String,

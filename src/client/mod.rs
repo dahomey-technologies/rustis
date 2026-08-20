@@ -52,7 +52,7 @@ A [`Client`] instance can be cloned, allowing multiple requests
 to be sent concurrently on the same underlying connection.
 
 Multiplexer mode is highly efficient in multi-threaded architectures because it uses only a single
-underlying connection. It is the prefered mode for most Web applications.
+underlying connection. It is the preferred mode for most Web applications.
 
 ### Managing Multiplexed Subscriptions
 Because **rustis** implements the RESP3 protocol, there is no limitation when using subscriptions on a multiplexed connection.
@@ -252,7 +252,7 @@ does not parse, is rejected with an error rather than ignored.
 * [`auto_remonitor`](Config::auto_remonitor) - When the client reconnects, if in `monitor` mode, the
   [`monitor`](crate::commands::BlockingCommands::monitor) command will be resent automatically
 * [`connection_name`](Config::connection_name) - Set the name of the connection to make
-  it easier to identity the connection in client list.
+  it easier to identify the connection in client list.
 * [`keep_alive`](Config::keep_alive) - Idle time before the TCP keep-alive probes start,
   or `None` (`keep_alive=0` in a URL) to disable keep-alive (default `30` s).
 * [`no_delay`](Config::no_delay) - Enable/disable the use of Nagle's algorithm (default `true`)
@@ -388,7 +388,7 @@ This allow to optimize round-trip times by batching Redis commands.
 
 ### API description
 
-You can create a pipeline on a [`Client`] instance by calling the associated fonction [`create_pipeline`](Client::create_pipeline).
+You can create a pipeline on a [`Client`] instance by calling the associated function [`create_pipeline`](Client::create_pipeline).
 Be sure to store the pipeline instance in a mutable variable because a pipeline requires an exclusive access.
 
 Once the pipeline is created, you can use exactly the same commands that you would directly use on a client instance.
@@ -402,7 +402,7 @@ The main difference, is that you have to choose for each command:
 
 Finally, call the [`execute`](Pipeline::execute) associated function.
 
-It is the caller responsability to use the right type to cast the server response
+It is the caller's responsibility to use the right type to cast the server response
 to the right tuple or collection depending on which command has been
 [queued](BatchPreparedCommand::queue) or [forgotten](BatchPreparedCommand::forget).
 
@@ -443,7 +443,7 @@ This guarantees that the commands are executed as a single isolated operation.
 
 ### API description
 
-You can create a transaction on a client instance by calling the associated fonction [`create_transaction`](Client::create_transaction).
+You can create a transaction on a client instance by calling the associated function [`create_transaction`](Client::create_transaction).
 Be sure to store the transaction instance in a mutable variable because a transaction requires an exclusive access.
 
 Once the transaction is created, you can use exactly the same commands that you would directly use on a client instance.
@@ -457,11 +457,11 @@ The main difference, is that you have to choose for each command:
 
 Finally, call the [`execute`](Transaction::execute) associated function.
 
-It is the caller responsability to use the right type to cast the server response
+It is the caller's responsibility to use the right type to cast the server response
 to the right tuple or collection depending on which command has been
 [queued](BatchPreparedCommand::queue) or [forgotten](BatchPreparedCommand::forget).
 
-The most generic type that can be requested as a result is `Vec<(resp::Value)>`
+The most generic type that can be requested as a result is `Vec<resp::Value>`
 
 ### Example
 ```

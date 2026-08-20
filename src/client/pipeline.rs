@@ -59,7 +59,7 @@ impl Pipeline<'_> {
     /// as a whole batch to the Redis server.
     ///
     /// # Return
-    /// It is the caller responsability to use the right type to cast the server response
+    /// It is the caller's responsibility to use the right type to cast the server response
     /// to the right tuple or collection depending on which command has been
     /// [queued](BatchPreparedCommand::queue) or [forgotten](BatchPreparedCommand::forget).
     ///

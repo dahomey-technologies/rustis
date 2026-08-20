@@ -523,12 +523,17 @@ impl ClusterConnection {
     ) -> Result<()> {
         trace!("Analyzing command {command:?}");
 
-        // A channel-less UNSUBSCRIBE (or PUNSUBSCRIBE) names nothing to hash and
-        // cancels every subscription the *connection* holds — which in a cluster
-        // is spread over several nodes. It falls through to the ordinary routing
-        // below, which serves it on a single node.
-        if is_broadcast_pub_sub_command(command) && command.num_args() > 0 {
-            return self.request_policy_pub_sub(command).await;
+        if is_broadcast_pub_sub_command(command) {
+            return if command.num_args() > 0 {
+                self.request_policy_pub_sub(command).await
+            } else {
+                // A channel-less UNSUBSCRIBE (or PUNSUBSCRIBE) names nothing to
+                // hash, and cancels every subscription the *connection* holds —
+                // which in a cluster is spread over the masters. Served by one
+                // node it cancels that node's share and silently leaves the rest,
+                // so every master hears it.
+                self.request_policy_all_shards(command).await
+            };
         }
 
         let request_policy = command.request_policy();

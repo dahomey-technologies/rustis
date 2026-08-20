@@ -657,6 +657,99 @@ async fn unsubscribe_reaches_the_subscribed_node() -> Result<()> {
     Ok(())
 }
 
+/// A channel-less UNSUBSCRIBE cancels every subscription the *connection* holds.
+/// It names nothing to hash, so unlike its argument-carrying form it cannot be
+/// routed by channel name — and in a cluster the connection's subscriptions are
+/// spread over several nodes. Served by one node, it silently cancels that
+/// node's share and leaves the rest.
+#[tokio::test]
+#[serial]
+async fn a_channel_less_unsubscribe_reaches_every_node() -> Result<()> {
+    let pub_sub_client = get_cluster_test_client().await?;
+    pub_sub_client.flushall(FlushingMode::Sync).await?;
+
+    let shard_results: Vec<ClusterShardResult> = pub_sub_client.cluster_shards().await?;
+    let mut master_clients = Vec::new();
+    for shard in &shard_results {
+        let master_node = shard.nodes.iter().find(|n| n.role == "master").unwrap();
+        master_clients.push(
+            Client::connect((master_node.ip.clone(), master_node.port.unwrap()).into_config()?)
+                .await?,
+        );
+    }
+
+    // The two channels are chosen against the live topology rather than hard
+    // coded: which shard a hash tag lands on depends on how many shards the
+    // deployment has, and two names that happen to share a master would make
+    // this test prove nothing.
+    let mut by_shard: HashMap<usize, String> = HashMap::new();
+    for tag in 0..32 {
+        let channel = format!("{{{tag}}}chan");
+        let slot = pub_sub_client.cluster_keyslot(&channel).await?;
+        let Some(shard_index) = shard_results.iter().position(|shard| {
+            shard
+                .slots
+                .iter()
+                .any(|(from, to)| *from <= slot && slot <= *to)
+        }) else {
+            continue;
+        };
+        by_shard.entry(shard_index).or_insert(channel);
+        if by_shard.len() == 2 {
+            break;
+        }
+    }
+    let channels: Vec<String> = by_shard.into_values().collect();
+    assert_eq!(
+        2,
+        channels.len(),
+        "the test cluster must have at least two shards"
+    );
+
+    // One channel per SUBSCRIBE: naming both in a single command spreads it over
+    // two nodes, whose confirmations come back in node order while the client
+    // expects them in the order the caller named them. That is its own defect,
+    // and mixing it in here would leave this test proving neither.
+    let mut pub_sub_stream = pub_sub_client.subscribe(channels[0].as_str()).await?;
+    pub_sub_stream.subscribe(channels[1].as_str()).await?;
+
+    // The premise of the test: the two subscriptions really are on two different
+    // masters. Co-located, a single-node unsubscribe would clear both and the
+    // assertion below would hold whatever the routing does.
+    let mut holders = 0;
+    let mut subscribed = HashSet::<String>::new();
+    for master_client in &master_clients {
+        let channels: HashSet<String> = master_client.pub_sub_channels(()).await?;
+        if !channels.is_empty() {
+            holders += 1;
+        }
+        subscribed.extend(channels);
+    }
+    assert_eq!(2, subscribed.len());
+    assert_eq!(
+        2, holders,
+        "the two channels landed on one master, so this test proves nothing"
+    );
+
+    // "Unsubscribe from everything", with no channel named.
+    pub_sub_stream.unsubscribe(()).await?;
+
+    // Asserted before `close()`: the sink's own channel set is untouched by this
+    // form, so a later `close()` would send the explicit names and hide the gap.
+    let mut subscribed = HashSet::<String>::new();
+    for master_client in &master_clients {
+        let channels: HashSet<String> = master_client.pub_sub_channels(()).await?;
+        subscribed.extend(channels);
+    }
+    assert!(
+        subscribed.is_empty(),
+        "a channel-less unsubscribe reached only part of the cluster: {subscribed:?}"
+    );
+
+    pub_sub_stream.close().await?;
+    Ok(())
+}
+
 #[tokio::test]
 #[serial]
 async fn pub_sub_shardnumsub() -> Result<()> {

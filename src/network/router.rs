@@ -123,6 +123,23 @@ impl Router {
         self.pending_subscriptions.extend(pending);
     }
 
+    /// The channels or patterns of one kind this connection currently holds.
+    ///
+    /// A channel-less UNSUBSCRIBE names nothing, and cancels every subscription
+    /// of its kind the connection holds. What it will be answered is therefore
+    /// not readable off the command — it is this, which is why the caller is
+    /// released only once every one of them comes back.
+    pub(crate) fn subscriptions_of(
+        &self,
+        subscription_type: SubscriptionType,
+    ) -> HashMap<Bytes, SubscriptionType> {
+        self.subscriptions
+            .iter()
+            .filter(|(_, (kind, _))| *kind == subscription_type)
+            .map(|(name, (kind, _))| (name.clone(), *kind))
+            .collect()
+    }
+
     /// Records the channels one caller-issued UNSUBSCRIBE waits to have
     /// confirmed.
     pub(crate) fn expect_unsubscriptions(&mut self, channels: HashMap<Bytes, SubscriptionType>) {

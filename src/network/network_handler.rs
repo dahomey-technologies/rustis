@@ -433,9 +433,19 @@ impl NetworkHandler {
                     }
                     MessageKind::Single { command, .. } => {
                         if let CommandKind::Unsbuscribe(subscription_type) = command.kind() {
-                            self.router.expect_unsubscriptions(
-                                command.args().map(|a| (a, *subscription_type)).collect(),
-                            );
+                            // A channel-less form names nothing: what it cancels
+                            // is every subscription of its kind the connection
+                            // holds, and only the router knows those. Read off
+                            // the command instead, it would wait for no
+                            // confirmation and release its caller at once —
+                            // while, in a cluster, the other nodes are still
+                            // cancelling.
+                            let channels = if command.num_args() > 0 {
+                                command.args().map(|a| (a, *subscription_type)).collect()
+                            } else {
+                                self.router.subscriptions_of(*subscription_type)
+                            };
+                            self.router.expect_unsubscriptions(channels);
                         }
                     }
 
@@ -970,6 +980,14 @@ impl NetworkHandler {
         value: Result<RespResponse>,
     ) -> Option<Result<RespResponse>> {
         if let Ok(ref_value) = &value {
+            // A node holding no subscription of the kind answers a channel-less
+            // UNSUBSCRIBE with a nil channel. It confirms nothing and cancels
+            // nothing, so it is dropped rather than reported to a caller who
+            // never named it — in a cluster every master answers, and all but
+            // the ones holding a subscription answer this.
+            if is_empty_unsubscribe_confirmation(ref_value) {
+                return None;
+            }
             if let Ok(pub_sub_message) = PubSubPush::try_from(ref_value) {
                 match pub_sub_message {
                     PubSubPush::Message(channel_or_pattern, _)
@@ -1299,6 +1317,25 @@ fn indicates_demoted_master(result: &Result<RespResponse>) -> bool {
             matches!(e.kind(), ErrorKind::Redis(error) if error.kind == RedisErrorKind::Readonly)
         }
     }
+}
+
+/// Whether this push is a `nil` unsubscription confirmation — what a server
+/// answers a channel-less UNSUBSCRIBE when it holds no such subscription.
+///
+/// `PubSubPush` cannot carry it: its channel is a bulk string there, and this
+/// one has none.
+fn is_empty_unsubscribe_confirmation(response: &RespResponse) -> bool {
+    let Ok(RespView::Push(push)) = response.view() else {
+        return false;
+    };
+    let mut fields = push.into_iter();
+    let Some(Ok(RespView::BulkString(kind @ (b"unsubscribe" | b"punsubscribe" | b"sunsubscribe")))) =
+        fields.next()
+    else {
+        return false;
+    };
+    let _ = kind;
+    matches!(fields.next(), Some(Ok(RespView::Null)))
 }
 
 /// Waits for the `+switch-master` subscription to announce a failover, and never

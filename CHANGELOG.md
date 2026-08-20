@@ -204,6 +204,12 @@ The upgrade checklist. Each item is stated in the section it belongs to below.
 
 ### Fixed
 
+- **A channel-less `UNSUBSCRIBE` now reaches every node of a cluster.** It names nothing
+  to hash, so unlike its argument-carrying form it was served by a single node: it
+  cancelled that node's share of the connection's subscriptions and silently left the
+  rest. It is now sent to every master, and the caller waits for all the confirmations
+  rather than for the first.
+
 - **Seven commands did not route on a key they name.** Six store commands added their
   destination as a plain argument, and `lcs` did the same with its second key, so the
   key took no part in slot computation: the command routed on its remaining keys

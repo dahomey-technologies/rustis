@@ -539,8 +539,8 @@ async fn main() -> Result<()> {
 
     // Let's now iterate over messages received:
     while let Some(Ok(message)) = pub_sub_stream.next().await {
-        assert_eq!(b"mychannel", message.channel());
-        assert_eq!(b"mymessage", message.payload());
+        assert_eq!("mychannel", message.channel_str()?);
+        assert_eq!("mymessage", message.payload_as::<&str>()?);
         break;
     }
 
@@ -586,8 +586,8 @@ async fn main() -> Result<()> {
 
     // Iterate over messages using the split stream:
     while let Some(Ok(message)) = stream.next().await {
-        assert_eq!(b"mychannel", message.channel());
-        assert_eq!(b"mymessage", message.payload());
+        assert_eq!("mychannel", message.channel_str()?);
+        assert_eq!("mymessage", message.payload_as::<&str>()?);
         break;
     }
 

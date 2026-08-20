@@ -69,6 +69,13 @@ The upgrade checklist. Each item is stated in the section it belongs to below.
 
 ### Added
 
+- **A pub/sub message reads as text or as a Rust type.** `PubSubMessage::channel_str()`
+  and `pattern_str()` answer a `&str`, failing with `ErrorKind::Utf8` on a binary name
+  rather than replacing what they cannot decode. `payload_as::<T>()` runs the payload
+  through the same serde machinery as a bulk string reply, so a published number reads
+  as a number and a document as `Json<T>`; `T` may borrow from the message, so
+  `payload_as::<&str>()` allocates nothing.
+
 - **Every tuning knob is now addressable in a URL.** `buffers`, `backpressure` and
   `limits` take one query parameter per field, named after it — `buffers.read_capacity`,
   `backpressure.max_queued_bytes`, `limits.max_bulk_length`. `reconnection` names the

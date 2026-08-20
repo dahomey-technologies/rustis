@@ -3,11 +3,11 @@ use crate::{
     client::{Client, ClientPreparedCommand},
     commands::InternalPubSubCommands,
     network::{PubSubPush, PubSubSender},
-    resp::{CommandArgs, CommandArgsMut, RefBulkString, RespResponse},
+    resp::{CommandArgs, CommandArgsMut, RefBulkString, RespDeserializer, RespResponse, RespView},
 };
 use bytes::Bytes;
 use futures_util::{Stream, StreamExt};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::{
     collections::HashSet,
     fmt,
@@ -52,6 +52,53 @@ impl PubSubMessage {
     #[inline]
     pub fn payload(&self) -> &[u8] {
         &self.buf[self.payload_start..]
+    }
+
+    /// The pattern the message matched, as text.
+    ///
+    /// A pattern is binary-safe on the wire, so this fails with
+    /// [`ErrorKind::Utf8`](crate::ErrorKind::Utf8) rather than replacing what it
+    /// cannot decode; read [`pattern`](Self::pattern) for the bytes.
+    #[inline]
+    pub fn pattern_str(&self) -> Result<&str> {
+        Ok(std::str::from_utf8(self.pattern())?)
+    }
+
+    /// The channel the message was published to, as text.
+    ///
+    /// A channel name is binary-safe on the wire, so this fails with
+    /// [`ErrorKind::Utf8`](crate::ErrorKind::Utf8) rather than replacing what it
+    /// cannot decode; read [`channel`](Self::channel) for the bytes.
+    #[inline]
+    pub fn channel_str(&self) -> Result<&str> {
+        Ok(std::str::from_utf8(self.channel())?)
+    }
+
+    /// The published payload, read as `T`.
+    ///
+    /// The payload goes through the same serde machinery as a bulk string reply,
+    /// so it reads into the same types a `GET` does: a published number as a
+    /// number, a document as `Json<T>` (feature `json`).
+    ///
+    /// `T` may borrow from the message — `payload_as::<&str>()` costs no
+    /// allocation — which is what a payload the caller only inspects wants.
+    ///
+    /// ```
+    /// # use rustis::{client::PubSubMessage, Result};
+    /// fn read(message: &PubSubMessage) -> Result<()> {
+    ///     println!(
+    ///         "{} published {}",
+    ///         message.channel_str()?,
+    ///         message.payload_as::<&str>()?
+    ///     );
+    ///     // a channel carrying a count reads as one
+    ///     let _count: i64 = message.payload_as().unwrap_or_default();
+    ///     Ok(())
+    /// }
+    /// ```
+    #[inline]
+    pub fn payload_as<'de, T: Deserialize<'de>>(&'de self) -> Result<T> {
+        T::deserialize(RespDeserializer::new(RespView::BulkString(self.payload())))
     }
 
     #[inline]

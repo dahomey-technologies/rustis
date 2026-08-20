@@ -125,3 +125,76 @@ fn a_push_that_is_not_a_message_is_refused() -> Result<()> {
 
     Ok(())
 }
+
+/// The text helpers are the reason the segments are not read as bytes by hand.
+#[test]
+fn the_segments_read_back_as_text() -> Result<()> {
+    let message = convert(&push(
+        "pmessage",
+        &[b"mychannel*", b"mychannel11", b"mymessage"],
+    ))?;
+
+    assert_eq!("mychannel*", message.pattern_str()?);
+    assert_eq!("mychannel11", message.channel_str()?);
+    assert_eq!("mymessage", message.payload_as::<&str>()?);
+
+    Ok(())
+}
+
+/// A channel name and a payload are both binary-safe, so text is a request the
+/// message may have to refuse.
+#[test]
+fn a_segment_that_is_not_text_is_refused() -> Result<()> {
+    let message = convert(&push("message", &[b"\xff", b"\xff"]))?;
+
+    assert_eq!(b"\xff", message.channel());
+    for error in [
+        message.channel_str().unwrap_err(),
+        message.payload_as::<&str>().unwrap_err(),
+        message.payload_as::<String>().unwrap_err(),
+    ] {
+        assert!(
+            matches!(error.kind(), ErrorKind::Utf8(_)),
+            "expected a UTF-8 error, got {error:?}"
+        );
+    }
+
+    Ok(())
+}
+
+/// A payload is read with the same serde machinery as a bulk string reply, so a
+/// published number is read as a number rather than parsed by the caller.
+#[test]
+fn a_payload_is_read_as_a_rust_type() -> Result<()> {
+    let message = convert(&push("message", &[b"mychannel", b"42"]))?;
+    assert_eq!(42i64, message.payload_as::<i64>()?);
+    assert_eq!(42u8, message.payload_as::<u8>()?);
+    assert_eq!("42", message.payload_as::<String>()?);
+
+    let message = convert(&push("message", &[b"mychannel", b"1.5"]))?;
+    assert_eq!(1.5f64, message.payload_as::<f64>()?);
+
+    // A payload that is not the type asked for is an error, not a zero.
+    let message = convert(&push("message", &[b"mychannel", b"one"]))?;
+    assert!(message.payload_as::<i64>().is_err());
+
+    Ok(())
+}
+
+/// A published document is the common case for a payload that is not a scalar.
+#[cfg(feature = "json")]
+#[test]
+fn a_json_payload_is_read_as_a_document() -> Result<()> {
+    use crate::resp::Json;
+
+    let message = convert(&push(
+        "message",
+        &[b"mychannel", br#"{"id":1,"name":"mike"}"#],
+    ))?;
+
+    let Json(document): Json<serde_json::Value> = message.payload_as()?;
+    assert_eq!(1, document["id"]);
+    assert_eq!("mike", document["name"]);
+
+    Ok(())
+}

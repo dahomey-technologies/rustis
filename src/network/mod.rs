@@ -16,6 +16,7 @@
 
 mod async_executor_strategy;
 mod cluster_connection;
+mod cluster_request;
 mod connection;
 mod connection_mode;
 mod connection_state;

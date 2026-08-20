@@ -1,16 +1,14 @@
+use super::cluster_request::{RequestInfo, SubRequest, collect_redirections};
 use super::pub_sub_push::PubSubPush;
 use crate::{
-    ClientError, ConnectionState, Error, ErrorKind, RedisError, RedisErrorKind, Result,
-    RetryReason, StandaloneConnection,
+    ClientError, ConnectionState, Error, ErrorKind, Result, RetryReason, StandaloneConnection,
     client::{ClusterConfig, Config, ReadPreference},
     commands::{
         ClusterCommands, ClusterHealthStatus, ClusterNodeResult, ClusterShardResult,
-        InternalCommands, LegacyClusterShardResult, RequestPolicy, ResponsePolicy,
+        InternalCommands, LegacyClusterShardResult, RequestPolicy,
     },
     network::{Version, sleep},
-    resp::{
-        ClientReplyMode, Command, CommandBuilder, CommandKind, RespResponse, RespView, hash_slot,
-    },
+    resp::{ClientReplyMode, Command, CommandBuilder, CommandKind, RespResponse, hash_slot},
 };
 use bytes::Bytes;
 use futures_util::{FutureExt, future};
@@ -18,9 +16,8 @@ use rand::RngExt;
 use smallvec::{SmallVec, smallvec};
 use std::{
     cmp::Ordering,
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{HashSet, VecDeque},
     fmt::{Debug, Formatter},
-    iter::zip,
     sync::Arc,
     task::Poll,
     time::Duration,
@@ -123,7 +120,7 @@ impl ClusterTestHook {
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
 #[repr(transparent)]
-struct NodeId(Arc<str>);
+pub(super) struct NodeId(Arc<str>);
 
 impl From<&str> for NodeId {
     fn from(value: &str) -> Self {
@@ -189,31 +186,6 @@ struct SlotRange {
     pub next_replica: usize,
 }
 
-#[derive(Debug)]
-struct SubRequest {
-    pub node_id: NodeId,
-    pub keys: SmallVec<[Bytes; 10]>,
-    pub result: Option<Option<Result<RespResponse>>>,
-}
-
-#[derive(Debug)]
-struct RequestInfo {
-    pub response_policy: Option<ResponsePolicy>,
-    pub keys: SmallVec<[Bytes; 10]>,
-    pub sub_requests: SmallVec<[SubRequest; 10]>,
-    /// The command the sub-requests were derived from, kept only when a single
-    /// sub-request can be re-sent on its own — i.e. when the command was split
-    /// across several shards. Everything else is retried as a whole and does not
-    /// pay for the clone.
-    pub command: Option<Command>,
-    /// Whether the command is a subscription one, whose answer is a push frame
-    /// the network handler consumes on its own. See `retire_pub_sub_request`.
-    pub is_pub_sub: bool,
-    #[allow(unused)]
-    #[cfg(test)]
-    pub command_seq: usize,
-}
-
 /// A subscription command is acknowledged by a push frame, not by an ordinary
 /// reply: `read` hands it to the network handler, which matches it against the
 /// caller itself. Nothing therefore ever fills the sub-request the connection
@@ -250,38 +222,6 @@ struct PendingRedirection {
     node_id: NodeId,
     command: Command,
     should_ask: bool,
-}
-
-/// Delay observed before replaying a command the cluster answered `TRYAGAIN`
-/// to. The slot is being migrated: the hand-over of a single key is short, so a
-/// brief pause is enough for the retry to land on the settled side.
-const TRY_AGAIN_DELAY: Duration = Duration::from_millis(25);
-
-/// Delay observed before replaying a command the cluster answered `CLUSTERDOWN`
-/// to. This one waits on a failover, which is decided in seconds rather than
-/// milliseconds, so retrying sooner would only spend the message's attempts.
-const CLUSTER_DOWN_DELAY: Duration = Duration::from_millis(250);
-
-/// The retry a transient cluster error calls for, or `None` for a server error
-/// that belongs to the caller.
-///
-/// Both kinds report a command that was *not* executed — a slot in migration
-/// whose keys are split across two nodes, or a shard momentarily without a
-/// master — and the cluster spec asks the client to absorb them instead of
-/// surfacing them, since they are what a routine resharding or failover
-/// produces.
-fn transient_retry_reason(kind: &RedisErrorKind) -> Option<RetryReason> {
-    match kind {
-        RedisErrorKind::TryAgain => Some(RetryReason::TryAgain {
-            delay: TRY_AGAIN_DELAY,
-            refresh_topology: false,
-        }),
-        RedisErrorKind::ClusterDown => Some(RetryReason::TryAgain {
-            delay: CLUSTER_DOWN_DELAY,
-            refresh_topology: true,
-        }),
-        _ => None,
-    }
 }
 
 /// What `internal_read` concluded about a fulfilled request.
@@ -1262,38 +1202,6 @@ impl ClusterConnection {
         true
     }
 
-    /// Collects the ASK/MOVED redirections carried by a fulfilled request,
-    /// paired with the sub-request that received them.
-    fn collect_redirections(request_info: &RequestInfo) -> SmallVec<[(usize, RetryReason); 1]> {
-        let mut redirections = SmallVec::<[(usize, RetryReason); 1]>::new();
-
-        for (idx, sub_request) in request_info.sub_requests.iter().enumerate() {
-            let Some(Some(Ok(result))) = &sub_request.result else {
-                continue;
-            };
-
-            let Ok(RespView::Error(error)) = result.view() else {
-                continue;
-            };
-
-            match RedisError::try_from(error) {
-                Ok(RedisError {
-                    kind: RedisErrorKind::Ask { hash_slot, address },
-                    ..
-                }) => redirections.push((idx, RetryReason::Ask { hash_slot, address })),
-                Ok(RedisError {
-                    kind: RedisErrorKind::Moved { hash_slot, address },
-                    ..
-                }) => redirections.push((idx, RetryReason::Moved { hash_slot, address })),
-                _ => (),
-            }
-        }
-
-        redirections
-    }
-
-    /// Re-arms the redirected sub-requests of a partially redirected command
-    /// against the nodes the server pointed at, leaving the sub-results already
     /// obtained untouched.
     ///
     /// Returns `false` — changing nothing — when a target is not a node we hold a
@@ -1400,7 +1308,7 @@ impl ClusterConnection {
         // it, and a second run reports different numbers — a replayed `DEL`
         // answers 0 for the keys it deleted the first time. Re-send only what
         // was redirected and keep the rest.
-        let redirections = Self::collect_redirections(&request_info);
+        let redirections = collect_redirections(&request_info);
         if !redirections.is_empty()
             && redirections.len() < request_info.sub_requests.len()
             && self.rearm_redirected_sub_requests(&mut request_info, &redirections)
@@ -1415,280 +1323,7 @@ impl ClusterConnection {
             return ReadOutcome::Deferred;
         }
 
-        ReadOutcome::Ready(self.aggregate_sub_results(request_info))
-    }
-
-    fn aggregate_sub_results(
-        &mut self,
-        mut request_info: RequestInfo,
-    ) -> Option<std::result::Result<RespResponse, Error>> {
-        let mut sub_results =
-            Vec::<Result<RespResponse>>::with_capacity(request_info.sub_requests.len());
-        let mut retry_reasons = SmallVec::<[RetryReason; 1]>::new();
-
-        for sub_request in request_info.sub_requests.iter_mut() {
-            // A sub-request still waiting for its result, or one whose node stream
-            // ended, leaves nothing to aggregate.
-            let result = sub_request.result.take()??;
-
-            if let Ok(result) = result {
-                match result.view() {
-                    Ok(RespView::Error(error)) => match RedisError::try_from(error) {
-                        Ok(RedisError {
-                            kind: RedisErrorKind::Ask { hash_slot, address },
-                            description: _,
-                        }) => retry_reasons.push(RetryReason::Ask {
-                            hash_slot,
-                            address: address.clone(),
-                        }),
-                        Ok(RedisError {
-                            kind: RedisErrorKind::Moved { hash_slot, address },
-                            description: _,
-                        }) => retry_reasons.push(RetryReason::Moved {
-                            hash_slot,
-                            address: address.clone(),
-                        }),
-                        // `TRYAGAIN` / `CLUSTERDOWN`: the command did not run,
-                        // so it is replayed rather than reported to the caller.
-                        Ok(RedisError { kind, .. }) => match transient_retry_reason(&kind) {
-                            Some(reason) => retry_reasons.push(reason),
-                            None => sub_results.push(Ok(result)),
-                        },
-                        _ => sub_results.push(Ok(result)),
-                    },
-                    _ => sub_results.push(Ok(result)),
-                }
-            } else {
-                sub_results.push(result);
-            }
-        }
-
-        if !retry_reasons.is_empty() {
-            debug!(
-                "read failed and will be retried. reasons: {:?}",
-                retry_reasons
-            );
-            return Some(Err(Error::from(ErrorKind::Retry(retry_reasons))));
-        }
-
-        // The response_policy tip is set for commands that reply with scalar data types,
-        // or when it's expected that clients implement a non-default aggregate.
-        if let Some(response_policy) = &request_info.response_policy {
-            match response_policy {
-                ResponsePolicy::OneSucceeded => self.response_policy_one_succeeded(sub_results),
-                ResponsePolicy::AllSucceeded => self.response_policy_all_succeeded(sub_results),
-                ResponsePolicy::AggLogicalAnd => {
-                    self.response_policy_agg(sub_results, |a, b| i64::from(a == 1 && b == 1))
-                }
-                ResponsePolicy::AggLogicalOr => self
-                    .response_policy_agg(sub_results, |a, b| if a == 0 && b == 0 { 0 } else { 1 }),
-                ResponsePolicy::AggMin => self.response_policy_agg(sub_results, i64::min),
-                ResponsePolicy::AggMax => self.response_policy_agg(sub_results, i64::max),
-                ResponsePolicy::AggSum => {
-                    // The operands are integers the shards sent, so the sum is
-                    // driven by server data. Saturating keeps an implausible total
-                    // implausible instead of wrapping it into a small one.
-                    self.response_policy_agg(sub_results, i64::saturating_add)
-                }
-                ResponsePolicy::Special => self.response_policy_special(sub_results),
-            }
-        } else {
-            self.no_response_policy(sub_results, &request_info)
-        }
-    }
-
-    fn response_policy_one_succeeded(
-        &mut self,
-        sub_results: Vec<Result<RespResponse>>,
-    ) -> Option<Result<RespResponse>> {
-        let mut result: Result<RespResponse> = Ok(RespResponse::null());
-
-        for sub_result in sub_results {
-            match &sub_result {
-                Err(_) => result = sub_result,
-                Ok(resp_buf) if resp_buf.is_error() => result = sub_result,
-                _ => return Some(sub_result),
-            }
-        }
-
-        Some(result)
-    }
-
-    fn response_policy_all_succeeded(
-        &mut self,
-        sub_results: Vec<Result<RespResponse>>,
-    ) -> Option<Result<RespResponse>> {
-        let mut result: Result<RespResponse> = Ok(RespResponse::null());
-
-        for sub_result in sub_results {
-            match &sub_result {
-                Err(_) => return Some(sub_result),
-                Ok(resp_buf) if resp_buf.is_error() => return Some(sub_result),
-                _ => result = sub_result,
-            }
-        }
-
-        Some(result)
-    }
-
-    fn response_policy_agg<F>(
-        &mut self,
-        sub_results: Vec<Result<RespResponse>>,
-        f: F,
-    ) -> Option<Result<RespResponse>>
-    where
-        F: Fn(i64, i64) -> i64,
-    {
-        let mut integer = Integer::Null;
-
-        for sub_result in sub_results {
-            let Ok(sub_result) = sub_result else {
-                return Some(sub_result);
-            };
-
-            let view = match sub_result.view() {
-                Ok(view) => view,
-                Err(e) => return Some(Err(e)),
-            };
-            match view {
-                RespView::Integer(i, _) => match &mut integer {
-                    Integer::Single(current) => *current = f(*current, i),
-                    Integer::Null => integer = Integer::Single(i),
-                    Integer::Array(_) => {
-                        return Some(Err(Error::from(ClientError::IncompatibleShardReplies)));
-                    }
-                },
-                RespView::Array(resp_array)
-                | RespView::Set(resp_array)
-                | RespView::Push(resp_array) => match &mut integer {
-                    Integer::Single(_) => {
-                        return Some(Err(Error::from(ClientError::IncompatibleShardReplies)));
-                    }
-                    Integer::Array(items) => {
-                        // Unequal per-shard array lengths must not be silently
-                        // truncated by `zip`: an uncombined tail would be a wrong
-                        // aggregate reported as success.
-                        if items.len() != resp_array.len() {
-                            return Some(Err(Error::from(ClientError::IncompatibleShardReplies)));
-                        }
-                        for (item, view) in items.iter_mut().zip(resp_array) {
-                            match view {
-                                Ok(RespView::Integer(i, _)) => *item = f(*item, i),
-                                Ok(_) => {
-                                    return Some(Err(Error::from(
-                                        ClientError::IncompatibleShardReplies,
-                                    )));
-                                }
-                                Err(e) => return Some(Err(e)),
-                            }
-                        }
-                    }
-                    Integer::Null => {
-                        let mut int_array = Vec::with_capacity(resp_array.len());
-
-                        for view in resp_array {
-                            match view {
-                                Ok(RespView::Integer(i, _)) => int_array.push(i),
-                                Ok(_) => {
-                                    return Some(Err(Error::from(
-                                        ClientError::IncompatibleShardReplies,
-                                    )));
-                                }
-                                Err(e) => return Some(Err(e)),
-                            }
-                        }
-
-                        integer = Integer::Array(int_array)
-                    }
-                },
-                _ => return Some(Err(Error::from(ClientError::IncompatibleShardReplies))),
-            }
-        }
-
-        match integer {
-            Integer::Single(i) => Some(Ok(RespResponse::integer(i))),
-            Integer::Array(v) => Some(Ok(RespResponse::integer_array(v))),
-            Integer::Null => Some(Ok(RespResponse::null())),
-        }
-    }
-
-    fn response_policy_special(
-        &mut self,
-        _sub_results: Vec<Result<RespResponse>>,
-    ) -> Option<Result<RespResponse>> {
-        Some(Err(Error::from(ClientError::CommandNotSupportedInCluster)))
-    }
-
-    fn no_response_policy(
-        &mut self,
-        sub_results: Vec<Result<RespResponse>>,
-        request_info: &RequestInfo,
-    ) -> Option<Result<RespResponse>> {
-        trace!("no_response_policy");
-
-        if sub_results.len() == 1 {
-            // when there is a single sub request, we just read the response
-            // on the right connection. For example, GET's reply
-            sub_results.into_iter().next()
-        } else if request_info.keys.is_empty() {
-            // The command doesn't accept key name arguments:
-            // the client can aggregate all replies within a single nested data structure.
-            // For example, the array replies we get from calling KEYS against all shards.
-            // These should be packed in a single array in no particular order.
-            let mut results = Vec::<RespResponse>::new();
-            for sub_result in sub_results {
-                // Propagate the shard's failure as a failure. Returning `None` here
-                // would mean "disconnected" to the network handler, which would
-                // reconnect the whole cluster over what is merely one shard
-                // answering an error.
-                let iter = match sub_result.and_then(RespResponse::into_collection_iter) {
-                    Ok(iter) => iter,
-                    Err(e) => return Some(Err(e)),
-                };
-                for item in iter {
-                    match item {
-                        Ok(item) => results.push(item),
-                        Err(e) => return Some(Err(e)),
-                    }
-                }
-            }
-
-            Some(Ok(RespResponse::owned_array(results)))
-        } else {
-            // For commands that accept one or more key name arguments:
-            // the client needs to retain the same order of replies as the input key names.
-            // For example, MGET's aggregated reply.
-            let mut results = SmallVec::<[(&Bytes, RespResponse); 10]>::new();
-
-            for (sub_result, sub_request) in zip(sub_results, &request_info.sub_requests) {
-                // Same reasoning as above: one shard's error is an error for the
-                // caller, not a lost connection.
-                let iter = match sub_result.and_then(RespResponse::into_collection_iter) {
-                    Ok(iter) => iter,
-                    Err(e) => return Some(Err(e)),
-                };
-                for (key, item) in sub_request.keys.iter().zip(iter) {
-                    match item {
-                        Ok(item) => results.push((key, item)),
-                        Err(e) => return Some(Err(e)),
-                    }
-                }
-            }
-
-            // Precompute each key's position in the request's key list once, so
-            // the reorder is O(n log n) instead of O(n² log n): the previous
-            // comparator ran two linear `position` scans per comparison, making a
-            // 10k-key MGET ~10⁹ `Bytes` comparisons. Duplicate keys keep their
-            // first position, matching the old `position` semantics.
-            let mut key_order = HashMap::<&Bytes, usize>::with_capacity(request_info.keys.len());
-            for (i, k) in request_info.keys.iter().enumerate() {
-                key_order.entry(k).or_insert(i);
-            }
-            results.sort_by_key(|(k, _)| *key_order.get(k).unwrap_or(&usize::MAX));
-
-            let results = results.into_iter().map(|(_, v)| v).collect::<Vec<_>>();
-            Some(Ok(RespResponse::owned_array(results)))
-        }
+        ReadOutcome::Ready(request_info.into_reply())
     }
 
     /// Refreshes the read-only copy the topology-change paths replay from.
@@ -2362,63 +1997,9 @@ fn select_replica(
     None
 }
 
-enum Integer {
-    Single(i64),
-    Array(Vec<i64>),
-    Null,
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{
-        CLUSTER_DOWN_DELAY, NodeId, TRY_AGAIN_DELAY, select_replica, transient_retry_reason,
-    };
-    use crate::{RedisErrorKind, RetryReason};
-
-    /// A `CLUSTERDOWN` follows a failover, which changes who owns the slot, so
-    /// the replay is worthless against the topology that earned the error.
-    #[test]
-    fn cluster_down_is_replayed_against_a_reloaded_topology() {
-        assert!(matches!(
-            transient_retry_reason(&RedisErrorKind::ClusterDown),
-            Some(RetryReason::TryAgain {
-                delay: CLUSTER_DOWN_DELAY,
-                refresh_topology: true
-            })
-        ));
-    }
-
-    /// A `TRYAGAIN` only reports a slot mid-migration: the topology it was read
-    /// against is still the right one, so the replay must not pay a discovery.
-    #[test]
-    fn try_again_is_replayed_without_a_discovery() {
-        assert!(matches!(
-            transient_retry_reason(&RedisErrorKind::TryAgain),
-            Some(RetryReason::TryAgain {
-                delay: TRY_AGAIN_DELAY,
-                refresh_topology: false
-            })
-        ));
-    }
-
-    /// Every other server error belongs to the caller: replaying it would hide a
-    /// real failure behind the attempt cap and, for a command that did run,
-    /// execute it twice.
-    #[test]
-    fn other_server_errors_are_not_retried() {
-        for kind in [
-            RedisErrorKind::WrongType,
-            RedisErrorKind::NoPerm,
-            RedisErrorKind::OutOfMemory,
-            RedisErrorKind::CrossSlot,
-            RedisErrorKind::Err,
-        ] {
-            assert!(
-                transient_retry_reason(&kind).is_none(),
-                "{kind:?} must reach the caller"
-            );
-        }
-    }
+    use super::{NodeId, select_replica};
 
     /// Reads of a shard must be spread over its replicas, not pinned on the
     /// first one: a preference that always answered the same node would move

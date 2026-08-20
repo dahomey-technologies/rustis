@@ -330,3 +330,25 @@ fn a_non_utf8_server_message_keeps_its_bytes() -> Result<()> {
 
     Ok(())
 }
+
+/// A rendered error holds no space it did not earn. An unrecognised kind renders
+/// as nothing and a redirection carries no message of its own, so the separator
+/// has to be dropped on both sides rather than written unconditionally.
+#[test]
+fn a_rendered_error_has_no_stray_space() -> Result<()> {
+    let unclassified = RedisError::try_from(b"SOMEWEIRD failure text".as_slice())?;
+    assert_eq!("SOMEWEIRD failure text", unclassified.to_string());
+    assert_eq!(
+        "redis server error: SOMEWEIRD failure text",
+        Error::from(ErrorKind::Redis(unclassified)).to_string()
+    );
+
+    let moved = RedisError::try_from(b"MOVED 3999 127.0.0.1:6381".as_slice())?;
+    assert_eq!("MOVED 3999 127.0.0.1:6381", moved.to_string());
+
+    // The ordinary shape, kind and message both present, is unchanged.
+    let wrong_type = RedisError::try_from(b"WRONGTYPE Operation against a key".as_slice())?;
+    assert_eq!("WRONGTYPE Operation against a key", wrong_type.to_string());
+
+    Ok(())
+}

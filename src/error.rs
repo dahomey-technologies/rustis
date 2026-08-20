@@ -997,7 +997,21 @@ impl<'a> TryFrom<&'a [u8]> for RedisError {
 }
 
 impl Display for RedisError {
+    /// The kind and the message, separated by a space — but only when there are
+    /// two of them. An unrecognised kind renders as nothing, and a redirection
+    /// carries its whole detail in the kind and leaves the message empty, so a
+    /// separator written unconditionally lands at one end or the other.
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("{} {}", self.kind, self.description()))
+        let description = self.description();
+
+        if description.is_empty() {
+            return Display::fmt(&self.kind, f);
+        }
+
+        if let RedisErrorKind::Other = self.kind {
+            return f.write_str(&description);
+        }
+
+        f.write_fmt(format_args!("{} {description}", self.kind))
     }
 }

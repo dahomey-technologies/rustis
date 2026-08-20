@@ -249,6 +249,13 @@ removed trait methods, 4 removed structs, the `resp::Response` trait, the
 
 ### Fixed
 
+- **A rendered server error no longer carries a stray space.** `RedisError`'s
+  `Display` wrote `"{kind} {description}"` unconditionally, so an error whose kind
+  rustis does not recognise — the kind renders as nothing, the message holding the
+  whole reply — came out with a leading space, and a redirection, whose detail is
+  all in the kind, with a trailing one. The separator is now written only between
+  two non-empty halves.
+
 - **A cluster `SUBSCRIBE` no longer fails when its channels span several nodes.** The
   command is split per node, but the confirmations were matched by rank against the
   order the caller named the channels — and the nodes answer in their own order, so a

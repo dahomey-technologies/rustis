@@ -204,6 +204,12 @@ The upgrade checklist. Each item is stated in the section it belongs to below.
 
 ### Fixed
 
+- **A cluster `SUBSCRIBE` no longer fails when its channels span several nodes.** The
+  command is split per node, but the confirmations were matched by rank against the
+  order the caller named the channels — and the nodes answer in their own order, so a
+  legitimate call failed with `ClientError::UnexpectedSubscriptionConfirmation`,
+  non-deterministically. A confirmation is now matched by name.
+
 - **A channel-less `UNSUBSCRIBE` now reaches every node of a cluster.** It names nothing
   to hash, so unlike its argument-carrying form it was served by a single node: it
   cancelled that node's share of the connection's subscriptions and silently left the

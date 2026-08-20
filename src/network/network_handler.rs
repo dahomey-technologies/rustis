@@ -400,17 +400,14 @@ impl NetworkHandler {
 
                         if collision_error.is_none() {
                             let subscriptions = std::mem::take(subscriptions);
-                            // The closure below never runs on an empty set, so
-                            // the saturated value is unreachable rather than wrong.
-                            let last_subscription_index = subscriptions.len().saturating_sub(1);
-                            let pending_subscriptions = subscriptions.into_iter().enumerate().map(
-                                |(index, (channel_or_pattern, sender))| PendingSubscription {
-                                    channel_or_pattern,
-                                    subscription_type: *subscription_type,
-                                    sender,
-                                    more_to_come: index < last_subscription_index,
-                                },
-                            );
+                            let pending_subscriptions =
+                                subscriptions
+                                    .into_iter()
+                                    .map(|(channel_or_pattern, sender)| PendingSubscription {
+                                        channel_or_pattern,
+                                        subscription_type: *subscription_type,
+                                        sender,
+                                    });
 
                             self.router.expect_subscriptions(pending_subscriptions);
                         }

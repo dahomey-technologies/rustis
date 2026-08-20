@@ -10,9 +10,6 @@ pub(crate) struct PendingSubscription {
     pub channel_or_pattern: Bytes,
     pub subscription_type: SubscriptionType,
     pub sender: PubSubSender,
-    /// Whether more subscriptions of the same caller's batch follow, so the
-    /// caller's single reply is still owed after this one.
-    pub more_to_come: bool,
 }
 
 /// What became of a pub/sub message handed to [`Router::deliver`].
@@ -80,9 +77,14 @@ pub(crate) enum UnsubscriptionConfirmed {
 pub(crate) struct Router {
     /// Confirmed subscriptions, by channel or pattern.
     subscriptions: HashMap<Bytes, (SubscriptionType, PubSubSender)>,
-    /// Subscriptions asked for and not yet confirmed, in the order the server
-    /// will confirm them.
-    pending_subscriptions: VecDeque<PendingSubscription>,
+    /// One entry per caller-issued SUBSCRIBE, holding what that command still
+    /// waits to have confirmed.
+    ///
+    /// A batch, not a queue of single channels: in a cluster the command is split
+    /// per node and the nodes answer in whatever order they answer, so a
+    /// confirmation is matched by name rather than by rank. The caller's one
+    /// reply is owed when its batch empties.
+    pending_subscriptions: VecDeque<HashMap<Bytes, PendingSubscription>>,
     /// One entry per caller-issued UNSUBSCRIBE, holding what that command still
     /// waits to have confirmed.
     pending_unsubscriptions: VecDeque<HashMap<Bytes, SubscriptionType>>,
@@ -115,12 +117,19 @@ impl Router {
         self.subscriptions.contains_key(channel_or_pattern)
     }
 
-    /// Records subscriptions the caller asked for, in confirmation order.
+    /// Records the subscriptions one caller-issued SUBSCRIBE waits to have
+    /// confirmed.
     pub(crate) fn expect_subscriptions(
         &mut self,
         pending: impl IntoIterator<Item = PendingSubscription>,
     ) {
-        self.pending_subscriptions.extend(pending);
+        let batch: HashMap<Bytes, PendingSubscription> = pending
+            .into_iter()
+            .map(|pending| (pending.channel_or_pattern.clone(), pending))
+            .collect();
+        if !batch.is_empty() {
+            self.pending_subscriptions.push_back(batch);
+        }
     }
 
     /// The channels or patterns of one kind this connection currently holds.
@@ -210,20 +219,23 @@ impl Router {
         &mut self,
         channel_or_pattern: &[u8],
     ) -> SubscriptionConfirmed {
-        // Peek before popping: a mismatched confirmation must not consume — and
-        // silently drop — the pending subscriber.
-        let matches = self
-            .pending_subscriptions
-            .front()
-            .is_some_and(|pending| pending.channel_or_pattern == channel_or_pattern);
-        if !matches {
+        // Only the oldest batch is looked at: a later SUBSCRIBE cannot be
+        // confirmed before an earlier one has been, and taking from it would
+        // release the wrong caller.
+        let Some(batch) = self.pending_subscriptions.front_mut() else {
             return SubscriptionConfirmed::Unexpected;
-        }
-        let Some(pending) = self.pending_subscriptions.pop_front() else {
+        };
+        // Removed rather than peeked at, but only on a match: a confirmation
+        // naming something else must not consume — and silently drop — a
+        // subscriber that is still waiting.
+        let Some(pending) = batch.remove(channel_or_pattern) else {
             return SubscriptionConfirmed::Unexpected;
         };
 
-        let more_to_come = pending.more_to_come;
+        let more_to_come = !batch.is_empty();
+        if !more_to_come {
+            self.pending_subscriptions.pop_front();
+        }
         if self
             .subscriptions
             .insert(
@@ -309,15 +321,17 @@ impl Router {
             })
             .collect();
 
-        for pending in std::mem::take(&mut self.pending_subscriptions) {
-            to_reissue.push((
-                pending.channel_or_pattern.clone(),
-                pending.subscription_type,
-            ));
-            self.subscriptions.insert(
-                pending.channel_or_pattern,
-                (pending.subscription_type, pending.sender),
-            );
+        for batch in std::mem::take(&mut self.pending_subscriptions) {
+            for pending in batch.into_values() {
+                to_reissue.push((
+                    pending.channel_or_pattern.clone(),
+                    pending.subscription_type,
+                ));
+                self.subscriptions.insert(
+                    pending.channel_or_pattern,
+                    (pending.subscription_type, pending.sender),
+                );
+            }
         }
 
         to_reissue
@@ -349,7 +363,6 @@ mod tests {
                 channel_or_pattern: channel(name),
                 subscription_type: SubscriptionType::Channel,
                 sender,
-                more_to_come: false,
             },
             receiver,
         )
@@ -395,8 +408,7 @@ mod tests {
     #[test]
     fn a_batch_owes_its_caller_one_reply_at_the_last_confirmation() {
         let mut router = Router::new();
-        let (mut first, _r1) = subscriber("a");
-        first.more_to_come = true;
+        let (first, _r1) = subscriber("a");
         let (second, _r2) = subscriber("b");
         router.expect_subscriptions([first, second]);
 
@@ -410,6 +422,30 @@ mod tests {
             },
             router.confirm_subscription(b"b")
         );
+    }
+
+    /// In a cluster a batch is split per node, and the nodes answer in whatever
+    /// order they answer. A confirmation is matched by name, not by rank, so the
+    /// caller's reply is owed once the batch is complete and not before.
+    #[test]
+    fn a_batch_is_confirmed_whatever_order_its_channels_come_back_in() {
+        let mut router = Router::new();
+        let (first, _r1) = subscriber("a");
+        let (second, _r2) = subscriber("b");
+        router.expect_subscriptions([first, second]);
+
+        assert_eq!(
+            SubscriptionConfirmed::Registered { more_to_come: true },
+            router.confirm_subscription(b"b")
+        );
+        assert_eq!(
+            SubscriptionConfirmed::Registered {
+                more_to_come: false
+            },
+            router.confirm_subscription(b"a")
+        );
+        assert!(router.is_subscribed(&channel("a")));
+        assert!(router.is_subscribed(&channel("b")));
     }
 
     #[test]

@@ -706,12 +706,8 @@ async fn a_channel_less_unsubscribe_reaches_every_node() -> Result<()> {
         "the test cluster must have at least two shards"
     );
 
-    // One channel per SUBSCRIBE: naming both in a single command spreads it over
-    // two nodes, whose confirmations come back in node order while the client
-    // expects them in the order the caller named them. That is its own defect,
-    // and mixing it in here would leave this test proving neither.
-    let mut pub_sub_stream = pub_sub_client.subscribe(channels[0].as_str()).await?;
-    pub_sub_stream.subscribe(channels[1].as_str()).await?;
+    // Both channels in one SUBSCRIBE, which a cluster splits over the two nodes.
+    let mut pub_sub_stream = pub_sub_client.subscribe(channels.clone()).await?;
 
     // The premise of the test: the two subscriptions really are on two different
     // masters. Co-located, a single-node unsubscribe would clear both and the

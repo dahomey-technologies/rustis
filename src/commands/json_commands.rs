@@ -303,7 +303,7 @@ pub trait JsonCommands<'a>: Sized {
         keys: impl Serialize,
         path: impl Serialize,
     ) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("JSON.MGET").key(keys).arg(path).readonly())
+        prepare_command(self, cmd("JSON.MGET").keys(keys).arg(path).readonly())
     }
 
     /// Merge a given JSON value into matching paths.

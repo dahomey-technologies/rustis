@@ -508,6 +508,19 @@ fn group_count(count: usize, step: usize) -> Option<usize> {
 }
 
 impl CommandBuilder {
+    /// The command name, for an error that names the command it belongs to.
+    #[expect(
+        clippy::indexing_slicing,
+        clippy::arithmetic_side_effects,
+        reason = "invariant: `name_layout` was recorded by `new` while it wrote \
+                  those very bytes into `buffer`, so the end offset lands inside \
+                  the buffer."
+    )]
+    fn name(&self) -> &[u8] {
+        let (start, len) = self.name_layout;
+        &self.buffer[start..start + len]
+    }
+
     /// Records the first deferred serialization error; later ones are ignored
     /// since the command is already doomed and the first is the most relevant.
     #[inline(always)]
@@ -745,11 +758,67 @@ impl CommandBuilder {
     ///
     /// A multi-key command additionally requires all its keys to hash to the
     /// same slot; use hash tags (`{tag}key1`, `{tag}key2`) to guarantee it.
+    ///
+    /// # Arity
+    /// The key must serialize to exactly one command argument. A collection of
+    /// keys goes through [`keys`](Self::keys), a counted list through
+    /// [`key_with_count`](Self::key_with_count). Anything else — `None`, an
+    /// empty collection, a struct, a sequence — fails the command with
+    /// [`InvalidKeyArity`](crate::ClientError::InvalidKeyArity) rather than
+    /// reaching the server malformed and unrouted.
     #[must_use]
     #[inline(always)]
-    pub fn key(mut self, key: impl Serialize) -> Self {
+    pub fn key(self, key: impl Serialize) -> Self {
+        self.key_of_arity(key, 1, "exactly one is required")
+    }
+
+    /// Adds every key of a collection, each marked for Cluster routing.
+    ///
+    /// The multi-key form of [`key`](Self::key), for commands whose grammar is a
+    /// bare list of keys — `DEL`, `EXISTS`, `WATCH`, `SDIFF`. The collection may
+    /// hold any number of keys but not none, which would send a command with no
+    /// key and no slot.
+    ///
+    /// Commands that declare their key count to the server use
+    /// [`key_with_count`](Self::key_with_count) instead, and may legally declare
+    /// zero.
+    #[must_use]
+    #[inline(always)]
+    pub fn keys(self, keys: impl Serialize) -> Self {
+        self.key_of_arity(keys, usize::MAX, "at least one is required")
+    }
+
+    /// Adds `key` as one or more routing keys, failing the command unless it
+    /// wrote between one and `at_most` command arguments.
+    ///
+    /// The count is what tells a key from a mistake. Arguments are
+    /// `impl Serialize` so that any foreign type may be a key — the orphan rule
+    /// leaves a marker trait unimplementable for one, by the crate that defines
+    /// neither it nor the trait. That bound admits values writing no argument
+    /// (`None`, an empty collection) and values writing several (a struct, a
+    /// sequence), neither of which is a single key. The first is the damaging
+    /// one: no argument means no slot, and a command with no slot is routed to a
+    /// random node rather than refused.
+    #[must_use]
+    #[inline(always)]
+    fn key_of_arity(mut self, key: impl Serialize, at_most: usize, expected: &'static str) -> Self {
         let old_len = self.args_layout.len();
         self = self.arg(key);
+        let written = self.args_layout.len().saturating_sub(old_len);
+
+        if written == 0 || written > at_most {
+            // A failed write stops part-way through, so its shortfall is
+            // expected and the failure is the more useful report of the two.
+            if self.pending_error.is_none() {
+                let command = String::from_utf8_lossy(self.name()).into_owned();
+                self.record_serialization_error(Error::from(ClientError::InvalidKeyArity {
+                    command,
+                    written,
+                    expected,
+                }));
+            }
+            return self;
+        }
 
         for layout in self.args_layout.iter_mut().skip(old_len) {
             layout.set_key();
@@ -1132,5 +1201,122 @@ mod tests {
                 crate::ClientError::InvalidArgumentGroupStep
             ))
         ));
+    }
+
+    /// The arity a key argument reported, or `None` when the command carries no
+    /// error at all.
+    fn key_arity_error(mut command: Command) -> Option<usize> {
+        match command
+            .take_serialization_error()
+            .map(crate::Error::into_kind)
+        {
+            Some(crate::ErrorKind::Client(crate::ClientError::InvalidKeyArity {
+                written, ..
+            })) => Some(written),
+            Some(other) => panic!("expected an arity error, got {other:?}"),
+            None => None,
+        }
+    }
+
+    /// `None` writes no argument at all, so the command reaches the server one
+    /// argument short — and, worse, carries no hash slot, which routes it to a
+    /// random node instead of the one that owns the key.
+    #[test]
+    fn a_key_serializing_to_no_argument_fails_the_command() {
+        let command: Command = cmd("GET").key(None::<&str>).into();
+        assert_eq!(Some(0), key_arity_error(command));
+    }
+
+    /// A sequence writes one argument per element, and a struct writes two —
+    /// name and value — per field, which is what makes `HSET` take a struct.
+    /// Nothing in the `impl Serialize` bound says a key is a single value, so
+    /// the count is what tells them apart.
+    #[test]
+    fn a_key_serializing_to_several_arguments_fails_the_command() {
+        let command: Command = cmd("GET").key(["a", "b"]).into();
+        assert_eq!(Some(2), key_arity_error(command));
+
+        #[derive(serde::Serialize)]
+        struct CompositeKey {
+            tenant: &'static str,
+            id: u64,
+        }
+        let command: Command = cmd("GET")
+            .key(CompositeKey {
+                tenant: "acme",
+                id: 42,
+            })
+            .into();
+        assert_eq!(Some(4), key_arity_error(command), "two fields, four args");
+    }
+
+    /// The point of checking the count rather than the type: a foreign type the
+    /// crate has never heard of is a valid key as soon as it writes one
+    /// argument. A marker trait could not accept it — the orphan rule leaves
+    /// neither side able to write the impl.
+    #[test]
+    fn a_foreign_type_writing_one_argument_is_a_valid_key() {
+        /// Serializes as a single string, the way `uuid::Uuid` does.
+        struct ForeignId;
+        impl serde::Serialize for ForeignId {
+            fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+                s.serialize_str("67e55044-10b1-426f-9247-bb680e5fe0c8")
+            }
+        }
+
+        let command: Command = cmd("GET").key(ForeignId).into();
+        assert_eq!(
+            vec![&b"67e55044-10b1-426f-9247-bb680e5fe0c8"[..]],
+            command.keys().collect::<Vec<_>>()
+        );
+        assert_eq!(None, key_arity_error(command));
+    }
+
+    /// A key that failed to serialize keeps its own error: the shortfall is a
+    /// consequence of the failure, so reporting the count would hide the cause.
+    #[test]
+    fn a_failed_key_serialization_keeps_its_own_error() {
+        let mut command: Command = cmd("GET").key(FailingSerialize).into();
+        assert!(matches!(
+            command
+                .take_serialization_error()
+                .map(crate::Error::into_kind),
+            Some(crate::ErrorKind::Client(
+                crate::ClientError::SerdeSerialize(_)
+            ))
+        ));
+    }
+
+    /// A multi-key command takes a collection, so its keys are added through
+    /// [`CommandBuilder::keys`], which allows any number of them — but not none,
+    /// which is the same slotless command as above.
+    #[test]
+    fn a_collection_of_keys_is_accepted_and_every_key_is_routed() {
+        let command: Command = cmd("DEL").keys(["k1", "k2", "k3"]).into();
+        assert_eq!(
+            vec![&b"k1"[..], &b"k2"[..], &b"k3"[..]],
+            command.keys().collect::<Vec<_>>()
+        );
+        assert_eq!(None, key_arity_error(command));
+    }
+
+    #[test]
+    fn an_empty_collection_of_keys_fails_the_command() {
+        let command: Command = cmd("DEL").keys(Vec::<&str>::new()).into();
+        assert_eq!(Some(0), key_arity_error(command));
+    }
+
+    /// `EVAL` and friends declare their key count to the server, and declaring
+    /// zero is legal: the script takes its arguments from `ARGV` alone. The
+    /// counted forms therefore check nothing.
+    #[test]
+    fn a_counted_key_list_may_legally_be_empty() {
+        let command: Command = cmd("EVAL")
+            .arg("return 1")
+            .key_with_count(Vec::<&str>::new())
+            .into();
+        assert_eq!(Some(&b"0"[..]), command.get_arg(1).as_deref());
+        assert_eq!(0, command.keys().count());
+        assert_eq!(None, key_arity_error(command));
     }
 }

@@ -46,9 +46,27 @@ The upgrade checklist. Each item is stated in the section it belongs to below.
   methods of the same name take a prepared one. Two calls that read alike and are
   not the same call now differ by name.
 
+- **`CommandBuilder::key` takes exactly one key**, and a collection of keys goes
+  through the new `CommandBuilder::keys`. A built-in command is unaffected — the 24
+  multi-key ones were moved — but a command built by hand with
+  `cmd("DEL").key(my_vec)` now fails with `ClientError::InvalidKeyArity`. Counted
+  forms (`key_with_count` and the stepped variants) are unchanged and may still
+  declare zero keys, as `EVAL` does.
+
 `cargo semver-checks` reports 11 removed trait methods and 4 removed structs.
 
 ### Added
+
+- **A key argument that is not a single key fails the command**, with
+  `ClientError::InvalidKeyArity` naming the command and the argument count. Command
+  arguments are `impl Serialize`, so the compiler cannot check how many arguments a
+  value produces: `None` and an empty collection produce none, a struct or a sequence
+  produces one per element. `client.get(None::<String>)` used to reach the server a
+  key short and, in Cluster mode, with no hash slot — which routes it to a random
+  node instead of the node that owns the key. The count is checked where the key is
+  added, so any foreign type is still a valid key as soon as it serializes to one
+  argument. `tests/arg_arity.rs` shows that against real third-party types, `uuid::Uuid`
+  and `serde_json::Value`, neither of which carries any `impl` from this crate.
 
 - **`Client::stats`** returns a `ClientStats` snapshot: queued commands and bytes,
   the bytes high-water mark, shed commands and reconnections. The numbers existed
@@ -165,6 +183,11 @@ The upgrade checklist. Each item is stated in the section it belongs to below.
 
 ### Fixed
 
+- **A client-side cache key that serialized to several arguments filed the entry
+  under the first of them.** `Cache::get` on a struct key kept one entry for every
+  key sharing a first field, each read returning another key's value. Only a key
+  serializing to no argument was refused; both counts now are.
+
 - **`ClientStats::queued_commands` no longer over-reports after a reconnection.** The
   replay rebuilt the byte total before re-queuing the messages it kept, and left the
   command total standing, so each replayed command was counted twice and the excess
@@ -229,6 +252,15 @@ The upgrade checklist. Each item is stated in the section it belongs to below.
   `rustis_long_pipeline`: no change outside the run-to-run drift.
 
 ### Documentation
+
+- **The `resp` page says why command arguments are `impl Serialize` and not a trait
+  of the crate's own.** Rust's orphan rule allows an `impl` only in the crate defining
+  the trait or the type, so a user could not implement a `rustis` marker trait for
+  `uuid::Uuid` or `serde_json::Value` — while `Serialize` is already implemented by
+  those crates. `serde_json::Value` also shows such a trait could not be honest:
+  one type, five argument counts, and a trait answers for a type while the count is a
+  property of the value. The page states what is checked instead, and that values are
+  not, a struct as a value being the point of `HSET`.
 
 - **`select` and `auth` warn that the connection is shared.** Every clone of a
   `Client` shares one connection, so these commands apply to all clones. A new

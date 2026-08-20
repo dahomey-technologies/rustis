@@ -581,7 +581,7 @@ pub trait StreamCommands<'a>: Sized {
             cmd("XREAD")
                 .arg(options)
                 .arg("STREAMS")
-                .key(keys)
+                .keys(keys)
                 .arg(ids)
                 .readonly(),
         )
@@ -611,7 +611,7 @@ pub trait StreamCommands<'a>: Sized {
                 .arg(consumer)
                 .arg(options)
                 .arg("STREAMS")
-                .key(keys)
+                .keys(keys)
                 .arg(ids),
         )
     }

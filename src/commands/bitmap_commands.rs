@@ -119,7 +119,7 @@ pub trait BitmapCommands<'a>: Sized {
         dest_key: impl Serialize,
         keys: impl Serialize,
     ) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("BITOP").arg(operation).key(dest_key).key(keys))
+        prepare_command(self, cmd("BITOP").arg(operation).key(dest_key).keys(keys))
     }
 
     /// Perform a bitwise operation between multiple keys (containing string values)

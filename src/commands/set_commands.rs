@@ -46,7 +46,7 @@ pub trait SetCommands<'a>: Sized {
     /// [<https://redis.io/commands/sdiff/>](https://redis.io/commands/sdiff/)
     #[must_use]
     fn sdiff<R: Response>(self, keys: impl Serialize) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("SDIFF").key(keys).readonly())
+        prepare_command(self, cmd("SDIFF").keys(keys).readonly())
     }
 
     /// This command is equal to [sdiff](SetCommands::sdiff), but instead of returning the resulting set,
@@ -63,7 +63,7 @@ pub trait SetCommands<'a>: Sized {
         destination: impl Serialize,
         keys: impl Serialize,
     ) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("SDIFFSTORE").arg(destination).key(keys))
+        prepare_command(self, cmd("SDIFFSTORE").arg(destination).keys(keys))
     }
 
     /// Returns the members of the set resulting from the intersection of all the given sets.
@@ -75,7 +75,7 @@ pub trait SetCommands<'a>: Sized {
     /// [<https://redis.io/commands/sinter/>](https://redis.io/commands/sinter/)
     #[must_use]
     fn sinter<R: Response>(self, keys: impl Serialize) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("SINTER").key(keys).readonly())
+        prepare_command(self, cmd("SINTER").keys(keys).readonly())
     }
 
     /// This command is similar to [sinter](SetCommands::sinter), but instead of returning the result set,
@@ -115,7 +115,7 @@ pub trait SetCommands<'a>: Sized {
         destination: impl Serialize,
         keys: impl Serialize,
     ) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("SINTERSTORE").arg(destination).key(keys))
+        prepare_command(self, cmd("SINTERSTORE").arg(destination).keys(keys))
     }
 
     /// Returns if member is a member of the set stored at key.
@@ -251,7 +251,7 @@ pub trait SetCommands<'a>: Sized {
     /// [<https://redis.io/commands/sunion/>](https://redis.io/commands/sunion/)
     #[must_use]
     fn sunion<R: Response>(self, keys: impl Serialize) -> PreparedCommand<'a, Self, R> {
-        prepare_command(self, cmd("SUNION").key(keys).readonly())
+        prepare_command(self, cmd("SUNION").keys(keys).readonly())
     }
 
     /// This command is equal to [sunion](SetCommands::sunion), but instead of returning the resulting set,
@@ -268,7 +268,7 @@ pub trait SetCommands<'a>: Sized {
         destination: impl Serialize,
         keys: impl Serialize,
     ) -> PreparedCommand<'a, Self, usize> {
-        prepare_command(self, cmd("SUNIONSTORE").key(destination).key(keys))
+        prepare_command(self, cmd("SUNIONSTORE").key(destination).keys(keys))
     }
 }
 

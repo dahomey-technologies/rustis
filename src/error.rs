@@ -158,6 +158,25 @@ pub enum ClientError {
     SendQueueFull,
     #[error("a client-side cache key must serialize to exactly one argument")]
     InvalidCacheKey,
+    /// Raised when a key argument does not serialize to the number of command
+    /// arguments its position allows.
+    ///
+    /// Command arguments are `impl Serialize`, so the compiler cannot check how
+    /// many arguments a value produces: `None` and an empty collection produce
+    /// none, a struct or a sequence produces one per element. A key that
+    /// produced none carries no hash slot, which in Cluster mode routes the
+    /// command to a random node instead of the node that owns it. The arity is
+    /// therefore checked where the key is added, and the message names the
+    /// command and the count.
+    #[error("{command}: a key argument serialized to {written} command arguments, but {expected}")]
+    InvalidKeyArity {
+        /// Name of the command being built.
+        command: String,
+        /// How many command arguments the key actually serialized to.
+        written: usize,
+        /// What the key's position allows, as it reads in the message.
+        expected: &'static str,
+    },
     /// Raised when cannot parse hash slot
     #[error("cannot parse hash slot")]
     CannotParseHashSlot,
@@ -316,6 +335,7 @@ impl ClientError {
             | ClientError::MaxCommandAttemptsReached
             | ClientError::SendQueueFull
             | ClientError::InvalidCacheKey
+            | ClientError::InvalidKeyArity { .. }
             | ClientError::CannotParseHashSlot
             | ClientError::CannotParseAddress
             | ClientError::CannotParsePort

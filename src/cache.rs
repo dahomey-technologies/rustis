@@ -651,12 +651,17 @@ fn get_subcache_key(key: &BulkString) -> Bytes {
     FastPathCommandBuilder::get(key.clone()).bytes().clone()
 }
 
+/// A cache entry is filed under its key, so the key must serialize to exactly
+/// one argument. A value writing several would file the entry under the first of
+/// them, which two different keys can share; a value writing none has no name to
+/// be filed under at all.
 fn key_to_bulk_string(key: &impl Serialize) -> Result<BulkString> {
     let args = CommandArgsMut::default().arg(key).freeze();
-    args.into_iter()
-        .next()
-        .map(Into::into)
-        .ok_or_else(|| Error::from(ClientError::InvalidCacheKey))
+    let mut args = args.into_iter();
+    match (args.next(), args.next()) {
+        (Some(key), None) => Ok(key.into()),
+        _ => Err(Error::from(ClientError::InvalidCacheKey)),
+    }
 }
 
 /// What to do with a freshly inserted cache entry once the response is in, given
@@ -705,7 +710,30 @@ mod tests {
         clippy::indexing_slicing,
         reason = "test code: a panic is how a test reports failure"
     )]
-    use super::{PostInsertAction, post_insert_action};
+    use super::{PostInsertAction, key_to_bulk_string, post_insert_action};
+
+    /// A cache entry is filed under its key, so a key that serialized to
+    /// anything other than one argument would file the entry under the first of
+    /// them — `{tenant: "acme", id: 42}` and `{tenant: "acme", id: 43}` sharing
+    /// the one entry, each reading the other's value.
+    #[test]
+    fn a_cache_key_must_serialize_to_exactly_one_argument() {
+        assert_eq!(
+            b"key",
+            key_to_bulk_string(&"key").unwrap().as_bytes(),
+            "a single argument is the key itself"
+        );
+
+        for rejected in [
+            key_to_bulk_string(&None::<String>),
+            key_to_bulk_string(&["a", "b"]),
+        ] {
+            assert!(matches!(
+                rejected.unwrap_err().into_kind(),
+                crate::ErrorKind::Client(crate::ClientError::InvalidCacheKey)
+            ));
+        }
+    }
 
     #[test]
     fn no_invalidation_recorded_keeps_entry() {

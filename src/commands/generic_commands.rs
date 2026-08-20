@@ -46,9 +46,11 @@ pub trait GenericCommands<'a>: Sized {
     fn del(self, keys: impl Serialize) -> PreparedCommand<'a, Self, usize> {
         prepare_command(
             self,
-            cmd("DEL")
-                .key(keys)
-                .cluster_info(RequestPolicy::MultiShard, ResponsePolicy::AggSum, 1),
+            cmd("DEL").keys(keys).cluster_info(
+                RequestPolicy::MultiShard,
+                ResponsePolicy::AggSum,
+                1,
+            ),
         )
     }
 
@@ -76,7 +78,7 @@ pub trait GenericCommands<'a>: Sized {
         prepare_command(
             self,
             cmd("EXISTS")
-                .key(keys)
+                .keys(keys)
                 .cluster_info(RequestPolicy::MultiShard, ResponsePolicy::AggSum, 1)
                 .readonly(),
         )
@@ -533,7 +535,7 @@ pub trait GenericCommands<'a>: Sized {
         prepare_command(
             self,
             cmd("TOUCH")
-                .key(keys)
+                .keys(keys)
                 .cluster_info(RequestPolicy::MultiShard, ResponsePolicy::AggSum, 1)
                 .readonly(),
         )
@@ -578,7 +580,7 @@ pub trait GenericCommands<'a>: Sized {
     fn unlink(self, keys: impl Serialize) -> PreparedCommand<'a, Self, usize> {
         prepare_command(
             self,
-            cmd("UNLINK").key(keys).cluster_info(
+            cmd("UNLINK").keys(keys).cluster_info(
                 RequestPolicy::MultiShard,
                 ResponsePolicy::AggSum,
                 1,

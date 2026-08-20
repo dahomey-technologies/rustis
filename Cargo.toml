@@ -103,6 +103,13 @@ log = "0.4"
 tracing-subscriber = "0.3"
 smallvec = { version = "1.15", features = ["serde"] }
 rustls-pemfile = "2.2"
+# Real third-party types for `tests/arg_arity.rs`, which proves that a foreign
+# type is a valid command argument with no impl from this crate — the claim a
+# marker trait could not have made. `serde_json` is also an optional runtime
+# dependency of the `json` feature; declared here too so the test compiles
+# whatever features the suite runs with.
+uuid = { version = "1", features = ["serde", "v4"] }
+serde_json = "1.0"
 
 [package.metadata.docs.rs]
 features = ["tokio-runtime", "tokio-rustls", "pool", "json", "client-cache"]

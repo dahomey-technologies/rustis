@@ -448,7 +448,7 @@ pub trait StringCommands<'a>: Sized {
         prepare_command(
             self,
             cmd("MGET")
-                .key(keys)
+                .keys(keys)
                 .cluster_info(RequestPolicy::MultiShard, None, 1)
                 .readonly(),
         )

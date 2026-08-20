@@ -30,6 +30,69 @@ async fn append() -> Result<()> {
     Ok(())
 }
 
+/// A key argument is `impl Serialize`, so the compiler cannot check that it is a
+/// single value. The count is checked while the command is built, and the error
+/// must reach the caller of the command rather than a malformed command reaching
+/// the server — or, in Cluster mode, a slotless command reaching a random node.
+#[tokio::test]
+#[serial]
+async fn a_key_of_the_wrong_arity_fails_the_command_at_the_caller() -> Result<()> {
+    let client = get_test_client().await?;
+
+    #[derive(serde::Serialize)]
+    struct CompositeKey {
+        tenant: &'static str,
+        id: u64,
+    }
+
+    // `None` writes no argument, a struct writes two per field, a sequence one
+    // per element. None of the three is a single key.
+    let no_argument: Result<String> = client.get(None::<String>).await;
+    let several_arguments: Result<String> = client
+        .get(CompositeKey {
+            tenant: "acme",
+            id: 42,
+        })
+        .await;
+    let a_sequence: Result<String> = client.get(["a", "b"]).await;
+
+    for result in [no_argument, several_arguments, a_sequence] {
+        let error = result.unwrap_err();
+        assert!(
+            matches!(
+                error.kind(),
+                ErrorKind::Client(crate::ClientError::InvalidKeyArity { command, .. })
+                    if command == "GET"
+            ),
+            "expected an arity error naming GET, got {error:?}"
+        );
+    }
+
+    // The connection is unharmed: the command never reached the wire.
+    client.set("key", "value").await?;
+    let value: String = client.get("key").await?;
+    assert_eq!("value", value);
+
+    // A multi-key command takes a collection, so a sequence is right there —
+    // while an empty one is the same slotless command as above.
+    let deleted = client.del(["key", "other"]).await?;
+    assert_eq!(1, deleted);
+
+    let error = client.del(Vec::<String>::new()).await.unwrap_err();
+    assert!(
+        matches!(
+            error.kind(),
+            ErrorKind::Client(crate::ClientError::InvalidKeyArity { command, written: 0, .. })
+                if command == "DEL"
+        ),
+        "expected an arity error naming DEL, got {error:?}"
+    );
+
+    client.close().await?;
+
+    Ok(())
+}
+
 #[tokio::test]
 #[serial]
 async fn digest_and_delex() -> Result<()> {

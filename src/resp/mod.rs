@@ -98,6 +98,68 @@ async fn main() -> Result<()> {
     Ok(())
 }
 ```
+## Why `impl Serialize` and not a trait of **rustis**' own
+
+A trait of our own — `SingleArg`, `IntoArgs`, whatever the name — would let the compiler check
+that a key is a single value. **rustis** does not define one, and cannot, because of Rust's
+orphan rule: an `impl` is only allowed in the crate that defines the trait or the crate that
+defines the type. Writing
+
+```text
+// in your own crate
+impl rustis::resp::SingleArg for uuid::Uuid {}
+//   error[E0117]: only traits defined in the current crate
+//                 can be implemented for types defined outside of it
+```
+
+since neither the trait nor the type belongs to your crate. (The example does not compile for a
+second reason: `SingleArg` does not exist, which is what this section is about.)
+Every third-party type would then need a newtype wrapper at each call site: `uuid::Uuid`,
+`serde_json::Value`, `chrono::DateTime`, `rust_decimal::Decimal`. `Serialize` has no such problem,
+being already implemented by those crates themselves.
+
+`serde_json::Value` shows the trait could not even be honest where the orphan rule allows it.
+One type, five argument counts: `Value::String` and `Value::Number` write one argument,
+`Value::Null` writes none, `Value::Array` writes one per element and `Value::Object` two per
+entry. A trait is a predicate on a *type*; the count is a property of the *value*. No `impl` can
+answer for `Value`.
+
+## Argument counts are checked, not typed
+
+The count is therefore checked where a key is added, since a mistake there is otherwise silent.
+`None` and an empty collection write no argument at all, which leaves the command a key short —
+and, in Cluster mode, with no hash slot, so it is routed to a **random node** instead of the one
+that owns the key. A struct or a sequence writes several arguments where one key was meant.
+
+Both fail the command with
+[`InvalidKeyArity`](crate::ClientError::InvalidKeyArity), naming the command and the count:
+
+```
+use rustis::{client::Client, commands::StringCommands, ClientError, ErrorKind, Result};
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    let client = Client::connect("127.0.0.1:6379").await?;
+
+    // a key that serializes to no argument at all
+    let result: Result<String> = client.get(None::<String>).await;
+    assert!(matches!(
+        result.unwrap_err().kind(),
+        ErrorKind::Client(ClientError::InvalidKeyArity { .. })
+    ));
+
+    Ok(())
+}
+```
+
+The check is on the count alone, so it costs nothing in flexibility: any foreign type is a valid
+key as soon as it writes one argument, whether or not **rustis** has ever heard of it. A
+`uuid::Uuid` passes, and so does `Value::String` — while `Value::Array` does not, which is the
+distinction a marker trait was unable to make.
+
+Values are not checked: a struct or a map as a value is the point of `HSET`
+(`client.hset("user:1", my_struct)`), so any count is legitimate there.
+
 # Command results
 
 **rustis** provides an idiomatic way to convert command results into Rust types with the help of [serde](serde.rs)

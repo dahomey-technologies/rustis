@@ -20,7 +20,11 @@ use crate::{
 };
 use bytes::Bytes;
 use smallvec::SmallVec;
-use std::{collections::HashMap, iter::zip, time::Duration};
+use std::{
+    collections::{HashMap, VecDeque},
+    iter::zip,
+    time::Duration,
+};
 use tracing::{debug, trace};
 
 #[derive(Debug)]
@@ -123,6 +127,126 @@ pub(super) fn collect_redirections(
     }
 
     redirections
+}
+
+/// The requests fed to the cluster and still awaiting their replies, oldest
+/// first.
+///
+/// The order is what the caller sees: a reply is reported only once every
+/// request ahead of it is answered, so a request that can never complete blocks
+/// every later one. That is why an orphaned front request is failed rather than
+/// waited on, and why a subscription's request — acknowledged by a push frame
+/// nothing files — is retired instead of left at the head.
+#[derive(Debug, Default)]
+pub(super) struct RequestQueue {
+    pending: VecDeque<RequestInfo>,
+}
+
+impl RequestQueue {
+    pub(super) fn push(&mut self, request_info: RequestInfo) {
+        self.pending.push_back(request_info);
+    }
+
+    /// Puts a partially redirected request back at the head, where it was: its
+    /// place in the order is what the caller's reply ordering rests on.
+    pub(super) fn push_front(&mut self, request_info: RequestInfo) {
+        self.pending.push_front(request_info);
+    }
+
+    pub(super) fn clear(&mut self) {
+        self.pending.clear();
+    }
+
+    /// Whether the oldest request is still owed a reply by a node the topology
+    /// no longer holds — a wait that will never end.
+    pub(super) fn front_awaits_a_missing_node(&self, holds: impl Fn(&NodeId) -> bool) -> bool {
+        let Some(request_info) = self.pending.front() else {
+            return false;
+        };
+
+        request_info
+            .sub_requests
+            .iter()
+            .any(|sr| sr.result.is_none() && !holds(&sr.node_id))
+    }
+
+    /// Test-only: the node the oldest request is still waiting on.
+    #[cfg(test)]
+    pub(super) fn front_awaited_node_id(&self) -> Option<NodeId> {
+        self.pending
+            .front()?
+            .sub_requests
+            .iter()
+            .find(|sr| sr.result.is_none())
+            .map(|sr| sr.node_id.clone())
+    }
+
+    pub(super) fn pop_front(&mut self) {
+        self.pending.pop_front();
+    }
+
+    /// Takes the oldest request once every one of its sub-requests has answered.
+    /// `None` while any is still outstanding — reporting it then would resolve
+    /// the caller on a partial reply.
+    pub(super) fn take_fulfilled_front(&mut self) -> Option<RequestInfo> {
+        let request_info = self.pending.front()?;
+        if !request_info
+            .sub_requests
+            .iter()
+            .all(|sr| sr.result.is_some())
+        {
+            return None;
+        }
+
+        trace!("fulfilled request_info: {request_info:?}");
+        self.pending.pop_front()
+    }
+
+    /// Files `result` against the oldest sub-request still awaiting a reply from
+    /// `node_id`, and reports whether one was found.
+    ///
+    /// The search and the store are one step. Split in two, the indices the
+    /// first produced could name nothing by the time the second ran, which is a
+    /// case the caller then has to have an answer for — an answer that is
+    /// unreachable and therefore untested.
+    pub(super) fn file_reply(
+        &mut self,
+        node_id: &NodeId,
+        result: Option<crate::Result<RespResponse>>,
+    ) -> bool {
+        let Some(sub_request) = self.pending.iter_mut().find_map(|request| {
+            request
+                .sub_requests
+                .iter_mut()
+                .find(|sr| sr.node_id == *node_id && sr.result.is_none())
+        }) else {
+            return false;
+        };
+
+        sub_request.result = Some(result);
+        true
+    }
+
+    /// Drops the request a subscription command left behind, now that the server
+    /// has acknowledged it with a push frame.
+    ///
+    /// Without this the request waits for a reply that never comes and blocks
+    /// every later one. Only a subscription acknowledgement retires a request:
+    /// an error reply such as `MOVED` is filed like any other, so the
+    /// redirection path keeps working.
+    pub(super) fn retire_pub_sub(&mut self, node_id: &NodeId) {
+        let Some(index) = self.pending.iter().position(|request| {
+            request.is_pub_sub
+                && request
+                    .sub_requests
+                    .iter()
+                    .any(|sr| sr.node_id == *node_id && sr.result.is_none())
+        }) else {
+            return;
+        };
+
+        self.pending.remove(index);
+    }
 }
 
 /// A subscription command is acknowledged by a push frame, not by an ordinary
@@ -811,5 +935,144 @@ mod construction_tests {
 
         let two_shards = RequestInfo::new(&command, sub_requests(2)).replayable_per_shard(&command);
         assert!(two_shards.command.is_some());
+    }
+}
+
+#[cfg(test)]
+mod queue_tests {
+    #![allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        reason = "test code: a panic is how a test reports failure"
+    )]
+    use super::{RequestInfo, RequestQueue, SubRequest};
+    use crate::resp::{Command, RespResponse, cmd};
+
+    fn request(name: &'static str, node_ids: &[&str]) -> RequestInfo {
+        let command: Command = cmd(name).into();
+        RequestInfo::new(
+            &command,
+            node_ids
+                .iter()
+                .map(|id| SubRequest::keyless((*id).into()))
+                .collect(),
+        )
+    }
+
+    fn ok() -> Option<crate::Result<RespResponse>> {
+        Some(Ok(RespResponse::ok()))
+    }
+
+    /// A reply belongs to the oldest sub-request still awaiting one from that
+    /// node. Filing it against a later one would leave the older request
+    /// unfulfilled forever, blocking every reply behind it.
+    #[test]
+    fn a_reply_fills_the_oldest_sub_request_awaiting_that_node() {
+        let mut queue = RequestQueue::default();
+        queue.push(request("PING", &["n1"]));
+        queue.push(request("PING", &["n1"]));
+
+        assert!(queue.file_reply(&"n1".into(), ok()));
+
+        let first = queue.take_fulfilled_front().expect("the first is answered");
+        assert!(first.sub_requests.first().unwrap().result.is_some());
+        assert!(
+            queue.take_fulfilled_front().is_none(),
+            "the second is still waiting"
+        );
+    }
+
+    /// A reply no request awaits is reported rather than dropped: it means the
+    /// connection and the queue disagree about what is in flight, and every
+    /// later reply would be matched to the wrong caller.
+    #[test]
+    fn a_reply_nothing_awaits_is_refused() {
+        let mut queue = RequestQueue::default();
+        assert!(!queue.file_reply(&"n1".into(), ok()));
+
+        queue.push(request("PING", &["n1"]));
+        assert!(queue.file_reply(&"n1".into(), ok()));
+        // The sub-request is filled: a second reply from the same node has
+        // nothing left to fill.
+        assert!(!queue.file_reply(&"n1".into(), ok()));
+    }
+
+    /// A request split over two nodes is not answerable until both have
+    /// replied. Reporting it early would resolve the caller on half an answer.
+    #[test]
+    fn a_split_request_is_taken_only_once_every_shard_replied() {
+        let mut queue = RequestQueue::default();
+        queue.push(request("MGET", &["n1", "n2"]));
+
+        assert!(queue.file_reply(&"n1".into(), ok()));
+        assert!(queue.take_fulfilled_front().is_none());
+
+        assert!(queue.file_reply(&"n2".into(), ok()));
+        assert!(queue.take_fulfilled_front().is_some());
+    }
+
+    /// A request waiting on a node the topology dropped can never complete, and
+    /// the queue is reported in order, so it would block every later reply.
+    #[test]
+    fn the_front_request_reports_a_node_that_is_gone() {
+        let mut queue = RequestQueue::default();
+        assert!(
+            !queue.front_awaits_a_missing_node(|_| false),
+            "an empty queue waits on nobody"
+        );
+
+        queue.push(request("MGET", &["n1", "n2"]));
+        assert!(queue.front_awaits_a_missing_node(|id| id.as_ref() == "n1"));
+        assert!(!queue.front_awaits_a_missing_node(|_| true));
+
+        // A sub-request already answered is owed nothing, so a node that left
+        // after answering does not orphan the request.
+        assert!(queue.file_reply(&"n2".into(), ok()));
+        assert!(!queue.front_awaits_a_missing_node(|id| id.as_ref() == "n1"));
+    }
+
+    /// A subscription is acknowledged by a push frame the handler consumes on
+    /// its own, so nothing ever fills its sub-request. Left in place it waits
+    /// forever and deadlocks the connection.
+    #[test]
+    fn a_subscription_request_is_retired_by_its_acknowledgement() {
+        let mut queue = RequestQueue::default();
+        queue.push(request("SUBSCRIBE", &["n1"]));
+        queue.push(request("PING", &["n1"]));
+
+        queue.retire_pub_sub(&"n1".into());
+
+        assert!(queue.file_reply(&"n1".into(), ok()));
+        let front = queue.take_fulfilled_front().expect("the PING is now first");
+        assert!(!front.is_pub_sub);
+    }
+
+    /// Only a subscription request is retired: an ordinary one waiting on the
+    /// same node must stay, or its caller is never answered.
+    #[test]
+    fn retiring_a_subscription_leaves_an_ordinary_request_alone() {
+        let mut queue = RequestQueue::default();
+        queue.push(request("PING", &["n1"]));
+
+        queue.retire_pub_sub(&"n1".into());
+
+        assert!(queue.file_reply(&"n1".into(), ok()));
+        assert!(queue.take_fulfilled_front().is_some());
+    }
+
+    /// A partially redirected request goes back to the head, not the tail: the
+    /// caller sees replies in order, so requeuing it behind newer requests
+    /// would answer them first.
+    #[test]
+    fn a_deferred_request_keeps_its_place_at_the_head() {
+        let mut queue = RequestQueue::default();
+        let deferred = request("MGET", &["n1"]);
+        queue.push(request("PING", &["n2"]));
+        queue.push_front(deferred);
+
+        assert!(queue.file_reply(&"n1".into(), ok()));
+        let front = queue.take_fulfilled_front().expect("the deferred one");
+        assert_eq!("n1", front.sub_requests.first().unwrap().node_id.as_ref());
     }
 }

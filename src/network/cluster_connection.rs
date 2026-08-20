@@ -1,4 +1,6 @@
-use super::cluster_request::{RequestInfo, SubRequest, collect_redirections, is_pub_sub_command};
+use super::cluster_request::{
+    RequestInfo, RequestQueue, SubRequest, collect_redirections, is_pub_sub_command,
+};
 use super::cluster_topology::{ClusterTopology, NodeId, NodeReach};
 use super::pub_sub_push::PubSubPush;
 use crate::{
@@ -10,13 +12,7 @@ use crate::{
 };
 use bytes::Bytes;
 use smallvec::{SmallVec, smallvec};
-use std::{
-    collections::{HashSet, VecDeque},
-    fmt::Debug,
-    sync::Arc,
-    task::Poll,
-    time::Duration,
-};
+use std::{collections::HashSet, fmt::Debug, sync::Arc, task::Poll, time::Duration};
 use tokio::time::Instant;
 use tracing::{debug, error, info, trace, warn};
 
@@ -126,6 +122,24 @@ fn is_broadcast_pub_sub_command(command: &Command) -> bool {
     )
 }
 
+/// Whether a push frame is a subscription command's acknowledgement, as opposed
+/// to a published message.
+///
+/// Only an acknowledgement retires the request its command left behind. An error
+/// reply such as `MOVED` is not a push frame at all and is filed like any other,
+/// so the redirection path keeps working.
+fn is_subscription_ack(response: &RespResponse) -> bool {
+    matches!(
+        PubSubPush::try_from(response),
+        Ok(PubSubPush::Subscribe(_)
+            | PubSubPush::PSubscribe(_)
+            | PubSubPush::SSubscribe(_)
+            | PubSubPush::Unsubscribe(_)
+            | PubSubPush::PUnsubscribe(_)
+            | PubSubPush::SUnsubscribe(_))
+    )
+}
+
 /// A sub-request that must be re-sent to another node before its request can be
 /// completed. Held aside because deciding this happens in `read`/`try_read`,
 /// and `try_read` cannot await the send.
@@ -186,7 +200,7 @@ pub(crate) struct ClusterConnection {
     /// siblings are in before anything is sent on them, and this is what lets them.
     state_snapshot: ConnectionState,
     topology: ClusterTopology,
-    pending_requests: VecDeque<RequestInfo>,
+    pending_requests: RequestQueue,
     /// Sub-requests re-armed by a partial redirection, awaiting the next `read`
     /// to be sent.
     pending_redirections: Vec<PendingRedirection>,
@@ -240,7 +254,7 @@ impl ClusterConnection {
             config: config.clone(),
             state_snapshot: connection_state.clone(),
             topology,
-            pending_requests: VecDeque::new(),
+            pending_requests: RequestQueue::default(),
             pending_redirections: Vec::new(),
             tag,
             is_reply_on: true,
@@ -436,7 +450,7 @@ impl ClusterConnection {
     /// The single funnel for all four routing policies, so the decision is made once.
     fn file_request(&mut self, request_info: RequestInfo) {
         if self.is_reply_on && self.pending_reply_skip.is_none() {
-            self.pending_requests.push_back(request_info);
+            self.pending_requests.push(request_info);
         }
     }
 
@@ -765,12 +779,7 @@ impl ClusterConnection {
             return;
         };
 
-        let Some(victim) = self
-            .pending_requests
-            .front()
-            .and_then(|ri| ri.sub_requests.iter().find(|sr| sr.result.is_none()))
-            .map(|sr| sr.node_id.clone())
-        else {
+        let Some(victim) = self.pending_requests.front_awaited_node_id() else {
             return;
         };
 
@@ -783,47 +792,46 @@ impl ClusterConnection {
         debug!("test hook removed node {victim:?}");
     }
 
-    /// Drops the pending request a subscription command left behind, now that
-    /// the server has acknowledged it with a push frame. Without this the
-    /// request waits for a reply that never comes, and since `read` reports the
-    /// queue in order, it blocks every later reply from any other node — the
-    /// whole connection deadlocks. Only a subscription acknowledgement retires
-    /// one: an error reply such as `MOVED` is filed as a result like any other,
-    /// so the redirection path keeps working.
-    fn retire_pub_sub_request(&mut self, node_id: &NodeId, response: &RespResponse) {
-        if !matches!(
-            PubSubPush::try_from(response),
-            Ok(PubSubPush::Subscribe(_)
-                | PubSubPush::PSubscribe(_)
-                | PubSubPush::SSubscribe(_)
-                | PubSubPush::Unsubscribe(_)
-                | PubSubPush::PUnsubscribe(_)
-                | PubSubPush::SUnsubscribe(_))
-        ) {
-            return;
-        }
-
-        let Some(index) = self.pending_requests.iter().position(|request| {
-            request.is_pub_sub
-                && request.sub_requests.iter().any(|sub_request| {
-                    sub_request.node_id == *node_id && sub_request.result.is_none()
-                })
-        }) else {
-            return;
-        };
-
-        self.pending_requests.remove(index);
+    /// Whether the oldest request waits on a node the topology no longer holds.
+    fn front_awaits_a_missing_node(&self) -> bool {
+        self.pending_requests
+            .front_awaits_a_missing_node(|node_id| {
+                self.topology.node_index_by_id(node_id).is_some()
+            })
     }
 
-    fn front_request_references_missing_node(&self) -> bool {
-        let Some(request_info) = self.pending_requests.front() else {
+    /// Files a node's reply against the sub-request awaiting it, reporting
+    /// `false` when no request expected one.
+    fn file_reply(
+        &mut self,
+        node_idx: usize,
+        #[cfg_attr(not(test), allow(unused_mut))] mut result: Option<Result<RespResponse>>,
+    ) -> bool {
+        // Test-only: hand a transient cluster error to the next sub-request that
+        // completes, in place of the reply the server actually sent.
+        #[cfg(test)]
+        if let Some(hook) = &self.test_hook
+            && matches!(result, Some(Ok(_)))
+            && let Some(error) = hook.take_transient_error()
+        {
+            let mut tape = crate::resp::RespTapeMut::default();
+            let mut parser = crate::resp::RespFrameParser::new(&error, &mut tape);
+            if let Ok((frame, _)) = parser.parse() {
+                result = Some(Ok(RespResponse::new(error.into(), frame)));
+            }
+        }
+
+        let Some(node) = self.topology.node(node_idx) else {
             return false;
         };
+        let node_id = node.id.clone();
 
-        request_info
-            .sub_requests
-            .iter()
-            .any(|sr| sr.result.is_none() && self.topology.node_index_by_id(&sr.node_id).is_none())
+        if !self.pending_requests.file_reply(&node_id, result) {
+            error!(node = %node_id.as_ref(), "Received a reply no request awaited");
+            return false;
+        }
+
+        true
     }
 
     pub(crate) async fn read(&mut self) -> Option<Result<RespResponse>> {
@@ -844,20 +852,15 @@ impl ClusterConnection {
             // not as a redirection: replaying it unconditionally would
             // re-execute a command whose caller may have opted out of retries,
             // and which the vanished node may well have already run.
-            if self.front_request_references_missing_node() {
+            if self.front_awaits_a_missing_node() {
                 self.pending_requests.pop_front();
                 return Some(Err(Error::from(ErrorKind::DisconnectedByPeer)));
             }
 
-            if let Some(ri) = self.pending_requests.front()
-                && ri.sub_requests.iter().all(|sr| sr.result.is_some())
-            {
-                trace!("fulfilled request_info: {ri:?}");
-                if let Some(ri) = self.pending_requests.pop_front() {
-                    match self.internal_read(ri) {
-                        ReadOutcome::Ready(result) => return result,
-                        ReadOutcome::Deferred => continue,
-                    }
+            if let Some(request_info) = self.pending_requests.take_fulfilled_front() {
+                match self.internal_read(request_info) {
+                    ReadOutcome::Ready(result) => return result,
+                    ReadOutcome::Deferred => continue,
                 }
             }
 
@@ -874,39 +877,16 @@ impl ClusterConnection {
             if let Some(Ok(response)) = &result
                 && response.is_push()
             {
-                if let Some(node_id) = self.topology.node(node_idx).map(|node| node.id.clone()) {
-                    self.retire_pub_sub_request(&node_id, response);
+                if is_subscription_ack(response)
+                    && let Some(node_id) = self.topology.node(node_idx).map(|node| node.id.clone())
+                {
+                    self.pending_requests.retire_pub_sub(&node_id);
                 }
                 return result;
             }
 
-            // The index names a node the topology just read from.
-            let Some(node) = self.topology.node(node_idx) else {
-                return Some(Err(Error::from(ClientError::InconsistentRoutingState)));
-            };
-            let node_id = &node.id;
-
-            let Some((req_idx, sub_req_idx)) =
-                self.pending_requests
-                    .iter()
-                    .enumerate()
-                    .find_map(|(req_idx, req)| {
-                        let sub_req_idx = req
-                            .sub_requests
-                            .iter()
-                            .position(|sr| sr.node_id == *node_id && sr.result.is_none())?;
-                        Some((req_idx, sub_req_idx))
-                    })
-            else {
-                error!(
-                    "Received unexpected message: {result:?} from {}",
-                    node.connection.tag()
-                );
+            if !self.file_reply(node_idx, result) {
                 return Some(Err(Error::from(ClientError::UnexpectedMessageReceived)));
-            };
-
-            if !self.store_sub_request_result(req_idx, sub_req_idx, result) {
-                return Some(Err(Error::from(ClientError::InconsistentRoutingState)));
             }
         }
     }
@@ -923,20 +903,15 @@ impl ClusterConnection {
             }
 
             // See `read()`: an orphaned front request must not block the queue.
-            if self.front_request_references_missing_node() {
+            if self.front_awaits_a_missing_node() {
                 self.pending_requests.pop_front();
                 return Poll::Ready(Some(Err(Error::from(ErrorKind::DisconnectedByPeer))));
             }
 
-            if let Some(ri) = self.pending_requests.front()
-                && ri.sub_requests.iter().all(|sr| sr.result.is_some())
-            {
-                trace!("fulfilled request_info: {ri:?}");
-                if let Some(ri) = self.pending_requests.pop_front() {
-                    match self.internal_read(ri) {
-                        ReadOutcome::Ready(result) => return Poll::Ready(result),
-                        ReadOutcome::Deferred => return Poll::Pending,
-                    }
+            if let Some(request_info) = self.pending_requests.take_fulfilled_front() {
+                match self.internal_read(request_info) {
+                    ReadOutcome::Ready(result) => return Poll::Ready(result),
+                    ReadOutcome::Deferred => return Poll::Pending,
                 }
             }
 
@@ -953,88 +928,20 @@ impl ClusterConnection {
             if let Some(Ok(response)) = &result
                 && response.is_push()
             {
-                if let Some(node_id) = self.topology.node(node_idx).map(|node| node.id.clone()) {
-                    self.retire_pub_sub_request(&node_id, response);
+                if is_subscription_ack(response)
+                    && let Some(node_id) = self.topology.node(node_idx).map(|node| node.id.clone())
+                {
+                    self.pending_requests.retire_pub_sub(&node_id);
                 }
                 return Poll::Ready(result);
             }
 
-            // The index names a node the topology just read from.
-            let Some(node) = self.topology.node(node_idx) else {
-                return Poll::Ready(Some(Err(Error::from(
-                    ClientError::InconsistentRoutingState,
-                ))));
-            };
-            let node_id = &node.id;
-
-            let Some((req_idx, sub_req_idx)) =
-                self.pending_requests
-                    .iter()
-                    .enumerate()
-                    .find_map(|(req_idx, req)| {
-                        let sub_req_idx = req
-                            .sub_requests
-                            .iter()
-                            .position(|sr| sr.node_id == *node_id && sr.result.is_none())?;
-                        Some((req_idx, sub_req_idx))
-                    })
-            else {
-                error!(
-                    node = %node.connection.tag(),
-                    "Received unexpected message: {result:?}"
-                );
+            if !self.file_reply(node_idx, result) {
                 return Poll::Ready(Some(Err(Error::from(
                     ClientError::UnexpectedMessageReceived,
                 ))));
-            };
-
-            if !self.store_sub_request_result(req_idx, sub_req_idx, result) {
-                return Poll::Ready(Some(Err(Error::from(
-                    ClientError::InconsistentRoutingState,
-                ))));
             }
         }
-    }
-
-    /// Files a sub-request result at the indices the caller just located by
-    /// scanning `pending_requests`, returning `false` if either index no longer
-    /// addresses anything.
-    ///
-    /// The scan and the store see the same queue with no mutation in between, so
-    /// `false` is unreachable; the caller turns it into an error for that one
-    /// command rather than letting it panic the network task.
-    fn store_sub_request_result(
-        &mut self,
-        req_idx: usize,
-        sub_req_idx: usize,
-        #[cfg_attr(not(test), allow(unused_mut))] mut result: Option<Result<RespResponse>>,
-    ) -> bool {
-        // Test-only: hand a transient cluster error to the next sub-request that
-        // completes, in place of the reply the server actually sent.
-        #[cfg(test)]
-        if let Some(hook) = &self.test_hook
-            && matches!(result, Some(Ok(_)))
-            && let Some(error) = hook.take_transient_error()
-        {
-            let mut tape = crate::resp::RespTapeMut::default();
-            let mut parser = crate::resp::RespFrameParser::new(&error, &mut tape);
-            if let Ok((frame, _)) = parser.parse() {
-                result = Some(Ok(RespResponse::new(error.into(), frame)));
-            }
-        }
-
-        let Some(request) = self.pending_requests.get_mut(req_idx) else {
-            return false;
-        };
-        let Some(sub_request) = request.sub_requests.get_mut(sub_req_idx) else {
-            return false;
-        };
-        sub_request.result = Some(result);
-        trace!(
-            "Did store sub-request result into {:?}",
-            self.pending_requests.get(req_idx)
-        );
-        true
     }
 
     /// obtained untouched.

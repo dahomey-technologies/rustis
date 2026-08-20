@@ -123,6 +123,46 @@ fn is_broadcast_pub_sub_command(command: &Command) -> bool {
     )
 }
 
+/// One shard's slice of a multi-key command: the keys of a single slot, the node
+/// that serves them, and whether the send must be prefixed with an `ASKING`.
+#[derive(Debug, PartialEq, Eq)]
+struct ShardSlice {
+    node_index: usize,
+    keys: SmallVec<[Bytes; 10]>,
+    should_ask: bool,
+}
+
+/// Cuts the routed keys into one slice per slot.
+///
+/// `routed_keys` must be sorted, which groups a slot's keys together. A slot is
+/// served as a whole: the read preference resolves each key on its own and its
+/// replica round-robin can name two different nodes for one slot, in which case
+/// the last one takes all of its keys. Splitting them would file two
+/// sub-requests for one slot and reassemble the reply against the wrong keys.
+fn shard_slices(routed_keys: Vec<(usize, u16, Bytes, bool)>) -> Vec<ShardSlice> {
+    let mut slices = Vec::<ShardSlice>::new();
+    let mut current_slot = None;
+
+    for (node_index, slot, key, should_ask) in routed_keys {
+        match slices.last_mut() {
+            Some(slice) if current_slot == Some(slot) => {
+                slice.node_index = node_index;
+                slice.keys.push(key);
+            }
+            _ => {
+                current_slot = Some(slot);
+                slices.push(ShardSlice {
+                    node_index,
+                    keys: smallvec![key],
+                    should_ask,
+                });
+            }
+        }
+    }
+
+    slices
+}
+
 /// The `ASK` redirections among the retry reasons, as the slot they name and the
 /// node that is importing it.
 fn ask_reasons(retry_reasons: &[RetryReason]) -> Vec<(u16, ClusterNodeAddress)> {
@@ -585,10 +625,10 @@ impl ClusterConnection {
     async fn request_policy_multi_shard(
         &mut self,
         command: &Command,
-        ask_reasons: &[(u16, (String, u16))],
+        ask_reasons: &[(u16, ClusterNodeAddress)],
     ) -> Result<()> {
         let for_read = self.may_read_from_replica(command);
-        let mut node_slot_keys_ask = command
+        let mut routed_keys = command
             .args_for_cluster()
             .filter_map(|(arg, is_key, slot)| {
                 is_key.then(|| {
@@ -601,72 +641,38 @@ impl ClusterConnection {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        if node_slot_keys_ask.is_empty() {
+        if routed_keys.is_empty() {
             return Ok(());
         }
 
-        node_slot_keys_ask.sort();
-        trace!("node_slot_keys_ask: {node_slot_keys_ask:?}");
+        // Sorting brings a slot's keys together, which is what the grouping
+        // below walks.
+        routed_keys.sort();
+        trace!("routed_keys: {routed_keys:?}");
 
-        let mut current_slot_keys = SmallVec::<[Bytes; 10]>::new();
-        let mut sub_requests = SmallVec::<[SubRequest; 10]>::new();
-        let mut last_slot = u16::MAX;
-        let mut last_node_index: usize = usize::MAX;
-        let mut last_should_ask = false;
         // Each shard receives the skip before its own slice of the command, so each
         // suppresses exactly one reply — its own.
         let reply_skip = self.pending_reply_skip.clone();
+        let mut sub_requests = SmallVec::<[SubRequest; 10]>::new();
 
-        // Placeholder, overwritten on the first iteration: `last_node_index`
-        // starts at a value no real index can equal. A node-less connection
-        // cannot serve the non-empty work list above.
-        let mut node = self
-            .topology
-            .node_mut(0)
-            .ok_or_else(|| Error::from(ClientError::InconsistentRoutingState))?;
+        for slice in shard_slices(routed_keys) {
+            let node = self
+                .topology
+                .node_mut(slice.node_index)
+                .ok_or_else(|| Error::from(ClientError::InconsistentRoutingState))?;
 
-        for (node_index, slot, key, should_ask) in node_slot_keys_ask {
-            if slot != last_slot {
-                if !current_slot_keys.is_empty() {
-                    if last_should_ask {
-                        node.connection.asking().await?;
-                    }
-
-                    let shard_command = prepare_command_for_shard(command, &current_slot_keys);
-                    node.feed(&shard_command, reply_skip.as_ref()).await?;
-                    sub_requests.push(SubRequest {
-                        node_id: node.id.clone(),
-                        keys: std::mem::take(&mut current_slot_keys),
-                        result: None,
-                    });
-                }
-
-                last_slot = slot;
-                last_should_ask = should_ask;
+            if slice.should_ask {
+                node.connection.asking().await?;
             }
 
-            current_slot_keys.push(key);
-
-            if node_index != last_node_index {
-                node = self
-                    .topology
-                    .node_mut(node_index)
-                    .ok_or_else(|| Error::from(ClientError::InconsistentRoutingState))?;
-                last_node_index = node_index;
-            }
+            let shard_command = prepare_command_for_shard(command, &slice.keys);
+            node.feed(&shard_command, reply_skip.as_ref()).await?;
+            sub_requests.push(SubRequest {
+                node_id: node.id.clone(),
+                keys: slice.keys,
+                result: None,
+            });
         }
-
-        if last_should_ask {
-            node.connection.asking().await?;
-        }
-
-        let shard_command = prepare_command_for_shard(command, &current_slot_keys);
-        node.feed(&shard_command, reply_skip.as_ref()).await?;
-        sub_requests.push(SubRequest {
-            node_id: node.id.clone(),
-            keys: std::mem::take(&mut current_slot_keys),
-            result: None,
-        });
 
         let request_info = RequestInfo::new(command, sub_requests).replayable_per_shard(command);
 
@@ -1287,4 +1293,109 @@ pub(crate) fn prepare_command_for_shard(command: &Command, shard_keys: &[Bytes])
     }
 
     shard_command.into()
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        reason = "test code: a panic is how a test reports failure"
+    )]
+    use super::shard_slices;
+    use bytes::Bytes;
+
+    fn key(name: &str) -> Bytes {
+        Bytes::from(name.to_owned())
+    }
+
+    fn slices(mut routed: Vec<(usize, u16, Bytes, bool)>) -> Vec<(usize, Vec<String>, bool)> {
+        routed.sort();
+        shard_slices(routed)
+            .into_iter()
+            .map(|slice| {
+                (
+                    slice.node_index,
+                    slice
+                        .keys
+                        .iter()
+                        .map(|k| String::from_utf8_lossy(k).into_owned())
+                        .collect(),
+                    slice.should_ask,
+                )
+            })
+            .collect()
+    }
+
+    /// One slice per slot, not per node: a shard owning two slots is fed twice
+    /// and owes two replies, which is what the reassembly lines up against the
+    /// keys of each.
+    #[test]
+    fn a_node_serving_two_slots_is_cut_into_two_slices() {
+        let cut = slices(vec![
+            (0, 10, key("a"), false),
+            (0, 20, key("b"), false),
+            (0, 10, key("c"), false),
+        ]);
+
+        assert_eq!(
+            vec![
+                (0, vec!["a".to_owned(), "c".to_owned()], false),
+                (0, vec!["b".to_owned()], false),
+            ],
+            cut
+        );
+    }
+
+    /// A command spread over two shards is cut per shard, each slice naming its
+    /// own node.
+    #[test]
+    fn keys_of_different_shards_are_cut_apart() {
+        let cut = slices(vec![
+            (1, 500, key("x"), false),
+            (0, 10, key("a"), false),
+            (1, 500, key("y"), false),
+        ]);
+
+        assert_eq!(
+            vec![
+                (0, vec!["a".to_owned()], false),
+                (1, vec!["x".to_owned(), "y".to_owned()], false),
+            ],
+            cut
+        );
+    }
+
+    /// An `ASK` applies to the whole slice: the redirection names the slot, and
+    /// the `ASKING` prefixes the one send that carries its keys.
+    #[test]
+    fn a_redirected_slot_carries_its_ask_for_the_whole_slice() {
+        let cut = slices(vec![
+            (0, 10, key("a"), true),
+            (0, 10, key("b"), true),
+            (1, 20, key("c"), false),
+        ]);
+
+        assert_eq!(
+            vec![
+                (0, vec!["a".to_owned(), "b".to_owned()], true),
+                (1, vec!["c".to_owned()], false),
+            ],
+            cut
+        );
+    }
+
+    /// A slot is served as a whole even when the read preference resolved its
+    /// keys to two different replicas. Two slices for one slot would file two
+    /// sub-requests where the command was split once.
+    #[test]
+    fn a_slot_resolved_to_two_replicas_stays_one_slice() {
+        let cut = slices(vec![(0, 10, key("a"), false), (1, 10, key("b"), false)]);
+
+        assert_eq!(1, cut.len());
+        let (node_index, keys, _) = cut.first().unwrap();
+        assert_eq!(1, *node_index, "the last resolution takes the slot");
+        assert_eq!(&vec!["a".to_owned(), "b".to_owned()], keys);
+    }
 }

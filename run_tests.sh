@@ -8,19 +8,32 @@
 # and the tests hang, saying nothing about why. The CI gates its test step on
 # `cluster_state:ok` for exactly this reason; this is that gate, locally.
 #
-# The check reports and steps aside when docker or the containers are absent, so
-# a deployment set up by other means still runs the suite.
+# The check reports and steps aside when docker is absent or no container of this
+# deployment is running, so a deployment set up by other means still runs the
+# suite. What tells the two apart is whether *any* `redis-*` container is up: a
+# deployment with some of its containers gone is broken, not absent, and is
+# refused rather than waved through — a missing node makes its tests fail to
+# connect while the suite still reports a total.
 # The filter is not inspected, so the gate also stops a run that needs no server
 # at all. `RUSTIS_SKIP_DEPLOYMENT_CHECK=1` is the way past it for those.
 check_deployment() {
     [ -n "$RUSTIS_SKIP_DEPLOYMENT_CHECK" ] && return 0
     command -v docker >/dev/null 2>&1 || return 0
-    docker ps --format '{{.Names}}' 2>/dev/null | grep -qx redis-node1 || return 0
 
-    if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -qx redis-standalone; then
+    running=$(docker ps --format '{{.Names}}' 2>/dev/null)
+    echo "$running" | grep -q '^redis-' || return 0
+
+    if ! echo "$running" | grep -qx redis-standalone; then
         echo "redis-standalone is not running: most of the suite has no server." >&2
         echo "A container outside this deployment may hold port 6379." >&2
         echo "Recreate it with:  cd redis && ./docker_down.sh && ./docker_up.sh" >&2
+        return 1
+    fi
+
+    if ! echo "$running" | grep -qx redis-node1; then
+        echo "The cluster nodes are not running, so every cluster test connects to" >&2
+        echo "nothing while the suite still reports a total." >&2
+        echo "Recreate the deployment with:  cd redis && ./docker_down.sh && ./docker_up.sh" >&2
         return 1
     fi
 

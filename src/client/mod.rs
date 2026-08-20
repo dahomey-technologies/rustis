@@ -76,6 +76,10 @@ The manager can be configured via [bb8](https://docs.rs/bb8/latest/bb8/) with a 
 
 For you convenience, [bb8](https://docs.rs/bb8/latest/bb8/) is reexported from the **rustis** crate.
 
+That re-export, and the `bb8::ManageConnection` implementation behind it, put bb8 in rustis'
+public API: a bb8 major release breaks rustis' semver on its own, and a dependency graph holds
+exactly one bb8 version.
+
 ```
 #[cfg(feature = "pool")]
 use rustis::{

@@ -92,6 +92,12 @@ compile error. Each implies the corresponding backend-only feature (`rustls`,
 feature on its own is also a compile error: it brings the configuration types
 without the connection code that honours them.
 
+`pool` puts bb8 in rustis' public API: [`PooledClientManager`](client::PooledClientManager)
+implements `bb8::ManageConnection` and the crate is re-exported as [`bb8`]. A bb8 major
+release is therefore a breaking rustis release even when no rustis code changes, and two
+crates in one dependency graph cannot disagree about the bb8 version. That is the price of
+configuring the pool with bb8's own builder rather than through a wrapper.
+
 The remaining features are for developing rustis itself and carry **no stability
 guarantee**: `bench` (exposes internal RESP entry points to the benchmarks and pulls in
 `criterion`, `fred`, `redis` and `pprof`), `fuzzing` (same, for the `cargo-fuzz` targets

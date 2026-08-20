@@ -48,7 +48,7 @@ mod config_server;
 #[cfg(feature = "server-tests")]
 mod connection_commands;
 #[cfg(feature = "server-tests")]
-mod count_min_sktech_commands;
+mod count_min_sketch_commands;
 #[cfg(feature = "server-tests")]
 mod cuckoo_commands;
 #[cfg(feature = "server-tests")]
@@ -129,7 +129,7 @@ mod string_commands;
 #[cfg(feature = "server-tests")]
 mod string_commands_server;
 #[cfg(feature = "server-tests")]
-mod t_disgest_commands;
+mod t_digest_commands;
 #[cfg(feature = "server-tests")]
 mod time_series_commands;
 #[cfg(feature = "server-tests")]

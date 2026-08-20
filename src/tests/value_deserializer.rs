@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use crate::{
     ClientError, ErrorKind, RedisError, RedisErrorKind, Result, resp::Value, tests::log_try_init,
 };
+use bytes::Bytes;
 use serde::Deserialize;
 use smallvec::SmallVec;
 
@@ -264,7 +265,7 @@ fn option() -> Result<()> {
 
     let result = Option::<String>::deserialize(&Value::Error(RedisError {
         kind: RedisErrorKind::Err,
-        description: "error".to_owned(),
+        description: Bytes::from_static(b"error"),
     }));
     assert!(matches!(
         result.unwrap_err().kind(),
@@ -308,7 +309,7 @@ fn unit() -> Result<()> {
 
     let result = <()>::deserialize(&Value::Error(RedisError {
         kind: RedisErrorKind::Err,
-        description: "error".to_owned(),
+        description: Bytes::from_static(b"error"),
     }));
     assert!(matches!(
         result.unwrap_err().kind(),
@@ -339,7 +340,7 @@ fn unit_struct() -> Result<()> {
 
     let result = Unit::deserialize(&Value::Error(RedisError {
         kind: RedisErrorKind::Err,
-        description: "error".to_owned(),
+        description: Bytes::from_static(b"error"),
     }));
     assert!(matches!(
         result.unwrap_err().kind(),
@@ -367,7 +368,7 @@ fn newtype_struct() -> Result<()> {
 
     let result = Millimeters::deserialize(&Value::Error(RedisError {
         kind: RedisErrorKind::Err,
-        description: "error".to_owned(),
+        description: Bytes::from_static(b"error"),
     }));
     assert!(matches!(
         result.unwrap_err().kind(),
@@ -389,7 +390,7 @@ fn seq() -> Result<()> {
 
     let result = Vec::<i32>::deserialize(&Value::Error(RedisError {
         kind: RedisErrorKind::Err,
-        description: "error".to_owned(),
+        description: Bytes::from_static(b"error"),
     }));
     assert!(matches!(
         result.unwrap_err().kind(),
@@ -422,7 +423,7 @@ fn tuple() -> Result<()> {
 
     let result = <(i32, i32)>::deserialize(&Value::Error(RedisError {
         kind: RedisErrorKind::Err,
-        description: "error".to_owned(),
+        description: Bytes::from_static(b"error"),
     }));
 
     assert!(matches!(
@@ -458,7 +459,7 @@ fn tuple_struct() -> Result<()> {
 
     let result = Rgb::deserialize(&Value::Error(RedisError {
         kind: RedisErrorKind::Err,
-        description: "error".to_owned(),
+        description: Bytes::from_static(b"error"),
     }));
 
     assert!(matches!(
@@ -685,7 +686,7 @@ fn _enum() -> Result<()> {
 
     let result = E::deserialize(&Value::Error(RedisError {
         kind: RedisErrorKind::Err,
-        description: "error".to_owned(),
+        description: Bytes::from_static(b"error"),
     }));
 
     assert!(matches!(

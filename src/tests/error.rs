@@ -8,7 +8,7 @@ use serial_test::serial;
 fn redis(kind: RedisErrorKind) -> Error {
     Error::from(ErrorKind::Redis(RedisError {
         kind,
-        description: String::new(),
+        description: Bytes::new(),
     }))
 }
 
@@ -314,4 +314,19 @@ fn a_retryable_error_covers_every_transient_layer() {
     assert!(!redis(RedisErrorKind::Err).is_retryable());
     assert!(!client(ClientError::MismatchedKeySlots).is_retryable());
     assert!(!Error::from(ErrorKind::Aborted).is_retryable());
+}
+
+/// A server message is bytes, not text. Reading it as text is lossy, so the
+/// bytes stay reachable: a key or an argument the server echoed back is
+/// recoverable byte for byte, whatever it holds.
+#[test]
+fn a_non_utf8_server_message_keeps_its_bytes() -> Result<()> {
+    let raw: &[u8] = b"ERR unknown command '\xff\xfe'";
+    let error = RedisError::try_from(raw)?;
+
+    assert_eq!(b"unknown command '\xff\xfe'", error.description_bytes());
+    assert!(error.description().contains('\u{fffd}'));
+    assert_eq!("unknown command '��'", error.description());
+
+    Ok(())
 }

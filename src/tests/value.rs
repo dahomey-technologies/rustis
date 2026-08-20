@@ -1,4 +1,5 @@
 use crate::{RedisError, RedisErrorKind, Result, resp::Value, tests::log_try_init};
+use bytes::Bytes;
 
 #[test]
 fn tuple() -> Result<()> {
@@ -52,7 +53,7 @@ fn display() {
         Value::Boolean(true),
         Value::Error(RedisError {
             kind: RedisErrorKind::Err,
-            description: "MyError".to_owned(),
+            description: Bytes::from_static(b"MyError"),
         }),
         Value::Null,
         Value::Map(Vec::from([
@@ -179,7 +180,7 @@ fn a_value_can_be_read_without_serde() {
 
     let error = Value::Error(RedisError {
         kind: RedisErrorKind::Err,
-        description: "MyError".to_owned(),
+        description: Bytes::from_static(b"MyError"),
     });
     assert_eq!(
         Some(&RedisErrorKind::Err),

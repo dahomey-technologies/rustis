@@ -21,10 +21,12 @@ async fn unknown_command() -> Result<()> {
 
     assert!(matches!(
         result.unwrap_err().kind(),
-        ErrorKind::Redis(RedisError {
-            kind: RedisErrorKind::Err,
-            description
-        }) if description.starts_with("unknown command 'UNKNOWN'")
+        ErrorKind::Redis(
+            redis @ RedisError {
+                kind: RedisErrorKind::Err,
+                ..
+            },
+        ) if redis.description().contains("unknown command 'UNKNOWN'")
     ));
 
     Ok(())

@@ -1423,7 +1423,7 @@ mod tests {
         assert!(!is_connection_level_error(&Error::from(ErrorKind::Redis(
             RedisError {
                 kind: RedisErrorKind::NoPerm,
-                description: "no permission".to_owned(),
+                description: bytes::Bytes::from_static(b"no permission"),
             }
         ))));
         // A caller-side client error is not a stream desync either.
@@ -1496,7 +1496,9 @@ mod tests {
         assert!(indicates_demoted_master(&Err(Error::from(
             ErrorKind::Redis(RedisError {
                 kind: RedisErrorKind::Readonly,
-                description: "You can't write against a read only replica.".to_owned(),
+                description: bytes::Bytes::from_static(
+                    b"You can't write against a read only replica."
+                ),
             })
         ))));
         assert!(!indicates_demoted_master(&Err(Error::from(
@@ -1524,7 +1526,9 @@ mod tests {
         assert!(!is_connection_level_error(&Error::from(ErrorKind::Redis(
             RedisError {
                 kind: RedisErrorKind::Readonly,
-                description: "You can't write against a read only replica.".to_owned(),
+                description: bytes::Bytes::from_static(
+                    b"You can't write against a read only replica."
+                ),
             }
         ))));
     }

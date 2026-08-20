@@ -4,6 +4,7 @@ use bytes::Bytes;
 use futures_channel::mpsc;
 use smallvec::SmallVec;
 use std::{
+    borrow::Cow,
     fmt::{Display, Formatter},
     num::{ParseFloatError, ParseIntError},
     str::Utf8Error,
@@ -930,7 +931,25 @@ impl Display for RedisErrorKind {
 #[non_exhaustive]
 pub struct RedisError {
     pub kind: RedisErrorKind,
-    pub description: String,
+    /// The server's message, as it arrived. A Redis error reply is bytes and can
+    /// echo a key or an argument, so reading it as text is the lossy step: it is
+    /// [`description`](RedisError::description) that pays for it, while
+    /// [`description_bytes`](RedisError::description_bytes) hands back the exact
+    /// bytes.
+    pub(crate) description: Bytes,
+}
+
+impl RedisError {
+    /// The server's message as text, with any byte that is not valid UTF-8
+    /// replaced by U+FFFD. This is what [`Display`] prints.
+    pub fn description(&self) -> Cow<'_, str> {
+        String::from_utf8_lossy(&self.description)
+    }
+
+    /// The server's message as it arrived, byte for byte.
+    pub fn description_bytes(&self) -> &[u8] {
+        &self.description
+    }
 }
 
 impl<'a> TryFrom<&'a [u8]> for RedisError {
@@ -949,11 +968,11 @@ impl<'a> TryFrom<&'a [u8]> for RedisError {
         {
             Some((b"ASK", _)) => Ok(Self {
                 kind: RedisErrorKind::try_from(error)?,
-                description: "".to_owned(),
+                description: Bytes::new(),
             }),
             Some((b"MOVED", _)) => Ok(Self {
                 kind: RedisErrorKind::try_from(error)?,
-                description: "".to_owned(),
+                description: Bytes::new(),
             }),
             Some((kind, description)) => {
                 let kind = RedisErrorKind::try_from(kind)?;
@@ -966,12 +985,12 @@ impl<'a> TryFrom<&'a [u8]> for RedisError {
 
                 Ok(Self {
                     kind,
-                    description: String::from_utf8_lossy(description).to_string(),
+                    description: Bytes::copy_from_slice(description),
                 })
             }
             None => Ok(Self {
                 kind: RedisErrorKind::Other,
-                description: String::from_utf8_lossy(error).to_string(),
+                description: Bytes::copy_from_slice(error),
             }),
         }
     }
@@ -979,6 +998,6 @@ impl<'a> TryFrom<&'a [u8]> for RedisError {
 
 impl Display for RedisError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("{} {}", self.kind, self.description))
+        f.write_fmt(format_args!("{} {}", self.kind, self.description()))
     }
 }

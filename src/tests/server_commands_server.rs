@@ -1290,7 +1290,7 @@ async fn shutdown_abort() -> Result<()> {
     let ErrorKind::Redis(e) = error.kind() else {
         panic!("expected the server to report that nothing is shutting down: {error:?}");
     };
-    assert!(e.description.contains("No shutdown in progress"));
+    assert!(e.description().contains("No shutdown in progress"));
 
     client.ping::<()>(()).await?;
 

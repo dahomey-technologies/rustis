@@ -65,6 +65,13 @@ The upgrade checklist. Each item is stated in the section it belongs to below.
   forms (`key_with_count` and the stepped variants) are unchanged and may still
   declare zero keys, as `EVAL` does.
 
+- **`RedisError::description` is a method, not a field, and the bytes are kept.** A
+  server error reply is bytes and can echo a key or an argument, which
+  `String::from_utf8_lossy` used to mangle on the way in.
+  `RedisError::description()` answers a `Cow<str>` with the same lossy reading, and
+  `RedisError::description_bytes()` answers the exact bytes. `kind` stays a public
+  field.
+
 - **`Client::close` returns `CloseOutcome` instead of `()`.** A connection is shared
   by every clone of a client, so a `close` that finds a clone alive shuts nothing down
   and used to report that as `Ok(())`. `CloseOutcome::Closed` and `StillShared` now

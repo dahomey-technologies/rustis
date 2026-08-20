@@ -1106,10 +1106,12 @@ async fn hset_struct_with_unskipped_none_is_rejected() -> Result<()> {
 
     assert!(matches!(
         result.unwrap_err().kind(),
-        ErrorKind::Redis(RedisError {
-            kind: RedisErrorKind::Err,
-            description
-        }) if description.contains("wrong number of arguments")
+        ErrorKind::Redis(
+            redis @ RedisError {
+                kind: RedisErrorKind::Err,
+                ..
+            },
+        ) if redis.description().contains("wrong number of arguments")
     ));
 
     Ok(())

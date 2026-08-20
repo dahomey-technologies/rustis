@@ -12,7 +12,7 @@
 //! its own answers, so the whole reassembly can be driven from a value built in
 //! a test.
 
-use super::cluster_connection::NodeId;
+use super::cluster_topology::NodeId;
 use crate::{
     ClientError, Error, ErrorKind, RedisError, RedisErrorKind, Result, RetryReason,
     commands::ResponsePolicy,
@@ -28,6 +28,19 @@ pub(super) struct SubRequest {
     pub node_id: NodeId,
     pub keys: SmallVec<[Bytes; 10]>,
     pub result: Option<Option<Result<RespResponse>>>,
+}
+
+impl SubRequest {
+    /// A sub-request of a command that names no key, so nothing of the reply has
+    /// to be lined up against one: a broadcast, or a command routed by its
+    /// channel rather than by a slot.
+    pub(super) fn keyless(node_id: NodeId) -> Self {
+        Self {
+            node_id,
+            keys: SmallVec::new(),
+            result: None,
+        }
+    }
 }
 
 #[derive(Debug)]

@@ -1,4 +1,5 @@
 use super::cluster_request::{RequestInfo, SubRequest, collect_redirections};
+use super::cluster_topology::{ClusterTopology, Node, NodeId, NodeReach, SlotRange};
 use super::pub_sub_push::PubSubPush;
 use crate::{
     ClientError, ConnectionState, Error, ErrorKind, Result, RetryReason, StandaloneConnection,
@@ -11,13 +12,10 @@ use crate::{
     resp::{ClientReplyMode, Command, CommandBuilder, CommandKind, RespResponse, hash_slot},
 };
 use bytes::Bytes;
-use futures_util::{FutureExt, future};
-use rand::RngExt;
 use smallvec::{SmallVec, smallvec};
 use std::{
-    cmp::Ordering,
     collections::{HashSet, VecDeque},
-    fmt::{Debug, Formatter},
+    fmt::Debug,
     sync::Arc,
     task::Poll,
     time::Duration,
@@ -118,74 +116,6 @@ impl ClusterTestHook {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
-#[repr(transparent)]
-pub(super) struct NodeId(Arc<str>);
-
-impl From<&str> for NodeId {
-    fn from(value: &str) -> Self {
-        Self(Arc::from(value))
-    }
-}
-
-impl AsRef<str> for NodeId {
-    fn as_ref(&self) -> &str {
-        self.0.as_ref()
-    }
-}
-
-struct Node {
-    pub id: NodeId,
-    pub is_master: bool,
-    pub address: (String, u16),
-    pub connection: StandaloneConnection,
-    pub is_dirty: bool,
-}
-
-impl Node {
-    /// `reply_skip` is a held-back `CLIENT REPLY SKIP`, emitted on this node right
-    /// before the command it silences.
-    ///
-    /// It has to travel with the command rather than being routed on its own: it
-    /// suppresses the reply of whatever the node receives next, so sending it to a
-    /// node the command never reaches would leave that node swallowing the reply of
-    /// some unrelated later command.
-    pub(crate) async fn feed(
-        &mut self,
-        command: &Command,
-        reply_skip: Option<&Command>,
-    ) -> Result<()> {
-        if let Some(reply_skip) = reply_skip {
-            self.connection.feed(reply_skip, &[]).await?;
-        }
-        self.connection.feed(command, &[]).await?;
-        self.is_dirty = true;
-        Ok(())
-    }
-}
-
-impl Debug for Node {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Node")
-            .field("id", &self.id)
-            .field("is_master", &self.is_master)
-            .field("tag", &self.connection.tag())
-            .finish()
-    }
-}
-
-#[derive(Debug)]
-struct SlotRange {
-    pub slot_range: (u16, u16),
-    /// node ids of the shard that owns the slot range,
-    /// the first node id being the master node id
-    pub node_ids: SmallVec<[NodeId; 6]>,
-    /// Round-robin cursor over the replicas of the shard, used when the read
-    /// preference sends read-only commands to them. It only has to advance, so
-    /// it wraps freely: the candidate is picked modulo the replica count.
-    pub next_replica: usize,
-}
-
 /// A subscription command is acknowledged by a push frame, not by an ordinary
 /// reply: `read` hands it to the network handler, which matches it against the
 /// caller itself. Nothing therefore ever fills the sub-request the connection
@@ -252,15 +182,17 @@ impl ClusterNodeResult {
     }
 }
 
-/// Cluster connection
-/// read & write_batch functions are implemented following Redis Command Tips
-/// See <https://redis.io/docs/reference/command-tips/>
 /// `interval` from now, capped rather than overflowing the monotonic clock.
 fn deadline_after(interval: Duration) -> Instant {
     let now = Instant::now();
     now.checked_add(interval).unwrap_or(now)
 }
 
+/// Cluster connection.
+///
+/// `feed` and `read` route a command by the Redis command tips — a request
+/// policy says which nodes it reaches, a response policy says how their replies
+/// become one. See <https://redis.io/docs/reference/command-tips/>.
 pub(crate) struct ClusterConnection {
     cluster_config: ClusterConfig,
     config: Config,
@@ -272,8 +204,7 @@ pub(crate) struct ClusterConnection {
     /// `select!` over its other fields. Those nodes must still reach the state their
     /// siblings are in before anything is sent on them, and this is what lets them.
     state_snapshot: ConnectionState,
-    nodes: Vec<Node>,
-    slot_ranges: Vec<SlotRange>,
+    topology: ClusterTopology,
     pending_requests: VecDeque<RequestInfo>,
     /// Sub-requests re-armed by a partial redirection, awaiting the next `read`
     /// to be sent.
@@ -316,20 +247,18 @@ impl ClusterConnection {
         config: &Config,
         connection_state: &mut ConnectionState,
     ) -> Result<ClusterConnection> {
-        let (mut nodes, slot_ranges) =
-            Self::connect_to_cluster(cluster_config, config, connection_state).await?;
-        let first_node = nodes
-            .get_mut(0)
-            .ok_or_else(|| Error::from(ClientError::ClusterConfig))?;
-
-        let tag = first_node.connection.tag();
+        let topology = Self::connect_to_cluster(cluster_config, config, connection_state).await?;
+        let tag = topology
+            .node(0)
+            .ok_or_else(|| Error::from(ClientError::ClusterConfig))?
+            .connection
+            .tag();
 
         let mut cluster_connection = ClusterConnection {
             cluster_config: cluster_config.clone(),
             config: config.clone(),
             state_snapshot: connection_state.clone(),
-            nodes,
-            slot_ranges,
+            topology,
             pending_requests: VecDeque::new(),
             pending_redirections: Vec::new(),
             tag,
@@ -475,9 +404,9 @@ impl ClusterConnection {
         // outright, where the cluster spec requires the redirection to be
         // followed. Reload the topology so the target becomes reachable.
         if !self.refreshed_in_current_batch
-            && ask_reasons.iter().any(|(_hash_slot, address)| {
-                !self.nodes.iter().any(|node| node.address == *address)
-            })
+            && ask_reasons
+                .iter()
+                .any(|(_hash_slot, address)| !self.topology.holds_address(address))
         {
             self.refreshed_in_current_batch = true;
             self.refresh_nodes_and_slot_ranges().await?;
@@ -573,39 +502,21 @@ impl ClusterConnection {
         self.refreshed_in_current_batch = false;
         self.delayed_in_current_batch = false;
 
-        let mut flush_futures = SmallVec::<[_; 16]>::new();
-
-        for node in self.nodes.iter_mut() {
-            if node.is_dirty {
-                node.is_dirty = false;
-                flush_futures.push(node.connection.flush());
-            }
-        }
-
-        let results = future::join_all(flush_futures).await;
-
-        for res in results {
-            res?;
-        }
-
-        Ok(())
+        self.topology.flush_fed_nodes().await
     }
 
     /// The client should execute the command on all master shards (e.g., the DBSIZE command).
     /// This tip is in-use by commands that don't accept key name arguments.
     /// The command operates atomically per shard.
     async fn request_policy_all_shards(&mut self, command: &Command) -> Result<()> {
-        let mut sub_requests = SmallVec::<[SubRequest; 10]>::new();
         let reply_skip = self.pending_reply_skip.clone();
-
-        for node in self.nodes.iter_mut().filter(|n| n.is_master) {
-            node.feed(command, reply_skip.as_ref()).await?;
-            sub_requests.push(SubRequest {
-                node_id: node.id.clone(),
-                keys: smallvec![],
-                result: None,
-            });
-        }
+        let sub_requests = self
+            .topology
+            .feed_each(command, reply_skip.as_ref(), NodeReach::Masters)
+            .await?
+            .into_iter()
+            .map(SubRequest::keyless)
+            .collect();
 
         let request_info = RequestInfo {
             response_policy: command.response_policy(),
@@ -627,20 +538,17 @@ impl ClusterConnection {
     /// This tip is in-use by commands that don't accept key name arguments.
     /// The command operates atomically per shard.
     async fn request_policy_all_nodes(&mut self, command: &Command) -> Result<()> {
-        if self.nodes.iter().all(|n| n.is_master) {
+        if self.topology.holds_no_replica() {
             self.connect_replicas().await?;
         }
-        let mut sub_requests = SmallVec::<[SubRequest; 10]>::new();
         let reply_skip = self.pending_reply_skip.clone();
-
-        for node in self.nodes.iter_mut() {
-            node.feed(command, reply_skip.as_ref()).await?;
-            sub_requests.push(SubRequest {
-                node_id: node.id.clone(),
-                keys: smallvec![],
-                result: None,
-            });
-        }
+        let sub_requests = self
+            .topology
+            .feed_each(command, reply_skip.as_ref(), NodeReach::All)
+            .await?
+            .into_iter()
+            .map(SubRequest::keyless)
+            .collect();
 
         let request_info = RequestInfo {
             response_policy: command.response_policy(),
@@ -672,7 +580,8 @@ impl ClusterConnection {
             .filter_map(|(arg, is_key, slot)| {
                 is_key.then(|| {
                     let (node_index, should_ask) = self
-                        .get_node_index_by_slot(slot, ask_reasons, for_read)
+                        .topology
+                        .node_index_by_slot(slot, ask_reasons, for_read)
                         .ok_or_else(|| Error::from(ClientError::ClusterConfig))?;
                     Ok((node_index, slot, arg, should_ask))
                 })
@@ -699,8 +608,8 @@ impl ClusterConnection {
         // starts at a value no real index can equal. A node-less connection
         // cannot serve the non-empty work list above.
         let mut node = self
-            .nodes
-            .first_mut()
+            .topology
+            .node_mut(0)
             .ok_or_else(|| Error::from(ClientError::InconsistentRoutingState))?;
 
         for (node_index, slot, key, should_ask) in node_slot_keys_ask {
@@ -727,8 +636,8 @@ impl ClusterConnection {
 
             if node_index != last_node_index {
                 node = self
-                    .nodes
-                    .get_mut(node_index)
+                    .topology
+                    .node_mut(node_index)
                     .ok_or_else(|| Error::from(ClientError::InconsistentRoutingState))?;
                 last_node_index = node_index;
             }
@@ -782,7 +691,8 @@ impl ClusterConnection {
 
         for channel in command.args() {
             let (node_index, _should_ask) = self
-                .get_node_index_by_slot(hash_slot(&channel), &[], false)
+                .topology
+                .node_index_by_slot(hash_slot(&channel), &[], false)
                 .ok_or_else(|| Error::from(ClientError::ClusterConfig))?;
 
             match node_channels.iter_mut().find(|(i, _)| *i == node_index) {
@@ -804,15 +714,11 @@ impl ClusterConnection {
             let node_command: Command = builder.into();
 
             let node = self
-                .nodes
-                .get_mut(node_index)
+                .topology
+                .node_mut(node_index)
                 .ok_or_else(|| Error::from(ClientError::InconsistentRoutingState))?;
             node.feed(&node_command, reply_skip.as_ref()).await?;
-            sub_requests.push(SubRequest {
-                node_id: node.id.clone(),
-                keys: smallvec![],
-                result: None,
-            });
+            sub_requests.push(SubRequest::keyless(node.id.clone()));
         }
 
         let request_info = RequestInfo {
@@ -856,10 +762,12 @@ impl ClusterConnection {
                 );
             }
 
-            self.get_node_index_by_slot(first_slot, ask_reasons, for_read)
+            self.topology
+                .node_index_by_slot(first_slot, ask_reasons, for_read)
                 .ok_or_else(|| Error::from(ClientError::ClusterConfig))
         } else {
-            self.get_random_node_index()
+            self.topology
+                .random_node_index()
                 .map(|node_idx| (node_idx, false))
                 .ok_or_else(|| Error::from(ClientError::ClusterConfig))
         }
@@ -873,8 +781,8 @@ impl ClusterConnection {
     ) -> Result<()> {
         let reply_skip = self.pending_reply_skip.clone();
         let node = self
-            .nodes
-            .get_mut(node_idx)
+            .topology
+            .node_mut(node_idx)
             .ok_or_else(|| Error::from(ClientError::InconsistentRoutingState))?;
         if should_ask {
             node.connection.asking().await?;
@@ -928,11 +836,11 @@ impl ClusterConnection {
         };
 
         // Keep at least one node so the cluster stays usable.
-        if self.nodes.len() < 2 || !hook.take_drop_front_pending_node() {
+        if self.topology.node_count() < 2 || !hook.take_drop_front_pending_node() {
             return;
         }
 
-        self.nodes.retain(|node| node.id != victim);
+        self.topology.retain_nodes(|node| node.id != victim);
         debug!("test hook removed node {victim:?}");
     }
 
@@ -976,7 +884,7 @@ impl ClusterConnection {
         request_info
             .sub_requests
             .iter()
-            .any(|sr| sr.result.is_none() && self.get_node_index_by_id(&sr.node_id).is_none())
+            .any(|sr| sr.result.is_none() && self.topology.node_index_by_id(&sr.node_id).is_none())
     }
 
     pub(crate) async fn read(&mut self) -> Option<Result<RespResponse>> {
@@ -1014,32 +922,27 @@ impl ClusterConnection {
                 }
             }
 
-            // `select_all` panics on an empty set of futures. A node-less
-            // cluster connection cannot serve anything: report it as a
-            // disconnection so the handler reconnects and rediscovers the
-            // topology, rather than taking the whole network task down.
-            if self.nodes.is_empty() {
+            // A node-less cluster connection cannot serve anything: report it as
+            // a disconnection so the handler reconnects and rediscovers the
+            // topology.
+            let Some((node_idx, result)) = self.topology.read_any().await else {
                 warn!("No cluster node available to read from");
                 return None;
-            }
-
-            let read_futures = self.nodes.iter_mut().map(|n| n.connection.read().boxed());
-            let (result, node_idx, _) = future::select_all(read_futures).await;
+            };
 
             result.as_ref()?;
 
             if let Some(Ok(response)) = &result
                 && response.is_push()
             {
-                if let Some(node_id) = self.nodes.get(node_idx).map(|node| node.id.clone()) {
+                if let Some(node_id) = self.topology.node(node_idx).map(|node| node.id.clone()) {
                     self.retire_pub_sub_request(&node_id, response);
                 }
                 return result;
             }
 
-            // `select_all` reports the index of the future it resolved, so this
-            // always addresses a node we are holding.
-            let Some(node) = self.nodes.get(node_idx) else {
+            // The index names a node the topology just read from.
+            let Some(node) = self.topology.node(node_idx) else {
                 return Some(Err(Error::from(ClientError::InconsistentRoutingState)));
             };
             let node_id = &node.id;
@@ -1099,33 +1002,26 @@ impl ClusterConnection {
             }
 
             // See `read()`: a node-less connection cannot serve anything.
-            if self.nodes.is_empty() {
-                warn!("No cluster node available to read from");
-                return Poll::Ready(None);
-            }
-
-            let Some((node_idx, result)) =
-                self.nodes.iter_mut().enumerate().find_map(|(node_idx, n)| {
-                    match n.connection.try_read() {
-                        Poll::Ready(result) => Some((node_idx, result)),
-                        Poll::Pending => None,
-                    }
-                })
-            else {
-                return Poll::Pending;
+            let (node_idx, result) = match self.topology.try_read_any() {
+                Poll::Ready(Some(read)) => read,
+                Poll::Ready(None) => {
+                    warn!("No cluster node available to read from");
+                    return Poll::Ready(None);
+                }
+                Poll::Pending => return Poll::Pending,
             };
 
             if let Some(Ok(response)) = &result
                 && response.is_push()
             {
-                if let Some(node_id) = self.nodes.get(node_idx).map(|node| node.id.clone()) {
+                if let Some(node_id) = self.topology.node(node_idx).map(|node| node.id.clone()) {
                     self.retire_pub_sub_request(&node_id, response);
                 }
                 return Poll::Ready(result);
             }
 
-            // The index comes from the `enumerate` over `self.nodes` just above.
-            let Some(node) = self.nodes.get(node_idx) else {
+            // The index names a node the topology just read from.
+            let Some(node) = self.topology.node(node_idx) else {
                 return Poll::Ready(Some(Err(Error::from(
                     ClientError::InconsistentRoutingState,
                 ))));
@@ -1230,7 +1126,7 @@ impl ClusterConnection {
                 RetryReason::TryAgain { .. } => return false,
             };
 
-            let Some(node) = self.nodes.iter().find(|n| n.address == *address) else {
+            let Some(node) = self.topology.node_by_address(address) else {
                 return false;
             };
 
@@ -1282,14 +1178,14 @@ impl ClusterConnection {
             // A node that vanished in the meantime leaves the sub-request
             // unfulfilled; the orphan check at the top of `read` turns that into
             // a reported failure rather than an endless wait.
-            let Some(node_index) = self.get_node_index_by_id(&redirection.node_id) else {
+            let Some(node_index) = self.topology.node_index_by_id(&redirection.node_id) else {
                 warn!("Redirection target {:?} is gone", redirection.node_id);
                 continue;
             };
 
             let node = self
-                .nodes
-                .get_mut(node_index)
+                .topology
+                .node_mut(node_index)
                 .ok_or_else(|| Error::from(ClientError::InconsistentRoutingState))?;
             if redirection.should_ask {
                 node.connection.asking().await?;
@@ -1339,12 +1235,11 @@ impl ClusterConnection {
     pub(crate) async fn reconnect(&mut self, connection_state: &mut ConnectionState) -> Result<()> {
         info!("Reconnecting to cluster...");
         self.state_snapshot = connection_state.clone();
-        let (nodes, slot_ranges) =
+        let topology =
             Self::connect_to_cluster(&self.cluster_config, &self.config, connection_state).await?;
         info!("Reconnected to cluster!");
 
-        self.nodes = nodes;
-        self.slot_ranges = slot_ranges;
+        self.topology = topology;
 
         self.connect_replicas_for_reads().await;
 
@@ -1428,8 +1323,7 @@ impl ClusterConnection {
     /// Addresses to try for topology discovery: the nodes currently known,
     /// then the configured seeds as a fallback.
     fn discovery_addresses(&self) -> Vec<(String, u16)> {
-        let mut addresses: Vec<(String, u16)> =
-            self.nodes.iter().map(|node| node.address.clone()).collect();
+        let mut addresses = self.topology.addresses();
         addresses.extend(self.cluster_config.nodes.iter().cloned());
         addresses
     }
@@ -1438,7 +1332,7 @@ impl ClusterConnection {
         cluster_config: &ClusterConfig,
         config: &Config,
         connection_state: &mut ConnectionState,
-    ) -> Result<(Vec<Node>, Vec<SlotRange>)> {
+    ) -> Result<ClusterTopology> {
         #[cfg_attr(not(test), allow(unused_mut))]
         let Some(mut shard_info_list) = Self::discover_shards(&cluster_config.nodes, config).await
         else {
@@ -1453,8 +1347,7 @@ impl ClusterConnection {
             shard_info_list.retain(|s| !s.nodes.iter().any(|n| n.id == hidden_node_id));
         }
 
-        let mut nodes = Vec::<Node>::new();
-        let mut slot_ranges = Vec::<SlotRange>::new();
+        let mut topology = ClusterTopology::default();
 
         for shard_info in shard_info_list.into_iter() {
             let Some(master_info) = shard_info
@@ -1472,13 +1365,15 @@ impl ClusterConnection {
                 StandaloneConnection::connect(&master_info.ip, port, config, connection_state)
                     .await?;
 
-            slot_ranges.extend(shard_info.slots.iter().map(|s| SlotRange {
+            for slot_range in shard_info.slots.iter().map(|s| SlotRange {
                 slot_range: *s,
                 node_ids: smallvec![master_id.clone()],
                 next_replica: 0,
-            }));
+            }) {
+                topology.insert_slot_range(slot_range);
+            }
 
-            nodes.push(Node {
+            topology.insert_node(Node {
                 id: master_id.clone(),
                 is_master: true,
                 address: (master_info.ip, port),
@@ -1487,12 +1382,9 @@ impl ClusterConnection {
             });
         }
 
-        slot_ranges.sort_by_key(|s| s.slot_range.0);
-        nodes.sort_by(|n1, n2| n1.id.cmp(&n2.id));
+        debug!("Cluster connected: {topology:?}");
 
-        debug!("Cluster connected: nodes={nodes:?}, slot_ranges={slot_ranges:?}");
-
-        Ok((nodes, slot_ranges))
+        Ok(topology)
     }
 
     /// Puts a replica connection in `READONLY` mode, which is what makes the node
@@ -1557,7 +1449,8 @@ impl ClusterConnection {
                 connection.restore_from_snapshot(&self.state_snapshot).await;
 
                 for slot_range_info in &shard_info.slots {
-                    if let Some(slot_range) = self.get_slot_range_by_slot_mut(slot_range_info.0)
+                    if let Some(slot_range) =
+                        self.topology.slot_range_by_slot_mut(slot_range_info.0)
                         && slot_range.slot_range.1 == slot_range_info.1
                     {
                         slot_range.node_ids.push(node_id.clone())
@@ -1567,7 +1460,7 @@ impl ClusterConnection {
                 Self::set_replica_read_mode(&mut connection, self.cluster_config.read_preference)
                     .await;
 
-                self.nodes.push(Node {
+                self.topology.insert_node(Node {
                     id: node_id,
                     is_master: false,
                     address: (node_info.ip.clone(), port),
@@ -1577,12 +1470,7 @@ impl ClusterConnection {
             }
         }
 
-        self.nodes.sort_by(|n1, n2| n1.id.cmp(&n2.id));
-
-        debug!(
-            "Cluster replicas connected: nodes={:?}, slot_ranges={:?}",
-            self.nodes, self.slot_ranges
-        );
+        debug!("Cluster replicas connected: {:?}", self.topology);
 
         Ok(())
     }
@@ -1658,14 +1546,14 @@ impl ClusterConnection {
             .flat_map(|s| s.nodes.iter().map(|n| n.id.as_str()))
             .collect::<Vec<_>>();
         node_ids.sort();
-        self.nodes.retain(|node| {
+        self.topology.retain_nodes(|node| {
             node_ids
                 .binary_search_by(|n| (*n).cmp(node.id.as_ref()))
                 .is_ok()
         });
 
         // create slot_ranges from scratch
-        self.slot_ranges.clear();
+        self.topology.clear_slot_ranges();
 
         // add missing nodes and connect them
         for mut shard_info in shard_info_list {
@@ -1687,7 +1575,7 @@ impl ClusterConnection {
 
             // add slot_ranges
             for slot_range_info in &shard_info.slots {
-                self.slot_ranges.push(SlotRange {
+                self.topology.insert_slot_range(SlotRange {
                     slot_range: *slot_range_info,
                     node_ids: shard_info
                         .nodes
@@ -1700,7 +1588,7 @@ impl ClusterConnection {
 
             for node_info in shard_info.nodes {
                 let node_id: NodeId = node_info.id.as_str().into();
-                if let Some(node) = self.nodes.iter_mut().find(|n| n.id == node_id) {
+                if let Some(node) = self.topology.node_by_id_mut(&node_id) {
                     // refresh is_master flag in case a failover happened
                     let is_master = node_info.role == "master";
                     if is_master != node.is_master {
@@ -1736,7 +1624,7 @@ impl ClusterConnection {
                         .await;
                     }
 
-                    self.nodes.push(Node {
+                    self.topology.insert_node(Node {
                         id: node_id,
                         is_master: node_info.role == "master",
                         address: (node_info.ip, port),
@@ -1747,117 +1635,12 @@ impl ClusterConnection {
             }
         }
 
-        self.slot_ranges.sort_by_key(|s| s.slot_range.0);
-        self.nodes.sort_by(|n1, n2| n1.id.cmp(&n2.id));
-
-        debug!(
-            "Cluster new setup: nodes={:?}, slot_ranges={:?}",
-            self.nodes, self.slot_ranges
-        );
+        debug!("Cluster new setup: {:?}", self.topology);
 
         Ok(())
     }
 
     #[inline]
-    fn get_node_index_by_id(&self, id: &NodeId) -> Option<usize> {
-        self.nodes.binary_search_by_key(&id, |n| &n.id).ok()
-    }
-
-    #[inline]
-    fn get_random_node_index(&self) -> Option<usize> {
-        if self.nodes.is_empty() {
-            return None;
-        }
-        Some(rand::rng().random_range(0..self.nodes.len()))
-    }
-
-    #[inline]
-    fn get_slot_range_index(&self, slot: u16) -> Option<usize> {
-        self.slot_ranges
-            .binary_search_by(|s| {
-                if s.slot_range.0 > slot {
-                    Ordering::Greater
-                } else if s.slot_range.1 < slot {
-                    Ordering::Less
-                } else {
-                    Ordering::Equal
-                }
-            })
-            .ok()
-    }
-
-    #[inline]
-    fn get_slot_range_by_slot(&self, slot: u16) -> Option<&SlotRange> {
-        self.get_slot_range_index(slot)
-            .and_then(|idx| self.slot_ranges.get(idx))
-    }
-
-    #[inline]
-    fn get_slot_range_by_slot_mut(&mut self, slot: u16) -> Option<&mut SlotRange> {
-        self.get_slot_range_index(slot)
-            .and_then(|idx| self.slot_ranges.get_mut(idx))
-    }
-
-    /// The node a command addressing `slot` must be fed to, and whether it has to
-    /// be prefixed with an `ASKING`.
-    ///
-    /// `for_read` asks for the configured read preference to be honoured. It is
-    /// the caller's job to answer it only for a command that may legitimately
-    /// leave the master — see [`Self::may_read_from_replica`].
-    fn get_node_index_by_slot(
-        &mut self,
-        slot: u16,
-        ask_reasons: &[(u16, (String, u16))],
-        for_read: bool,
-    ) -> Option<(usize, bool)> {
-        let ask_reason = ask_reasons
-            .iter()
-            .find(|(hash_slot, (_ip, _port))| *hash_slot == slot);
-
-        // An ASK names the node itself: the redirection is the routing decision,
-        // and the read preference has nothing to say about it.
-        if let Some((_hash_slot, address)) = ask_reason {
-            let node_index = self.nodes.iter().position(|n| n.address == *address)?;
-            return Some((node_index, true));
-        }
-
-        if for_read && let Some(node_index) = self.get_replica_node_index_by_slot(slot) {
-            return Some((node_index, false));
-        }
-
-        let slot_range = self.get_slot_range_by_slot(slot)?;
-        // A slot range names its master first; one with no node routes nowhere.
-        let master_node_id = slot_range.node_ids.first()?;
-        let node_index = self.get_node_index_by_id(master_node_id)?;
-        Some((node_index, false))
-    }
-
-    /// The next replica of the shard owning `slot`, or `None` when the shard has
-    /// no connected one — in which case the caller falls back to the master
-    /// rather than failing the command.
-    fn get_replica_node_index_by_slot(&mut self, slot: u16) -> Option<usize> {
-        let slot_range_index = self.get_slot_range_index(slot)?;
-        let slot_range = self.slot_ranges.get(slot_range_index)?;
-
-        // The master heads the list; everything after it is a replica.
-        let replica_ids: SmallVec<[NodeId; 6]> =
-            slot_range.node_ids.iter().skip(1).cloned().collect();
-        if replica_ids.is_empty() {
-            return None;
-        }
-
-        let mut cursor = slot_range.next_replica;
-        let node_index = select_replica(&replica_ids, &mut cursor, |id| {
-            self.get_node_index_by_id(id)
-        })?;
-
-        if let Some(slot_range) = self.slot_ranges.get_mut(slot_range_index) {
-            slot_range.next_replica = cursor;
-        }
-
-        Some(node_index)
-    }
-
     /// Whether `command` may be served by a replica: the preference asks for it,
     /// the command only reads, and it is not part of a block that belongs to a
     /// single node.
@@ -1967,92 +1750,4 @@ pub(crate) fn prepare_command_for_shard(command: &Command, shard_keys: &[Bytes])
     }
 
     shard_command.into()
-}
-
-/// Picks the next replica of a shard, starting at `cursor` and advancing it past
-/// the one returned.
-///
-/// A replica the topology names may not be connected yet — `AllNodes` is what
-/// brings them in when the read preference does not. The whole list is walked
-/// from the cursor so a hole does not pin every read of the shard on one node,
-/// and `None` — no replica reachable at all — sends the read back to the master.
-fn select_replica(
-    replica_ids: &[NodeId],
-    cursor: &mut usize,
-    resolve: impl Fn(&NodeId) -> Option<usize>,
-) -> Option<usize> {
-    if replica_ids.is_empty() {
-        return None;
-    }
-
-    for offset in 0..replica_ids.len() {
-        let position = cursor.wrapping_add(offset);
-        let candidate = replica_ids.get(position.checked_rem(replica_ids.len())?)?;
-        if let Some(node_index) = resolve(candidate) {
-            *cursor = position.wrapping_add(1);
-            return Some(node_index);
-        }
-    }
-
-    None
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{NodeId, select_replica};
-
-    /// Reads of a shard must be spread over its replicas, not pinned on the
-    /// first one: a preference that always answered the same node would move
-    /// the load instead of sharing it.
-    #[test]
-    fn replicas_are_picked_in_round_robin() {
-        let replicas: Vec<NodeId> = vec!["r1".into(), "r2".into(), "r3".into()];
-        let mut cursor = 0;
-
-        let picks = (0..6)
-            .map(|_| {
-                select_replica(&replicas, &mut cursor, |id| match id.as_ref() {
-                    "r1" => Some(10),
-                    "r2" => Some(20),
-                    "r3" => Some(30),
-                    _ => None,
-                })
-            })
-            .collect::<Vec<_>>();
-
-        assert_eq!(
-            vec![Some(10), Some(20), Some(30), Some(10), Some(20), Some(30)],
-            picks
-        );
-    }
-
-    /// A replica the topology names but nothing has connected yet must be
-    /// stepped over, otherwise every read of the shard falls back to the master
-    /// one time out of two.
-    #[test]
-    fn an_unconnected_replica_is_skipped() {
-        let replicas: Vec<NodeId> = vec!["r1".into(), "r2".into()];
-        let mut cursor = 0;
-
-        let picks = (0..3)
-            .map(|_| {
-                select_replica(&replicas, &mut cursor, |id| {
-                    (id.as_ref() == "r2").then_some(20)
-                })
-            })
-            .collect::<Vec<_>>();
-
-        assert_eq!(vec![Some(20), Some(20), Some(20)], picks);
-    }
-
-    /// A shard with no reachable replica is not a routing failure: the read goes
-    /// to the master, which is what the caller would have got anyway.
-    #[test]
-    fn a_shard_without_a_reachable_replica_selects_nothing() {
-        let mut cursor = 0;
-        assert_eq!(None, select_replica(&[], &mut cursor, |_| Some(0)));
-
-        let replicas: Vec<NodeId> = vec!["r1".into()];
-        assert_eq!(None, select_replica(&replicas, &mut cursor, |_| None));
-    }
 }

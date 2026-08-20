@@ -255,6 +255,23 @@ does not parse, is rejected with an error rather than ignored.
 * [`retry_on_error`](Config::retry_on_error) - Defines the default strategy for retries on network error (default `false`).
 * [`max_command_attempts`](Config::max_command_attempts) - Maximum number of times a command is sent
   before giving up (default `5`).
+* [`buffers.read_capacity`](BufferConfig::read_capacity), [`buffers.tape_capacity`](BufferConfig::tape_capacity),
+  [`buffers.shrink_factor`](BufferConfig::shrink_factor), [`buffers.shrink_hysteresis`](BufferConfig::shrink_hysteresis) -
+  Sizing and recycling policy of the connection's buffers, one parameter per field of [`BufferConfig`].
+* [`backpressure.max_queued_bytes`](BackpressureConfig::max_queued_bytes),
+  [`backpressure.max_pubsub_bytes`](BackpressureConfig::max_pubsub_bytes),
+  [`backpressure.max_push_bytes`](BackpressureConfig::max_push_bytes) - Memory budgets, in bytes,
+  `0` to disable one.
+* [`limits.max_nesting_depth`](RespLimits::max_nesting_depth), [`limits.max_bulk_length`](RespLimits::max_bulk_length),
+  [`limits.max_collection_length`](RespLimits::max_collection_length) - What the RESP parser accepts
+  from the server.
+* [`reconnection`](Config::reconnection) - The reconnection policy: `constant`, `linear` or `exponential`.
+  Its fields follow, each one spelled `reconnection.<field>`: `max_attempts` (default `0`, retry forever)
+  and `jitter` (default `100` ms) on all three, `delay` (default `1000` ms) on `constant`, `delay` and
+  `max_delay` on `linear`, `min_delay`, `max_delay` and `multiplicative_factor` on `exponential`.
+  A field the policy does not carry is rejected, and the ones with no default are required: `max_delay`
+  clamps the delay, so a policy given none would reconnect with no backoff at all.
+  [`ReconnectionConfig::Custom`] is Rust code and has no URL spelling.
 * [`read_preference`](ClusterConfig::read_preference) - (Cluster only) Which node of a shard reads
   are routed to (default `master`).
 * [`topology_refresh_interval`](ClusterConfig::topology_refresh_interval) - (Cluster only) How often

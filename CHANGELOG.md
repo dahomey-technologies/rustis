@@ -69,6 +69,14 @@ The upgrade checklist. Each item is stated in the section it belongs to below.
 
 ### Added
 
+- **Every tuning knob is now addressable in a URL.** `buffers`, `backpressure` and
+  `limits` take one query parameter per field, named after it — `buffers.read_capacity`,
+  `backpressure.max_queued_bytes`, `limits.max_bulk_length`. `reconnection` names the
+  policy, `constant`, `linear` or `exponential`, and `reconnection.delay` and its
+  siblings shape it; a field the policy does not carry is rejected rather than dropped.
+  `Display` writes them back, `max_command_attempts` included, so a config round-trips
+  through its URL.
+
 - **A Sentinel failover is now noticed before a command fails.** The client subscribes
   to `+switch-master` and rediscovers the master when a Sentinel announces one, and
   polls the fleet every `SentinelConfig::master_check_interval` (default 10 s) to cover

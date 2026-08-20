@@ -309,6 +309,18 @@ impl Default for RespLimits {
     }
 }
 
+/// Appends one query parameter to a URI being written, opening the query with a
+/// `?` for the first one and separating the next ones with `&`.
+fn write_query_param(
+    f: &mut fmt::Formatter,
+    query_separator: &mut bool,
+    param: fmt::Arguments,
+) -> fmt::Result {
+    f.write_char(if *query_separator { '&' } else { '?' })?;
+    *query_separator = true;
+    f.write_fmt(param)
+}
+
 #[inline]
 fn invalid_config(message: &'static str) -> Error {
     Error::from(ClientError::InvalidConfig(message))
@@ -328,11 +340,10 @@ type Uri<'a> = (
 ///
 /// # Loading from a configuration file
 ///
-/// `Config` is [`Serialize`] and [`Deserialize`], which is the only way to set
-/// [`buffers`](Self::buffers), [`backpressure`](Self::backpressure),
-/// [`limits`](Self::limits) and [`reconnection`](Self::reconnection): a URI
-/// cannot express them. An absent field takes its default, so a file names only
-/// what it changes. [`Duration`] follows serde's own form, a `secs`/`nanos` pair.
+/// `Config` is [`Serialize`] and [`Deserialize`]. An absent field takes its
+/// default, so a file names only what it changes, and [`Duration`] follows
+/// serde's own form, a `secs`/`nanos` pair. A file keeps the shape of the
+/// structs, where a URI flattens them into `buffers.read_capacity` and the like.
 ///
 /// Three fields carry Rust code and are skipped both ways:
 /// [`credentials_provider`](Self::credentials_provider), `tls_config` and
@@ -933,6 +944,9 @@ impl Config {
             config.max_command_attempts = max_command_attempts;
         }
 
+        Self::apply_tuning_params(config, query)?;
+        Self::apply_reconnection_params(config, query)?;
+
         // Whatever is left is a key this client does not know: a typo, or a
         // knob borrowed from another server type. Dropping it silently leaves
         // the default in place behind the caller's back.
@@ -943,6 +957,131 @@ impl Config {
         }
 
         Ok(())
+    }
+
+    /// Reads the knobs held by [`BufferConfig`], [`BackpressureConfig`] and
+    /// [`RespLimits`], each spelled `<struct>.<field>` after the field it sets.
+    fn apply_tuning_params(config: &mut Config, query: &mut HashMap<String, String>) -> Result<()> {
+        if let Some(value) = Self::take_query_param(query, "buffers.read_capacity")? {
+            config.buffers.read_capacity = value;
+        }
+        if let Some(value) = Self::take_query_param(query, "buffers.tape_capacity")? {
+            config.buffers.tape_capacity = value;
+        }
+        if let Some(value) = Self::take_query_param(query, "buffers.shrink_factor")? {
+            config.buffers.shrink_factor = value;
+        }
+        if let Some(value) = Self::take_query_param(query, "buffers.shrink_hysteresis")? {
+            config.buffers.shrink_hysteresis = value;
+        }
+
+        if let Some(value) = Self::take_query_param(query, "backpressure.max_queued_bytes")? {
+            config.backpressure.max_queued_bytes = value;
+        }
+        if let Some(value) = Self::take_query_param(query, "backpressure.max_pubsub_bytes")? {
+            config.backpressure.max_pubsub_bytes = value;
+        }
+        if let Some(value) = Self::take_query_param(query, "backpressure.max_push_bytes")? {
+            config.backpressure.max_push_bytes = value;
+        }
+
+        if let Some(value) = Self::take_query_param(query, "limits.max_nesting_depth")? {
+            config.limits.max_nesting_depth = value;
+        }
+        if let Some(value) = Self::take_query_param(query, "limits.max_bulk_length")? {
+            config.limits.max_bulk_length = value;
+        }
+        if let Some(value) = Self::take_query_param(query, "limits.max_collection_length")? {
+            config.limits.max_collection_length = value;
+        }
+
+        Ok(())
+    }
+
+    /// Reads the `reconnection` policy and the `reconnection.*` fields shaping
+    /// it.
+    ///
+    /// A field belongs to the policy that carries it, so `max_delay` on a
+    /// constant policy is rejected rather than dropped. The fields with no
+    /// sensible default are required: `max_delay` clamps the delay, so a linear
+    /// or exponential policy given none would reconnect with no backoff at all.
+    fn apply_reconnection_params(
+        config: &mut Config,
+        query: &mut HashMap<String, String>,
+    ) -> Result<()> {
+        let Some(policy) = query.remove("reconnection") else {
+            return match Self::leftover_reconnection_field(query) {
+                Some(name) => Err(Self::invalid_uri(format!(
+                    "query parameter `{name}` needs `reconnection` to name the policy"
+                ))),
+                None => Ok(()),
+            };
+        };
+
+        let max_attempts = Self::take_query_param(query, "reconnection.max_attempts")?.unwrap_or(0);
+
+        let mut reconnection = match policy.as_str() {
+            "constant" => ReconnectionConfig::new_constant(
+                max_attempts,
+                Self::take_query_param(query, "reconnection.delay")?.unwrap_or(DEFAULT_DELAY_MS),
+            ),
+            "linear" => ReconnectionConfig::new_linear(
+                max_attempts,
+                Self::required_reconnection_param(query, &policy, "max_delay")?,
+                Self::required_reconnection_param(query, &policy, "delay")?,
+            ),
+            "exponential" => ReconnectionConfig::new_exponential(
+                max_attempts,
+                Self::required_reconnection_param(query, &policy, "min_delay")?,
+                Self::required_reconnection_param(query, &policy, "max_delay")?,
+                Self::required_reconnection_param(query, &policy, "multiplicative_factor")?,
+            ),
+            _ => {
+                return Err(Self::invalid_uri(format!(
+                    "unknown reconnection policy `{policy}`, expected `constant`, `linear` or \
+                     `exponential`"
+                )));
+            }
+        };
+
+        if let Some(jitter) = Self::take_query_param(query, "reconnection.jitter")? {
+            reconnection.set_jitter(jitter);
+        }
+
+        if let Some(name) = Self::leftover_reconnection_field(query) {
+            return Err(Self::invalid_uri(format!(
+                "query parameter `{name}` does not apply to the `{policy}` reconnection policy"
+            )));
+        }
+
+        config.reconnection = reconnection;
+
+        Ok(())
+    }
+
+    /// Takes a `reconnection.<name>` the policy cannot do without, reporting an
+    /// error naming it when the URI leaves it out.
+    fn required_reconnection_param(
+        query: &mut HashMap<String, String>,
+        policy: &str,
+        name: &str,
+    ) -> Result<u32> {
+        let key = format!("reconnection.{name}");
+        match Self::take_query_param(query, &key)? {
+            Some(value) => Ok(value),
+            None => Err(Self::invalid_uri(format!(
+                "the `{policy}` reconnection policy needs the query parameter `{key}`"
+            ))),
+        }
+    }
+
+    /// The first `reconnection.*` key the policy did not take, in name order so
+    /// the error is the same whatever the map's iteration order.
+    fn leftover_reconnection_field(query: &HashMap<String, String>) -> Option<&String> {
+        query
+            .keys()
+            .filter(|name| name.starts_with("reconnection."))
+            .min()
     }
 
     /// Parses what follows the scheme of a `unix://` URI: an absolute socket
@@ -1286,6 +1425,150 @@ impl Display for Config {
                 f.write_char('&')?;
             }
             f.write_fmt(format_args!("retry_on_error={}", self.retry_on_error))?;
+        }
+
+        if self.max_command_attempts != DEFAULT_MAX_COMMAND_ATTEMPTS {
+            write_query_param(
+                f,
+                &mut query_separator,
+                format_args!("max_command_attempts={}", self.max_command_attempts),
+            )?;
+        }
+
+        let BufferConfig {
+            read_capacity,
+            tape_capacity,
+            shrink_factor,
+            shrink_hysteresis,
+        } = self.buffers;
+        let defaults = BufferConfig::DEFAULT;
+        for (name, value, default) in [
+            ("read_capacity", read_capacity, defaults.read_capacity),
+            ("tape_capacity", tape_capacity, defaults.tape_capacity),
+            ("shrink_factor", shrink_factor, defaults.shrink_factor),
+            (
+                "shrink_hysteresis",
+                shrink_hysteresis,
+                defaults.shrink_hysteresis,
+            ),
+        ] {
+            if value != default {
+                write_query_param(
+                    f,
+                    &mut query_separator,
+                    format_args!("buffers.{name}={value}"),
+                )?;
+            }
+        }
+
+        let BackpressureConfig {
+            max_queued_bytes,
+            max_pubsub_bytes,
+            max_push_bytes,
+        } = self.backpressure;
+        let defaults = BackpressureConfig::DEFAULT;
+        for (name, value, default) in [
+            (
+                "max_queued_bytes",
+                max_queued_bytes,
+                defaults.max_queued_bytes,
+            ),
+            (
+                "max_pubsub_bytes",
+                max_pubsub_bytes,
+                defaults.max_pubsub_bytes,
+            ),
+            ("max_push_bytes", max_push_bytes, defaults.max_push_bytes),
+        ] {
+            if value != default {
+                write_query_param(
+                    f,
+                    &mut query_separator,
+                    format_args!("backpressure.{name}={value}"),
+                )?;
+            }
+        }
+
+        let RespLimits {
+            max_nesting_depth,
+            max_bulk_length,
+            max_collection_length,
+        } = self.limits;
+        let defaults = RespLimits::DEFAULT;
+        for (name, value, default) in [
+            (
+                "max_nesting_depth",
+                max_nesting_depth,
+                defaults.max_nesting_depth,
+            ),
+            ("max_bulk_length", max_bulk_length, defaults.max_bulk_length),
+            (
+                "max_collection_length",
+                max_collection_length,
+                defaults.max_collection_length,
+            ),
+        ] {
+            if value != default {
+                write_query_param(
+                    f,
+                    &mut query_separator,
+                    format_args!("limits.{name}={value}"),
+                )?;
+            }
+        }
+
+        // A policy other than the default is written out in full, fields the URI
+        // left implicit included: a reader restores it from the URI alone rather
+        // than from its own defaults.
+        match &self.reconnection {
+            ReconnectionConfig::Constant {
+                max_attempts,
+                delay,
+                jitter,
+            } => {
+                if (*max_attempts, *delay, *jitter) != (0, DEFAULT_DELAY_MS, DEFAULT_JITTER_MS) {
+                    write_query_param(
+                        f,
+                        &mut query_separator,
+                        format_args!(
+                            "reconnection=constant&reconnection.max_attempts={max_attempts}\
+                             &reconnection.delay={delay}&reconnection.jitter={jitter}"
+                        ),
+                    )?;
+                }
+            }
+            ReconnectionConfig::Linear {
+                max_attempts,
+                max_delay,
+                delay,
+                jitter,
+            } => write_query_param(
+                f,
+                &mut query_separator,
+                format_args!(
+                    "reconnection=linear&reconnection.max_attempts={max_attempts}\
+                     &reconnection.delay={delay}&reconnection.max_delay={max_delay}\
+                     &reconnection.jitter={jitter}"
+                ),
+            )?,
+            ReconnectionConfig::Exponential {
+                max_attempts,
+                min_delay,
+                max_delay,
+                multiplicative_factor,
+                jitter,
+            } => write_query_param(
+                f,
+                &mut query_separator,
+                format_args!(
+                    "reconnection=exponential&reconnection.max_attempts={max_attempts}\
+                     &reconnection.min_delay={min_delay}&reconnection.max_delay={max_delay}\
+                     &reconnection.multiplicative_factor={multiplicative_factor}\
+                     &reconnection.jitter={jitter}"
+                ),
+            )?,
+            // a policy of Rust code has no URI representation
+            ReconnectionConfig::Custom(_) => {}
         }
 
         if let ServerConfig::Cluster(ClusterConfig {

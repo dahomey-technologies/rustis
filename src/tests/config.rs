@@ -341,6 +341,52 @@ fn into_config() -> Result<()> {
             .to_string()
     );
     assert_eq!(
+        "redis://127.0.0.1?max_command_attempts=2",
+        "redis://127.0.0.1?max_command_attempts=2"
+            .into_config()?
+            .to_string()
+    );
+    // a knob left at its default is implicit in the URL, whichever struct holds it
+    assert_eq!(
+        "redis://127.0.0.1",
+        "redis://127.0.0.1?buffers.shrink_factor=8&limits.max_nesting_depth=128"
+            .into_config()?
+            .to_string()
+    );
+    assert_eq!(
+        "redis://127.0.0.1?buffers.read_capacity=1024&backpressure.max_push_bytes=0&limits.max_bulk_length=1048576",
+        "redis://127.0.0.1?buffers.read_capacity=1024&backpressure.max_push_bytes=0&limits.max_bulk_length=1048576"
+            .into_config()?
+            .to_string()
+    );
+    // the default policy is implicit, any other one is written out in full so it
+    // survives the round trip whatever the reader's defaults are
+    assert_eq!(
+        "redis://127.0.0.1",
+        "redis://127.0.0.1?reconnection=constant"
+            .into_config()?
+            .to_string()
+    );
+    assert_eq!(
+        "redis://127.0.0.1?reconnection=constant&reconnection.max_attempts=3&reconnection.delay=1000&reconnection.jitter=100",
+        "redis://127.0.0.1?reconnection=constant&reconnection.max_attempts=3"
+            .into_config()?
+            .to_string()
+    );
+    assert_eq!(
+        "redis://127.0.0.1?reconnection=linear&reconnection.max_attempts=0&reconnection.delay=100&reconnection.max_delay=5000&reconnection.jitter=100",
+        "redis://127.0.0.1?reconnection=linear&reconnection.delay=100&reconnection.max_delay=5000"
+            .into_config()?
+            .to_string()
+    );
+    assert_eq!(
+        "redis://127.0.0.1?reconnection=exponential&reconnection.max_attempts=0&reconnection.min_delay=50&reconnection.max_delay=10000&reconnection.multiplicative_factor=2&reconnection.jitter=100",
+        "redis://127.0.0.1?reconnection=exponential&reconnection.min_delay=50&reconnection.max_delay=10000&reconnection.multiplicative_factor=2"
+            .into_config()?
+            .to_string()
+    );
+
+    assert_eq!(
         "redis+sentinel://127.0.0.1:6379,127.0.0.1:6380,127.0.0.1:6381/myservice/1",
         "redis+sentinel://127.0.0.1:6379,127.0.0.1:6380,127.0.0.1:6381/myservice/1"
             .into_config()?
@@ -476,8 +522,10 @@ fn an_unknown_query_parameter_is_rejected() {
     for uri in [
         "redis://127.0.0.1?param=value",
         "redis://127.0.0.1?commandtimeout=5000",
-        "redis://127.0.0.1?reconnection=constant",
         "redis://127.0.0.1?command_timeout=5000&read_timeout=5000",
+        // a knob is addressed by the field it sets, not by the struct alone
+        "redis://127.0.0.1?buffers=1024",
+        "redis://127.0.0.1?limits.max_bulk_len=1024",
         "redis+sentinel://127.0.0.1:6379/myservice?sentinel_user=foo",
         "redis+cluster://127.0.0.1:6379?sentinel_username=foo",
         // a read preference only means something to a cluster client
@@ -632,9 +680,9 @@ fn validate_names_the_offending_knob() {
 
 #[cfg(feature = "json")]
 #[test]
-fn a_config_file_sets_the_knobs_no_uri_can_express() {
-    // `backpressure`, `buffers`, `limits` and `reconnection` have no URI spelling,
-    // so deserialization is the only way to configure them from a file.
+fn a_config_file_sets_every_knob() {
+    // A file names the knobs in the shape of the structs holding them, where a
+    // URI flattens them into `backpressure.max_queued_bytes` and the like.
     let config: Config = serde_json::from_str(
         r#"{
             "server": { "Standalone": { "host": "example.com", "port": 6380 } },
@@ -688,4 +736,127 @@ fn a_serialized_config_round_trips() {
     assert_eq!(config.connection_name, back.connection_name);
     assert_eq!(config.limits.max_bulk_length, back.limits.max_bulk_length);
     assert_eq!(format!("{:?}", config.server), format!("{:?}", back.server));
+}
+
+#[test]
+fn the_tuning_knobs_are_addressable_in_a_uri() -> Result<()> {
+    // Each key is named after the field it sets, so a URI reads like the struct
+    // it builds.
+    let config = "redis://127.0.0.1\
+        ?buffers.read_capacity=1024\
+        &buffers.tape_capacity=2048\
+        &buffers.shrink_factor=4\
+        &buffers.shrink_hysteresis=32\
+        &backpressure.max_queued_bytes=4096\
+        &backpressure.max_pubsub_bytes=8192\
+        &backpressure.max_push_bytes=0\
+        &limits.max_nesting_depth=16\
+        &limits.max_bulk_length=1048576\
+        &limits.max_collection_length=1000"
+        .into_config()?;
+
+    assert_eq!(1024, config.buffers.read_capacity);
+    assert_eq!(2048, config.buffers.tape_capacity);
+    assert_eq!(4, config.buffers.shrink_factor);
+    assert_eq!(32, config.buffers.shrink_hysteresis);
+    assert_eq!(4096, config.backpressure.max_queued_bytes);
+    assert_eq!(8192, config.backpressure.max_pubsub_bytes);
+    assert_eq!(0, config.backpressure.max_push_bytes);
+    assert_eq!(16, config.limits.max_nesting_depth);
+    assert_eq!(1048576, config.limits.max_bulk_length);
+    assert_eq!(1000, config.limits.max_collection_length);
+
+    Ok(())
+}
+
+#[test]
+fn a_reconnection_policy_is_addressable_in_a_uri() -> Result<()> {
+    let config = "redis://127.0.0.1?reconnection=constant".into_config()?;
+    assert!(matches!(
+        config.reconnection,
+        ReconnectionConfig::Constant {
+            max_attempts: 0,
+            delay: 1000,
+            jitter: 100
+        }
+    ));
+
+    let config =
+        "redis://127.0.0.1?reconnection=constant&reconnection.delay=250&reconnection.jitter=25&reconnection.max_attempts=3"
+            .into_config()?;
+    assert!(matches!(
+        config.reconnection,
+        ReconnectionConfig::Constant {
+            max_attempts: 3,
+            delay: 250,
+            jitter: 25
+        }
+    ));
+
+    let config =
+        "redis://127.0.0.1?reconnection=linear&reconnection.delay=100&reconnection.max_delay=5000"
+            .into_config()?;
+    assert!(matches!(
+        config.reconnection,
+        ReconnectionConfig::Linear {
+            max_attempts: 0,
+            max_delay: 5000,
+            delay: 100,
+            jitter: 100
+        }
+    ));
+
+    let config = "redis://127.0.0.1\
+        ?reconnection=exponential\
+        &reconnection.min_delay=50\
+        &reconnection.max_delay=10000\
+        &reconnection.multiplicative_factor=2"
+        .into_config()?;
+    assert!(matches!(
+        config.reconnection,
+        ReconnectionConfig::Exponential {
+            max_attempts: 0,
+            min_delay: 50,
+            max_delay: 10000,
+            multiplicative_factor: 2,
+            jitter: 100
+        }
+    ));
+
+    Ok(())
+}
+
+#[test]
+fn a_reconnection_uri_that_shapes_nothing_is_rejected() {
+    // `max_delay` clamps the delay, so a policy that needs one and is not given
+    // it would reconnect immediately and forever. And a field belonging to
+    // another policy shapes nothing at all.
+    for (uri, expected) in [
+        (
+            "redis://127.0.0.1?reconnection=linear&reconnection.delay=100",
+            "reconnection.max_delay",
+        ),
+        (
+            "redis://127.0.0.1?reconnection=exponential&reconnection.min_delay=50&reconnection.max_delay=1000",
+            "reconnection.multiplicative_factor",
+        ),
+        (
+            "redis://127.0.0.1?reconnection=constant&reconnection.max_delay=1000",
+            "reconnection.max_delay",
+        ),
+        (
+            "redis://127.0.0.1?reconnection.delay=100",
+            "reconnection.delay",
+        ),
+        ("redis://127.0.0.1?reconnection=quadratic", "quadratic"),
+    ] {
+        let error = uri.into_config().unwrap_err();
+        let ErrorKind::Client(ClientError::InvalidUri(message)) = error.kind() else {
+            panic!("`{uri}` should be rejected");
+        };
+        assert!(
+            message.contains(expected),
+            "`{uri}`: message `{message}` does not name `{expected}`"
+        );
+    }
 }

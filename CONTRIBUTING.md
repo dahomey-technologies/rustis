@@ -57,7 +57,10 @@ A hermetic test that still needs a server to talk to has one:
 * `cargo semver-checks` reports the public-API breaks a pull request introduces.
   It never fails the job: the report is there so each break becomes a deliberate
   `CHANGELOG.md` entry rather than a discovery made after publishing.
-* The four `cargo-fuzz` targets run weekly.
+* The four `cargo-fuzz` targets run weekly. They reach the parser through the
+  `fuzzing` feature, which exposes the same kind of internal entry points as
+  `bench` does through `resp::bench_support` and carries the same absence of a
+  stability guarantee: `cd fuzz && cargo +nightly fuzz run <target>`.
 
 **Never `--all-features`.** The two TLS runtimes are mutually exclusive and
 enabling both is a compile error; the CI feature sets are what to reproduce

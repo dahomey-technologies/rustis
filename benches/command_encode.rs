@@ -13,7 +13,7 @@
 
 use bytes::BytesMut;
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
-use rustis::resp::{Command, bench_encode_command, cmd};
+use rustis::resp::{Command, bench_support::bench_encode_command, cmd};
 use std::hint::black_box;
 
 /// A `SET bench:key <value>` command whose value is `payload_len` bytes.

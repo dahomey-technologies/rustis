@@ -40,6 +40,9 @@ server-tests = []
 # Marker features, carrying no dependency of their own: they gate the
 # `bench`-only module in the library and the `required-features` of the benchmark
 # and web-example targets, whose crates are plain dev dependencies.
+# `bench` exposes `resp::bench_support` to the benchmark crates. Not part of the
+# public API; no stability guarantee, which is why it is absent from the docs.rs
+# feature list below.
 bench = []
 # Exposes internal RESP parsing/deserialization entry points to the `cargo-fuzz`
 # targets in `fuzz/`. Not part of the public API; no stability guarantee.

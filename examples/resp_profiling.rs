@@ -17,7 +17,7 @@
 //!   PPROF_HZ     sampling frequency in Hz (default 4000)
 
 use pprof::ProfilerGuardBuilder;
-use rustis::resp::{BenchTape, bench_parse_only};
+use rustis::resp::bench_support::{BenchTape, bench_parse_only};
 use std::{collections::HashMap, fs::File, hint::black_box};
 
 fn env_usize(key: &str, default: usize) -> usize {

@@ -31,7 +31,7 @@
 //!   cargo bench --features bench --bench pub_sub_decode
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
-use rustis::resp::BenchPubSubPush;
+use rustis::resp::bench_support::BenchPubSubPush;
 use std::hint::black_box;
 
 /// The RESP3 push frame the server sends for `PUBLISH mychannel <payload>`.

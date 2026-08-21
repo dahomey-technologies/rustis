@@ -176,6 +176,15 @@ wrong side does not go unnoticed — it fails the hermetic run.
 
 The doctests are excluded (`--tests`): each one opens a connection.
 
+# Contributing
+
+[`CONTRIBUTING.md`](CONTRIBUTING.md) states what CI enforces and what the code
+assumes: where a new test goes on either side of the `server-tests` split, the
+panic policy, the MSRV promise, and why `--all-features` never works here.
+
+[`SECURITY.md`](SECURITY.md) is the private reporting path, and states what the
+crate treats as hostile input.
+
 # Benchmarks
 
 1. From the `redis` directory, run `docker_up.sh` or `docker_up.cmd`

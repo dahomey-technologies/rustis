@@ -135,6 +135,20 @@ fn bench(c: &mut Criterion) {
         });
     }
 
+    // Many keys, one shard: a hash tag pins them all to the same slot, so the
+    // command is routed as a single sub-request. This is the shape where the
+    // per-command key bookkeeping is largest while none of it is read back.
+    let tagged: Vec<String> = (0..KEY_COUNT).map(|i| format!("{{tag}}key{i}")).collect();
+    rt.block_on(seed(&cluster, &tagged));
+
+    group.bench_function("mget_one_slot/100", |b| {
+        let (cluster, tagged) = (&cluster, &tagged);
+        b.to_async(&rt).iter(|| async move {
+            let values: Vec<Option<String>> = cluster.mget(tagged.as_slice()).await.unwrap();
+            black_box(values);
+        })
+    });
+
     group.finish();
 }
 

@@ -19,7 +19,7 @@ use crate::{
     resp::{Command, RespResponse, RespView},
 };
 use bytes::Bytes;
-use smallvec::SmallVec;
+use smallvec::{SmallVec, smallvec};
 use std::{
     collections::{HashMap, VecDeque},
     iter::zip,
@@ -274,9 +274,30 @@ impl RequestInfo {
     /// they would have no way of noticing, each field being read by a different
     /// part of the reassembly.
     pub(super) fn new(command: &Command, sub_requests: SmallVec<[SubRequest; 10]>) -> Self {
+        Self::with_keys(command, sub_requests, command.keys().collect())
+    }
+
+    /// The same, for a command that reached a single node.
+    ///
+    /// Such a command owes no key list, at either level. A key list has one
+    /// reader: the reassembly that lines one node's replies up against another's,
+    /// so that the caller gets its keys back in the order it named them. With one
+    /// node there is nothing to line up — `no_response_policy` hands the single
+    /// sub-reply back untouched, and every `ResponsePolicy` branch ignores the
+    /// keys outright. Collecting them clones one `Bytes` per key, twice, for a
+    /// list nothing reads.
+    pub(super) fn single_shard(command: &Command, sub_request: SubRequest) -> Self {
+        Self::with_keys(command, smallvec![sub_request], SmallVec::new())
+    }
+
+    fn with_keys(
+        command: &Command,
+        sub_requests: SmallVec<[SubRequest; 10]>,
+        keys: SmallVec<[Bytes; 10]>,
+    ) -> Self {
         Self {
             response_policy: command.response_policy(),
-            keys: command.keys().collect(),
+            keys,
             sub_requests,
             command: None,
             is_pub_sub: is_pub_sub_command(command),
@@ -886,8 +907,17 @@ mod construction_tests {
         reason = "test code: a panic is how a test reports failure"
     )]
     use super::{RequestInfo, SubRequest};
-    use crate::resp::{Command, cmd};
+    use crate::resp::{Command, RespFrameParser, RespResponse, RespTapeMut, cmd};
+    use bytes::Bytes;
     use smallvec::SmallVec;
+
+    fn reply(raw: &str) -> RespResponse {
+        let bytes = Bytes::copy_from_slice(raw.as_bytes());
+        let mut tape = RespTapeMut::default();
+        let mut parser = RespFrameParser::new(&bytes, &mut tape);
+        let (frame, _) = parser.parse().expect("a well-formed frame");
+        RespResponse::new(bytes.into(), frame)
+    }
 
     fn sub_requests(count: usize) -> SmallVec<[SubRequest; 10]> {
         (0..count)
@@ -912,6 +942,38 @@ mod construction_tests {
             );
             assert!(request.is_pub_sub, "{name} is answered by a push frame");
         }
+    }
+
+    /// A command routed to one node files no key, at either level: the only
+    /// reader lines one node's reply up against another's, and there is no other.
+    /// The reply must still come back untouched.
+    #[test]
+    fn a_single_shard_command_files_no_key() {
+        let command: Command = cmd("MGET").key("{tag}a").key("{tag}b").into();
+        let mut sub_request = SubRequest::keyless("n".into());
+        sub_request.result = Some(Some(Ok(reply("*2\r\n$1\r\nA\r\n$1\r\nB\r\n"))));
+        let request = RequestInfo::single_shard(&command, sub_request);
+
+        assert!(
+            request.keys.is_empty(),
+            "a single-shard command names no key list, got {:?}",
+            request.keys
+        );
+        assert!(
+            request
+                .sub_requests
+                .iter()
+                .all(|sub_request| sub_request.keys.is_empty()),
+            "nor does its sub-request"
+        );
+
+        let Some(Ok(answer)) = request.into_reply() else {
+            panic!("the single sub-reply is the answer");
+        };
+        assert_eq!(
+            vec![Some(String::from("A")), Some(String::from("B"))],
+            answer.to::<Vec<Option<String>>>().unwrap()
+        );
     }
 
     /// A keyed command files its keys, which is what the reassembly orders the

@@ -15,11 +15,34 @@ use thiserror::Error;
 
 /// `Internal Use`
 ///
-/// Gives a reason to retry sending a command to the Redis Server
+/// The reasons why a command is sent again.
+///
+/// The reasons themselves stay inside the driver: they steer the replay and are
+/// gone by the time the command is answered, so this carries them across the
+/// network path without putting them in reach of a caller.
 #[doc(hidden)]
+#[derive(Debug, Clone, Default)]
+pub struct RetryReasons(SmallVec<[RetryReason; 1]>);
+
+impl RetryReasons {
+    pub(crate) fn new(reasons: SmallVec<[RetryReason; 1]>) -> Self {
+        Self(reasons)
+    }
+
+    pub(crate) fn into_inner(self) -> SmallVec<[RetryReason; 1]> {
+        self.0
+    }
+
+    #[cfg(test)]
+    pub(crate) fn first(&self) -> Option<&RetryReason> {
+        self.0.first()
+    }
+}
+
+/// Gives a reason to retry sending a command to the Redis Server
 #[derive(Debug, Clone)]
 #[non_exhaustive]
-pub enum RetryReason {
+pub(crate) enum RetryReason {
     /// Received an ASK error from the Redis Server
     Ask {
         hash_slot: u16,
@@ -27,6 +50,13 @@ pub enum RetryReason {
     },
     /// Received a MOVED error from the Redis Server
     Moved {
+        /// A MOVED sends the topology back to be reloaded whatever the slot, so
+        /// nothing reads this back. It is kept because it is what names the slot
+        /// that moved in the `Debug` line the retry path logs.
+        #[cfg_attr(
+            not(test),
+            expect(dead_code, reason = "reported through Debug, read by nothing else")
+        )]
         hash_slot: u16,
         address: (String, u16),
     },
@@ -437,7 +467,7 @@ pub enum ErrorKind {
     /// Internal error to trigger retry sending the command
     #[doc(hidden)]
     #[error("Retry")]
-    Retry(SmallVec<[RetryReason; 1]>),
+    Retry(RetryReasons),
     /// Raised when end of stream is reached
     #[error("End of stream reached")]
     EOF,

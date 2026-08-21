@@ -372,6 +372,13 @@ removed trait methods, 4 removed structs, the `resp::Response` trait, the
 
 ### Internal
 
+- **The cluster retry reasons are no longer a public type.** `RetryReason` named the
+  ASK, MOVED and TRYAGAIN redirections in the crate root, and `ErrorKind::Retry`
+  carried a `SmallVec` of them. Both were `#[doc(hidden)]`, so neither was in the
+  documented contract, yet a caller could read a redirect target out of an error the
+  driver answers no command with. `RetryReason` is now crate-internal and
+  `ErrorKind::Retry` carries an opaque `RetryReasons`, which exposes nothing.
+
 - **The benchmark and web-example crates are dev dependencies.** `criterion`,
   `fred`, `redis`, `axum`, `actix-web` and `pprof` were optional dependencies so a
   Cargo feature could gate them, which made two competing drivers read as

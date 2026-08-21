@@ -64,8 +64,8 @@ impl RetryPolicy {
         };
 
         match &mut message.retry_reasons {
-            Some(retry_reasons) => retry_reasons.extend(reasons),
-            None => message.retry_reasons = Some(Vec::from_iter(reasons)),
+            Some(retry_reasons) => retry_reasons.extend(reasons.into_inner()),
+            None => message.retry_reasons = Some(Vec::from_iter(reasons.into_inner())),
         }
     }
 }
@@ -78,7 +78,7 @@ mod tests {
         reason = "test code: a panic is how a test reports failure"
     )]
     use super::*;
-    use crate::{client::Message, resp::cmd};
+    use crate::{RetryReasons, client::Message, resp::cmd};
     use smallvec::SmallVec;
 
     fn message() -> Message {
@@ -91,7 +91,29 @@ mod tests {
             hash_slot: slot,
             address: (String::from("127.0.0.1"), 6379),
         });
-        Err(Error::from(ErrorKind::Retry(reasons)))
+        Err(Error::from(ErrorKind::Retry(RetryReasons::new(reasons))))
+    }
+
+    /// The reasons travel inside an opaque wrapper, so what the retry path reads
+    /// back has to be what the reply put in, in the same order.
+    #[test]
+    fn the_wrapper_hands_back_the_reasons_it_was_given() {
+        let policy = RetryPolicy::new(0);
+        let mut message = message();
+
+        policy.absorb_reasons(&mut message, redirect(1));
+        policy.absorb_reasons(&mut message, redirect(2));
+
+        let slots: Vec<u16> = message
+            .retry_reasons
+            .unwrap()
+            .iter()
+            .map(|reason| match reason {
+                crate::RetryReason::Moved { hash_slot, .. } => *hash_slot,
+                other => panic!("unexpected reason: {other:?}"),
+            })
+            .collect();
+        assert_eq!(vec![1, 2], slots);
     }
 
     #[test]

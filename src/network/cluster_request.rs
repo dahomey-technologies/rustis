@@ -14,7 +14,7 @@
 
 use super::cluster_topology::NodeId;
 use crate::{
-    ClientError, Error, ErrorKind, RedisError, RedisErrorKind, Result, RetryReason,
+    ClientError, Error, ErrorKind, RedisError, RedisErrorKind, Result, RetryReason, RetryReasons,
     commands::ResponsePolicy,
     resp::{Command, RespResponse, RespView},
 };
@@ -350,7 +350,9 @@ impl RequestInfo {
                 "read failed and will be retried. reasons: {:?}",
                 retry_reasons
             );
-            return Some(Err(Error::from(ErrorKind::Retry(retry_reasons))));
+            return Some(Err(Error::from(ErrorKind::Retry(RetryReasons::new(
+                retry_reasons,
+            )))));
         }
 
         // The response_policy tip is set for commands that reply with scalar data types,

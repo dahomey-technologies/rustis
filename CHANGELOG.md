@@ -372,6 +372,13 @@ removed trait methods, 4 removed structs, the `resp::Response` trait, the
 
 ### Internal
 
+- **TLS and cluster routing have benchmarks.** Two of the crate's headline features
+  had none: the 15 existing targets covered neither, so the encrypted path and the
+  routed path had no figure to weigh a change against. `tls_round_trip` measures the
+  handshake and the per-command record layer against the plain connection;
+  `cluster_routing` measures a routed command, and a cross-slot `mget` at 2, 10 and
+  100 keys, against a plain connection to the same node.
+
 - **The cluster retry reasons are no longer a public type.** `RetryReason` named the
   ASK, MOVED and TRYAGAIN redirections in the crate root, and `ErrorKind::Retry`
   carried a `SmallVec` of them. Both were `#[doc(hidden)]`, so neither was in the

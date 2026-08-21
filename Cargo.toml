@@ -192,6 +192,18 @@ name = "large_reply_reserve"
 harness = false
 required-features = ["bench"]
 
+# The only bench that needs a TLS stack, so it names one: `bench` alone would
+# leave the target unbuildable.
+[[bench]]
+name = "tls_round_trip"
+harness = false
+required-features = ["bench", "tokio-rustls"]
+
+[[bench]]
+name = "cluster_routing"
+harness = false
+required-features = ["bench"]
+
 [[bench]]
 name = "cluster_read_alloc"
 harness = false

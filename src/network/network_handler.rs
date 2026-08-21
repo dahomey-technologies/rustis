@@ -707,9 +707,11 @@ impl NetworkHandler {
     /// Hands a matched reply to its caller, waking it.
     ///
     /// Called from [`Self::receive_result`] the moment the reply is matched,
-    /// before the next ready reply is parsed: on a multi-thread runtime another
-    /// worker resumes the caller in parallel while this task keeps draining,
-    /// which shortens first-reply latency on the critical path.
+    /// before the next ready reply is parsed. What overlaps is the wake-up: on a
+    /// multi-thread runtime the woken caller resumes on another worker while this
+    /// task keeps draining. The draining itself overlaps with nothing — the
+    /// network task is single — so the early dispatch buys the first caller's
+    /// latency, not parallel parsing.
     /// `command` names what the reply answers, so an abandoned one can be traced
     /// back on a multiplexed connection where hundreds are in flight.
     fn dispatch_result<T>(

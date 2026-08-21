@@ -178,6 +178,13 @@ pub struct BackpressureConfig {
     /// The budget is per stream, shared by every channel and pattern that stream
     /// subscribes to.
     ///
+    /// **A single message larger than the whole budget is delivered, not
+    /// dropped.** Shedding stops at the last queued message, so the budget can
+    /// never make a message undeliverable — which means the memory actually held
+    /// is bounded by this budget *plus* one message, and one message is bounded
+    /// by [`RespLimits::max_bulk_length`] (512 MiB by default). Size a container
+    /// on that sum, or lower `max_bulk_length` to make this budget the real one.
+    ///
     /// The default is 8 MiB. `0` disables the budget.
     pub max_pubsub_bytes: usize,
     /// Memory budget for messages held for one push sink — the client-side
@@ -196,6 +203,10 @@ pub struct BackpressureConfig {
     ///   moves, invalidates its whole cache — losing invalidations means no
     ///   longer knowing what is stale, exactly as after a reconnection. The
     ///   result is a cold cache, never a wrong answer.
+    ///
+    /// A single oversized message is delivered rather than dropped here too, so
+    /// the same budget-plus-one-message bound applies as for
+    /// [`max_pubsub_bytes`](Self::max_pubsub_bytes).
     ///
     /// The default is 8 MiB. `0` disables the budget.
     pub max_push_bytes: usize,
@@ -2099,6 +2110,20 @@ impl IntoConfig for Url {
 /// memory with
 /// [`BackpressureConfig`] instead, which sheds load without ending the
 /// connection.
+///
+/// # A cluster reconnection is all-or-nothing within one attempt
+///
+/// This policy is the only retry a cluster reconnection gets, and one attempt
+/// has to succeed at everything: the configured seed addresses are asked for the
+/// topology until one answers, and then **every** master in that topology must be
+/// connected. One unreachable master fails the whole attempt, so the client goes
+/// back to the delay this policy names rather than retrying that node.
+///
+/// A standalone or Sentinel reconnection has one server to reach, so it has
+/// nothing to be partly successful at. During a rolling restart or a partial
+/// control-plane outage, a cluster client therefore spends more attempts than a
+/// standalone one on the same outage — which is a reason to keep `max_attempts`
+/// at its default `0` in cluster mode.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[non_exhaustive]
 pub enum ReconnectionConfig {

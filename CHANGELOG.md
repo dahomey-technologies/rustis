@@ -349,6 +349,26 @@ removed trait methods, 4 removed structs, the `resp::Response` trait, the
 
 ### Documentation
 
+- **A shedding budget states the memory it does not bound.** A single message larger
+  than `max_pubsub_bytes` or `max_push_bytes` is delivered rather than made
+  undeliverable, so the memory actually held is the budget plus one message, itself
+  bounded by `RespLimits::max_bulk_length` — 512 MiB by default. Both fields now say
+  so, since sizing a container is what the knobs are for.
+
+- **`ReconnectionConfig` states that a cluster reconnection is all-or-nothing.** One
+  attempt must reach a seed that answers *and* connect every master in the topology it
+  returns; a single unreachable master sends the client back to the delay rather than
+  retrying that node. A cluster client therefore spends more attempts than a standalone
+  one on the same partial outage, which is a reason to leave `max_attempts` at `0`.
+
+- **The README says which profile the benchmark numbers hold under.** `[profile.bench]`
+  sets `lto = "fat"` and `codegen-units = 1`, neither of which a downstream `--release`
+  build gets, and the in-tree comparisons against `fred` and `redis-rs` are measured
+  under it.
+
+- **`CONTRIBUTING.md` names the `fuzzing` feature and how to run the targets.** It was
+  discoverable only from a `Cargo.toml` comment.
+
 - **The `resp` page says why command arguments are `impl Serialize` and not a trait
   of the crate's own.** Rust's orphan rule allows an `impl` only in the crate defining
   the trait or the type, so a user could not implement a `rustis` marker trait for

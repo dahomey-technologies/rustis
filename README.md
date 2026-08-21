@@ -193,3 +193,9 @@ crate treats as hostile input.
 The feature is required: every benchmark target declares
 `required-features = ["bench"]`, so a plain `cargo bench` skips all of them and
 reports success having measured nothing.
+
+The numbers hold under `[profile.bench]`: `opt-level = 3`, `lto = "fat"`,
+`codegen-units = 1`. A downstream `--release` build gets none of the last two by
+default, so reproduce the profile before comparing your own figures — including
+the ones from the in-tree comparisons against `fred` and `redis-rs`, which are
+measured under it too.

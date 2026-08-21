@@ -3,9 +3,14 @@
 //! The parser (`RespFrameParser`, `BufferDecoder`, `RespResponse`, `RespBuf`)
 //! is `pub(crate)`, so an external `benches/*.rs` crate cannot reach it. These
 //! thin shims expose exactly the decode + deserialize path, isolated from the
-//! network, so the parser can be measured on hand-built RESP buffers. They are
-//! gated behind the `bench` feature and compiled out of shipped builds, like
-//! the `pprof` profiling example.
+//! network, so the parser can be measured on hand-built RESP buffers.
+//!
+//! This module is a development instrument, not API. It carries **no stability
+//! guarantee**: it is gated behind the `bench` feature, which no dependent has a
+//! reason to enable, it is absent from every shipped build, and `docs.rs` does
+//! not list it, so nothing here is documented as part of the crate's surface.
+//! `cargo semver-checks` runs on the explicit features only, so a change here is
+//! not a breaking change.
 #![allow(
     clippy::indexing_slicing,
     clippy::expect_used,

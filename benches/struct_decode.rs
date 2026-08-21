@@ -12,7 +12,7 @@
 //! smallest possible payload.
 
 use criterion::{Criterion, criterion_group, criterion_main};
-use rustis::{commands::StreamEntry, resp::bench_decode_to};
+use rustis::{commands::StreamEntry, resp::bench_support::bench_decode_to};
 use std::hint::black_box;
 
 /// An `XRANGE` reply of `n` entries: a stream id and a one-pair field/value map

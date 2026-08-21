@@ -372,6 +372,13 @@ removed trait methods, 4 removed structs, the `resp::Response` trait, the
 
 ### Internal
 
+- **The `bench`-gated RESP entry points are behind a named module.** They were glob
+  re-exported into `resp`, where they stood beside the real API with nothing marking
+  them apart; they are now `resp::bench_support`, whose module page states that the
+  module is a development instrument with no stability guarantee. `docs.rs` does not
+  list the `bench` feature and `cargo semver-checks` runs on the explicit features
+  only, so the module is documented and checked nowhere — which is what it is for.
+
 - **A command routed to a single shard no longer builds a key list.** It built two,
   one on the sub-request and one on the request, and nothing read either: a key list
   is read only to line one node's replies up against another's. Measured on

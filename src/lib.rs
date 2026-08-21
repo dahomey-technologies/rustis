@@ -99,9 +99,11 @@ crates in one dependency graph cannot disagree about the bb8 version. That is th
 configuring the pool with bb8's own builder rather than through a wrapper.
 
 The remaining features are for developing rustis itself and carry **no stability
-guarantee**: `bench` (exposes internal RESP entry points to the benchmarks and pulls in
-`criterion`, `fred`, `redis` and `pprof`), `fuzzing` (same, for the `cargo-fuzz` targets
-in `fuzz/`) and `web-examples` (`axum` / `actix-web`, for the examples).
+guarantee**: `bench` (exposes internal RESP entry points to the benchmark crates, as
+`resp::bench_support`), `fuzzing` (same, for the `cargo-fuzz` targets in `fuzz/`) and
+`web-examples` (the `axum` / `actix-web` examples). None of the three carries a
+dependency: the crates they need are dev dependencies, so a dependent that enables one
+still builds nothing extra.
 
 # Protocol Compatibility
 

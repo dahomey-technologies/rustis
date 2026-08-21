@@ -13,7 +13,7 @@
 //!   slices, the only shape that exposes the partial-parse re-scan.
 
 use criterion::{Criterion, criterion_group, criterion_main};
-use rustis::resp::{bench_decode_chunked, bench_decode_to};
+use rustis::resp::bench_support::{bench_decode_chunked, bench_decode_to};
 use std::hint::black_box;
 
 /// A flat RESP array of `n` bulk strings, each `elem_len` bytes.

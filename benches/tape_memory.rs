@@ -40,7 +40,7 @@
 
 use bytes::{BufMut, BytesMut};
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
-use rustis::resp::{
+use rustis::resp::bench_support::{
     BenchDecoder, BenchTape, bench_decode_to, bench_parse_only, bench_tape_footprint,
 };
 use std::alloc::{GlobalAlloc, Layout, System};

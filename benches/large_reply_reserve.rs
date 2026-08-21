@@ -20,7 +20,7 @@
 //!   cargo bench --features bench --bench large_reply_reserve
 
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
-use rustis::resp::{bench_decode_stream_grow, bench_decode_stream_prereserve};
+use rustis::resp::bench_support::{bench_decode_stream_grow, bench_decode_stream_prereserve};
 use std::hint::black_box;
 
 /// A single RESP bulk string of `payload` bytes: `$<len>\r\n<payload>\r\n`.

@@ -372,6 +372,13 @@ removed trait methods, 4 removed structs, the `resp::Response` trait, the
 
 ### Internal
 
+- **A command routed to a single shard no longer builds a key list.** It built two,
+  one on the sub-request and one on the request, and nothing read either: a key list
+  is read only to line one node's replies up against another's. Measured on
+  `cluster_routing`, the removal is not visible (a 100-key single-slot `mget` is
+  unchanged at ~118 µs, p = 0.29); it ships because the work was dead, and because a
+  constructor that names the case states the invariant the two collects hid.
+
 - **TLS and cluster routing have benchmarks.** Two of the crate's headline features
   had none: the 15 existing targets covered neither, so the encrypted path and the
   routed path had no figure to weigh a change against. `tls_round_trip` measures the

@@ -788,12 +788,8 @@ impl ClusterConnection {
             node.connection.asking().await?;
         }
         node.feed(command, reply_skip.as_ref()).await?;
-        let sub_request = SubRequest {
-            node_id: node.id.clone(),
-            keys: command.keys().collect(),
-            result: None,
-        };
-        self.file_request(RequestInfo::new(command, smallvec![sub_request]));
+        let sub_request = SubRequest::keyless(node.id.clone());
+        self.file_request(RequestInfo::single_shard(command, sub_request));
         Ok(())
     }
 

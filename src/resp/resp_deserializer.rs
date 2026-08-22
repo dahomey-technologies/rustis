@@ -542,18 +542,22 @@ impl<'de> Deserializer<'de> for RespDeserializer<'de> {
             RespView::SimpleString(b) | RespView::BulkString(b) => {
                 visitor.visit_borrowed_str(str::from_utf8(b)?)
             }
-            // The reply verbatim, as `deserialize_str` explains.
-            RespView::Integer(_, raw) | RespView::Double(_, raw) if !raw.is_empty() => {
+            // The reply verbatim, as `deserialize_str` explains. A double always
+            // reaches here: it carries its text even once decoded, because the
+            // server's rendering of a float is not Rust's and only the bytes that
+            // arrived are the value the caller asked to read.
+            RespView::Double(_, raw) => visitor.visit_borrowed_str(str::from_utf8(raw)?),
+            RespView::Integer(_, raw) if !raw.is_empty() => {
                 visitor.visit_borrowed_str(str::from_utf8(raw)?)
             }
             // Synthesized, so there is nothing to quote and the value is rendered.
             // `itoa` rather than `to_string`, which pulls in the `fmt` machinery
-            // and allocates a `String` only to hand it over.
+            // and allocates a `String` only to hand it over. An integer has a
+            // single decimal spelling, so this renders what the wire would have.
             RespView::Integer(i, _) => {
                 let mut buffer = itoa::Buffer::new();
                 visitor.visit_str(buffer.format(i))
             }
-            RespView::Double(d, _) => visitor.visit_string(d.to_string()),
             RespView::Boolean(b) => visitor.visit_str(if b { "true" } else { "false" }),
             RespView::Null => Err(Error::from(ClientError::UnexpectedNil {
                 target: "a string",

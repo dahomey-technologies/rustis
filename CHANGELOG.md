@@ -249,6 +249,14 @@ removed trait methods, 4 removed structs, the `resp::Response` trait, the
 
 ### Fixed
 
+- **A cached RESP3 double read as a string now spells the value the way the server
+  did.** The client-side cache decodes a double when it compacts an entry, and a read
+  as `String` rebuilt the text from that `f64` — so a score of `1e+20` came back as
+  `100000000000000000000` on a cache hit and `1e+20` on a miss, and `nan` as `NaN`.
+  A compacted double now keeps the reply's own bytes beside the value, so a hit and a
+  miss answer the same string, and the read hands them over borrowed instead of
+  rendering a `String` (56 ns per read, on the caller's thread).
+
 - **A rendered server error no longer carries a stray space.** `RedisError`'s
   `Display` wrote `"{kind} {description}"` unconditionally, so an error whose kind
   rustis does not recognise — the kind renders as nothing, the message holding the

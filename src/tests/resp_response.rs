@@ -271,6 +271,31 @@ fn compact_preserves_the_value_it_copies_out() {
     assert_eq!(vec![7i64], synthesized.compact().to::<Vec<i64>>().unwrap());
 }
 
+/// A double's text is the server's rendering of the float, and it is not Rust's:
+/// rebuilt from the `f64`, `1e+20` comes back as `100000000000000000000` and
+/// `nan` as `NaN`. A compacted response is what a cache hit answers, so a
+/// rendering of its own makes one score read as two different strings depending
+/// on whether the reply came from the cache or from the server.
+#[test]
+fn a_compacted_double_reads_back_as_the_text_the_reply_carried() {
+    for resp in [
+        &b",1e+20\r\n"[..],
+        b",nan\r\n",
+        b",inf\r\n",
+        b",-inf\r\n",
+        b",1.0\r\n",
+        b",12.5\r\n",
+    ] {
+        let double = parse_owned(resp);
+        assert_eq!(
+            double.to::<String>().unwrap(),
+            double.compact().to::<String>().unwrap(),
+            "the compacted copy re-rendered {}",
+            String::from_utf8_lossy(resp).trim_end()
+        );
+    }
+}
+
 /// Builds a tapeless frame — a lone scalar, indexed by no tape node — straight
 /// from bytes, without going through the parser. Most of the frames below are ones
 /// the parser rejects, so this is the only way to reach the read-back path with

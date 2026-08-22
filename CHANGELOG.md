@@ -392,6 +392,13 @@ removed trait methods, 4 removed structs, the `resp::Response` trait, the
 
 ### Internal
 
+- **A held `CLIENT REPLY SKIP` is borrowed while it is routed, not cloned.** The five
+  cluster routing paths read it through `.cloned()`, because the reply mode and the
+  node topology looked like one borrow of the connection; they are separate fields, so
+  the read is a disjoint borrow and needs no copy. A `Command` is 120 bytes over a
+  refcounted buffer and the clone measures 27 ns, paid on the shared network task once
+  per command the caller silences.
+
 - **Reading a cluster tip off a `Command` no longer calls `Clone::clone`.**
   `request_policy()` and `response_policy()` returned `Option<RequestPolicy>` /
   `Option<ResponsePolicy>` through `.clone()`; both enums are fieldless, so the two

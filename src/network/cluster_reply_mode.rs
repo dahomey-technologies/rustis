@@ -65,6 +65,16 @@ impl ClusterReplyMode {
 
     /// The held `SKIP`, to be emitted on each node the command being routed
     /// reaches, right before its own slice of that command.
+    ///
+    /// Borrowed, not cloned: a `Command` clone is a 120-byte copy plus a
+    /// refcount pair on its buffer, and the routing paths pay it on the shared
+    /// network task, once per command they silence. The borrow costs nothing
+    /// there because the mode and the topology are separate fields of the
+    /// cluster connection, so holding this one out while the other is fed
+    /// mutably is a disjoint borrow. Taking the skip instead of borrowing it
+    /// would be wrong: [`Self::awaits_a_reply`] has to still see it held when
+    /// the routed request is filed, or a silenced reply gets a queue entry that
+    /// nothing will ever resolve.
     pub(super) fn held_skip(&self) -> Option<&Command> {
         self.pending_skip.as_ref()
     }

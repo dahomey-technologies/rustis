@@ -12,7 +12,9 @@ use crate::{
         PushSender, ReconnectReceiver, ReconnectSender, ResultReceiver, ResultSender,
         ResultsReceiver, ResultsSender, timeout, timeout_future,
     },
-    resp::{Command, CommandArgs, CommandArgsMut, RespResponse, SubscriptionType, cmd},
+    resp::{
+        Command, CommandArgs, CommandArgsMut, RawResponse, RespResponse, SubscriptionType, cmd,
+    },
 };
 use bytes::Bytes;
 use serde::{Serialize, de::DeserializeOwned};
@@ -430,6 +432,82 @@ impl Client {
             result.as_ref().err(),
         );
         result.map(|(response, _)| response)
+    }
+
+    /// Sends an arbitrary command to the server and hands back the reply as
+    /// [RESP](https://redis.io/docs/reference/protocol-spec/) bytes.
+    ///
+    /// This is the reply below the serde layer, for the callers that do not want
+    /// a Rust type out of it: a proxy forwarding replies to another connection,
+    /// a bridge to another protocol, a reader of a shape no type models. Anything
+    /// that reads a value is better served by [`send`](Self::send), and
+    /// [`Value`](crate::resp::Value) is the same reply as a tree.
+    ///
+    /// A Redis error is a reply here, not a failure: it is handed back like any
+    /// other, since a caller forwarding replies has to forward the failures too.
+    /// [`RawResponse::is_error`] tells them apart, and an installed
+    /// [`CommandInterceptor`](crate::client::CommandInterceptor) is told the
+    /// command failed, as it is on [`send`](Self::send). The returned
+    /// [`Error`](crate::Error) is therefore the driver's own: a connection lost,
+    /// a timeout, a reply that cannot be read.
+    ///
+    /// # Arguments
+    /// * `command` - generic [`Command`](crate::resp::Command) meant to be sent to the Redis server.
+    /// * `retry_on_error` - retry to send the command on network error.
+    ///   * `None` - default behaviour defined in [`Config::retry_on_error`](crate::client::Config::retry_on_error)
+    ///   * `Some(true)` - retry sending command on network error
+    ///   * `Some(false)` - do not retry sending command on network error
+    ///
+    /// # Errors
+    /// Any Redis driver [`Error`](crate::Error) that occurs during the send operation
+    ///
+    /// # Warning
+    /// The bytes are the frame the client received, byte for byte, except for a
+    /// reply the client built itself: see
+    /// [what is verbatim and what is rewritten](RawResponse#what-is-verbatim-and-what-is-rewritten).
+    ///
+    /// The Cluster key rule of [`send`](Self::send) applies here too.
+    ///
+    /// # Example
+    /// ```
+    /// use rustis::{client::Client, commands::StringCommands, resp::cmd, Result};
+    ///
+    /// #[tokio::main]
+    /// async fn main() -> Result<()> {
+    ///     let client = Client::connect("127.0.0.1:6379").await?;
+    ///     client.set("raw_key", "value").await?;
+    ///
+    ///     let raw = client.send_raw(cmd("GET").key("raw_key"), None).await?;
+    ///     assert_eq!(b"$5\r\nvalue\r\n", raw.as_bytes());
+    ///
+    ///     Ok(())
+    /// }
+    /// ```
+    #[inline]
+    pub async fn send_raw(
+        &self,
+        command: impl Into<Command>,
+        retry_on_error: Option<bool>,
+    ) -> Result<RawResponse> {
+        let started_at = self.started_at();
+        let result: Result<(RawResponse, Option<Bytes>, Option<Error>)> = async {
+            let (response, command_name) = self.internal_send(command, retry_on_error).await?;
+            // The failure is read before the bytes are copied, since the caller
+            // gets the error reply rather than the error and an interceptor
+            // would otherwise never hear of it.
+            let failure = response.redis_error();
+            let raw = Self::name_command(response.to_raw(), command_name.clone())?;
+            Ok((raw, command_name, failure))
+        }
+        .await;
+        self.notify_completion(
+            result.as_ref().ok().and_then(|(_, name, _)| name.as_ref()),
+            started_at,
+            result
+                .as_ref()
+                .map_or_else(Some, |(_, _, failure)| failure.as_ref()),
+        );
+        result.map(|(raw, _, _)| raw)
     }
 
     /// Turns a reply into the type the caller declared for it, and names the

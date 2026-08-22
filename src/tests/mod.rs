@@ -97,6 +97,8 @@ mod prelude;
 #[cfg(feature = "server-tests")]
 mod pub_sub_commands;
 mod pub_sub_message;
+#[cfg(feature = "tokio-runtime")]
+mod raw_response;
 mod reconnection_state;
 #[cfg(feature = "server-tests")]
 mod resp3;

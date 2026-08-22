@@ -1,9 +1,10 @@
 use crate::{
     ClientError, Error, ErrorKind, RedisError, Result,
     resp::{
-        ARRAY_TAG, BULK_ERROR_TAG, MAP_TAG, NULL_TAG, PUSH_TAG, ParsedFrame, RespBuf,
+        ARRAY_TAG, BULK_ERROR_TAG, MAP_TAG, NULL_TAG, PUSH_TAG, ParsedFrame, RawResponse, RespBuf,
         RespDeserializer, RespTape, SET_TAG, SIMPLE_ERROR_TAG, SIMPLE_STRING_TAG, ScalarKind,
         TapeNode, frame_scalar_value, scalar_span, scalar_value, util::int_from_text,
+        write_response,
     },
 };
 use bytes::Bytes;
@@ -258,6 +259,53 @@ impl RespResponse {
         T::deserialize(RespDeserializer::new(self.view()?))
     }
 
+    /// Copies the reply out as the RESP bytes a caller can forward.
+    ///
+    /// A reply that reached the client as one frame is copied as it stands. One
+    /// the client built itself — an aggregation over cluster nodes, a decoded
+    /// cache entry, a null collection — has no bytes to copy and is written from
+    /// what it reads as. See [`RawResponse`].
+    pub(crate) fn to_raw(&self) -> Result<RawResponse> {
+        if let Some(frame) = self.wire_bytes() {
+            return Ok(RawResponse::from_slice(frame));
+        }
+        let mut out = Vec::new();
+        write_response(self, &mut out)?;
+        Ok(RawResponse::from_vec(out))
+    }
+
+    /// The bytes of the frame this reply came off the wire as, when it is one
+    /// whole frame.
+    ///
+    /// An element of a collection is not: it shares its frame's buffer with its
+    /// siblings, and the tape indexes elements rather than delimiting them, so
+    /// there is no span to hand back.
+    #[inline]
+    pub(crate) fn wire_bytes(&self) -> Option<&[u8]> {
+        match self {
+            RespResponse::Frame { buf, root: 0, .. } => Some(buf.as_ref()),
+            _ => None,
+        }
+    }
+
+    /// The Redis error this reply carries, if it carries one.
+    ///
+    /// A message that does not read back as an error is answered with the
+    /// failure reading it produced: the reply failed either way.
+    #[inline]
+    pub(crate) fn redis_error(&self) -> Option<Error> {
+        // `is_error` is a tag check, so a non-error reply does not pay for a view.
+        if self.is_error()
+            && let Ok(RespView::Error(message)) = self.view()
+        {
+            return Some(match RedisError::try_from(message) {
+                Ok(error) => Error::from(ErrorKind::Redis(error)),
+                Err(error) => error,
+            });
+        }
+        None
+    }
+
     /// Returns a self-contained copy that holds **only** what this response
     /// needs, releasing any larger shared block it was carved from.
     ///
@@ -324,13 +372,8 @@ impl RespResponse {
                   `root + 1` addresses a node that exists."
     )]
     pub(crate) fn into_collection_iter(self) -> Result<RespResponseIter> {
-        // `is_error` is a tag check, so a non-error reply does not pay for a view.
-        if self.is_error()
-            && let Ok(RespView::Error(message)) = self.view()
-        {
-            return Err(Error::from(ErrorKind::Redis(RedisError::try_from(
-                message,
-            )?)));
+        if let Some(error) = self.redis_error() {
+            return Err(error);
         }
         match self {
             RespResponse::Frame { buf, tape, root }

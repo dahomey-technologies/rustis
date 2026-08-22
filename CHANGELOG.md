@@ -102,6 +102,18 @@ removed trait methods, 4 removed structs, the `resp::Response` trait, the
 
 ### Added
 
+- **`Client::send_raw` hands a reply back as RESP bytes.** Every reply went through
+  serde, so a proxy, a bridge to another protocol or a reader of a shape no type
+  models had to go through `Value` — an owned tree that drops what it cannot spell
+  back: a server's rendering of a float, a verbatim string's tag, an error's exact
+  wording. `send_raw` answers a `resp::RawResponse` instead, the frame the client
+  received, byte for byte. A reply the client built itself — a cluster aggregation, a
+  decoded cache entry, a `*-1` — is written as RESP3, which `RawResponse` documents.
+  A Redis error is a reply here rather than a failure, since a caller forwarding
+  replies forwards the failures too: `RawResponse::is_error` tells them apart, and an
+  interceptor is still told the command failed. The bytes are copied out of the read
+  buffer, which the connection recycles.
+
 - **`rustis::prelude` holds every command trait.** A command lives on a trait, so a
   program calling several families collected one `use` per family. The prelude
   re-exports all 28, the two traits carrying `forget` and `queue`, and the types a

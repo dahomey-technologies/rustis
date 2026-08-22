@@ -7,8 +7,9 @@
 //! fails on that error rather than hanging.
 //!
 //! Replies are written as raw bytes: the crate encodes requests only
-//! ([`CommandEncoder`](crate::resp::CommandEncoder)), and has nothing that turns
-//! a value into a server reply.
+//! ([`CommandEncoder`](crate::resp::CommandEncoder)), and writes a reply back
+//! only from one it decoded ([`RawResponse`](crate::resp::RawResponse)), which
+//! is a reply a test would have had to write in the first place.
 
 use crate::{
     Future,

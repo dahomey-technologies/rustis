@@ -18,7 +18,8 @@ by converting it to a Rust type. **rustis** provides that conversion with a
 reached through the associate function [`Value::into`](Value::into).
 
 A command whose reply shape is known is best deserialized straight into the type that models it:
-`Value` is the fallback for the replies that are not.
+`Value` is the fallback for the replies that are not, and [`RawResponse`] the one for a caller
+that wants the RESP bytes rather than a value.
 
 # Command arguments
 
@@ -218,6 +219,20 @@ async fn main() -> Result<()> {
     Ok(())
 }
 ```
+
+## The reply below serde
+
+A caller that wants no Rust type out of a reply — a proxy forwarding it to
+another connection, a bridge to another protocol, a reader of a shape no type
+models — asks [`Client::send_raw`](crate::client::Client::send_raw) for it. It
+answers a [`RawResponse`], the reply's RESP bytes, which the client hands back as
+it received them.
+
+That is the layer below [`Value`]: no tree is built, no payload is copied twice,
+and nothing is decoded, so the reply keeps what a value cannot spell back — the
+server's rendering of a float, a verbatim string's own tag, an error's exact
+wording. The bytes are copied out of the read buffer rather than borrowed from
+it, the connection recycling that buffer across replies.
 */
 // This module is fed directly by server bytes: every length, cardinality and
 // offset here is attacker-controlled, so an out-of-bounds index is reachable
@@ -248,6 +263,7 @@ pub(crate) use command_encoder::*;
 pub use fast_path_command_builder::*;
 #[cfg(feature = "json")]
 pub use json::*;
+pub use raw_response::*;
 pub(crate) use resp_batch_deserializer::*;
 pub(crate) use resp_buf::*;
 pub(crate) use resp_deserializer::*;
@@ -272,6 +288,7 @@ mod command_encoder;
 mod fast_path_command_builder;
 #[cfg(feature = "json")]
 mod json;
+mod raw_response;
 mod resp_batch_deserializer;
 mod resp_buf;
 mod resp_deserializer;

@@ -7,7 +7,7 @@ use crate::{
     },
     commands::{BlockingCommands, PubSubCommands, TransactionCommands},
     network::ReconnectReceiver,
-    resp::Command,
+    resp::{Command, RawResponse},
 };
 use serde::{Serialize, de::DeserializeOwned};
 use std::future::IntoFuture;
@@ -159,6 +159,16 @@ impl ExclusiveClient {
         retry_on_error: Option<bool>,
     ) -> Result<T> {
         self.inner.send(command, retry_on_error).await
+    }
+
+    /// See [`Client::send_raw`].
+    #[inline]
+    pub async fn send_raw(
+        &self,
+        command: impl Into<Command>,
+        retry_on_error: Option<bool>,
+    ) -> Result<RawResponse> {
+        self.inner.send_raw(command, retry_on_error).await
     }
 
     /// See [`Client::send_and_forget`].

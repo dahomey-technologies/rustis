@@ -23,11 +23,18 @@ use std::{
 pub(crate) enum RespResponse {
     Null,
     Integer(i64),
+    /// A decoded double, with the text the reply spelled it as.
+    ///
+    /// The text is kept because it cannot be rebuilt: the server's rendering of
+    /// a float is not Rust's — `1e+20` renders back as
+    /// `100000000000000000000` — so a response read as a string has to hand back
+    /// the bytes it arrived with. Carrying them is free: the variant is 40 bytes
+    /// against the 72 that `Frame` already sets as this enum's width.
     #[allow(
         dead_code,
         reason = "produced by `compact`, which only the client-side cache and the tests build"
     )]
-    Double(f64),
+    Double(f64, Bytes),
     IntegerArray(Vec<i64>),
     OwnedArray(Vec<RespResponse>),
     /// A frame's bytes plus the flat parse **tape** indexing it — one
@@ -147,9 +154,12 @@ impl RespResponse {
         match self {
             RespResponse::Null => Ok(RespView::Null),
             // Synthesized: no wire bytes to hand back, so a string rendering has
-            // to be built from the value.
+            // to be built from the value. An integer has one decimal spelling, so
+            // rebuilding it loses nothing.
             RespResponse::Integer(i) => Ok(RespView::Integer(*i, b"")),
-            RespResponse::Double(d) => Ok(RespView::Double(*d, b"")),
+            // A double is decoded but never synthesized, and hands back the text
+            // it arrived with, which is the only faithful one.
+            RespResponse::Double(d, raw) => Ok(RespView::Double(*d, raw)),
             RespResponse::IntegerArray(a) => Ok(RespView::IntegerArray(a)),
             RespResponse::OwnedArray(a) => Ok(RespView::OwnedArray(a)),
             RespResponse::Frame { buf, tape, root } => view_at(buf.as_ref(), tape, *root as usize),
@@ -260,15 +270,17 @@ impl RespResponse {
     ///
     /// A numeric scalar is decoded here rather than copied, because a retained
     /// response is read repeatedly — a cache entry hit a thousand times would
-    /// otherwise decode a thousand times. Strings keep their RESP header: the
-    /// read path recovers the value from the tag, so the bytes have to stay a
-    /// readable element.
+    /// otherwise decode a thousand times. A double keeps its text alongside the
+    /// value it decoded to, because that text is not reproducible from the float
+    /// and a read as a string owes the caller the spelling the reply carried.
+    /// Strings keep their RESP header: the read path recovers the value from the
+    /// tag, so the bytes have to stay a readable element.
     #[cfg(any(test, feature = "client-cache"))]
     pub(crate) fn compact(&self) -> RespResponse {
         match self {
             RespResponse::Null => RespResponse::Null,
             RespResponse::Integer(i) => RespResponse::Integer(*i),
-            RespResponse::Double(d) => RespResponse::Double(*d),
+            RespResponse::Double(d, raw) => RespResponse::Double(*d, raw.clone()),
             RespResponse::IntegerArray(a) => RespResponse::IntegerArray(a.clone()),
             RespResponse::OwnedArray(a) => {
                 RespResponse::OwnedArray(a.iter().map(RespResponse::compact).collect())
@@ -277,7 +289,9 @@ impl RespResponse {
                 let data = buf.as_ref();
                 match read_frame_view(data) {
                     Ok(RespView::Integer(i, _)) => RespResponse::Integer(i),
-                    Ok(RespView::Double(d, _)) => RespResponse::Double(d),
+                    Ok(RespView::Double(d, raw)) => {
+                        RespResponse::Double(d, Bytes::copy_from_slice(raw))
+                    }
                     Ok(RespView::Null) => RespResponse::Null,
                     // Anything else copies its bytes out as they are. A scalar
                     // that does not read back keeps them too, so the failure

@@ -580,10 +580,10 @@ impl ClusterConnection {
     /// This tip is in-use by commands that don't accept key name arguments.
     /// The command operates atomically per shard.
     async fn request_policy_all_shards(&mut self, command: &Command) -> Result<()> {
-        let reply_skip = self.reply_mode.held_skip().cloned();
+        let reply_skip = self.reply_mode.held_skip();
         let sub_requests = self
             .topology
-            .feed_each(command, reply_skip.as_ref(), NodeReach::Masters)
+            .feed_each(command, reply_skip, NodeReach::Masters)
             .await?
             .into_iter()
             .map(SubRequest::keyless)
@@ -604,10 +604,10 @@ impl ClusterConnection {
                 .connect_replicas(&self.cluster_config, &self.config, &self.state_snapshot)
                 .await?;
         }
-        let reply_skip = self.reply_mode.held_skip().cloned();
+        let reply_skip = self.reply_mode.held_skip();
         let sub_requests = self
             .topology
-            .feed_each(command, reply_skip.as_ref(), NodeReach::All)
+            .feed_each(command, reply_skip, NodeReach::All)
             .await?
             .into_iter()
             .map(SubRequest::keyless)
@@ -652,7 +652,7 @@ impl ClusterConnection {
 
         // Each shard receives the skip before its own slice of the command, so each
         // suppresses exactly one reply — its own.
-        let reply_skip = self.reply_mode.held_skip().cloned();
+        let reply_skip = self.reply_mode.held_skip();
         let mut sub_requests = SmallVec::<[SubRequest; 10]>::new();
 
         for slice in shard_slices(routed_keys) {
@@ -666,7 +666,7 @@ impl ClusterConnection {
             }
 
             let shard_command = prepare_command_for_shard(command, &slice.keys);
-            node.feed(&shard_command, reply_skip.as_ref()).await?;
+            node.feed(&shard_command, reply_skip).await?;
             sub_requests.push(SubRequest {
                 node_id: node.id.clone(),
                 keys: slice.keys,
@@ -713,7 +713,7 @@ impl ClusterConnection {
 
         // Each node receives the skip before its own slice of the command, so
         // each suppresses exactly one reply — its own.
-        let reply_skip = self.reply_mode.held_skip().cloned();
+        let reply_skip = self.reply_mode.held_skip();
         let mut sub_requests = SmallVec::<[SubRequest; 10]>::new();
 
         for (node_index, channels) in node_channels {
@@ -727,7 +727,7 @@ impl ClusterConnection {
                 .topology
                 .node_mut(node_index)
                 .ok_or_else(|| Error::from(ClientError::InconsistentRoutingState))?;
-            node.feed(&node_command, reply_skip.as_ref()).await?;
+            node.feed(&node_command, reply_skip).await?;
             sub_requests.push(SubRequest::keyless(node.id.clone()));
         }
 
@@ -779,7 +779,7 @@ impl ClusterConnection {
         node_idx: usize,
         should_ask: bool,
     ) -> Result<()> {
-        let reply_skip = self.reply_mode.held_skip().cloned();
+        let reply_skip = self.reply_mode.held_skip();
         let node = self
             .topology
             .node_mut(node_idx)
@@ -787,7 +787,7 @@ impl ClusterConnection {
         if should_ask {
             node.connection.asking().await?;
         }
-        node.feed(command, reply_skip.as_ref()).await?;
+        node.feed(command, reply_skip).await?;
         let sub_request = SubRequest::keyless(node.id.clone());
         self.file_request(RequestInfo::single_shard(command, sub_request));
         Ok(())

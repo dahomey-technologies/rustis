@@ -406,11 +406,11 @@ impl Command {
     }
 
     pub fn request_policy(&self) -> Option<RequestPolicy> {
-        self.request_policy.clone()
+        self.request_policy
     }
 
     pub fn response_policy(&self) -> Option<ResponsePolicy> {
-        self.response_policy.clone()
+        self.response_policy
     }
 
     pub fn key_step(&self) -> usize {
@@ -1079,7 +1079,20 @@ mod tests {
         clippy::indexing_slicing,
         reason = "test code: a panic is how a test reports failure"
     )]
-    use crate::resp::{Command, cmd};
+    use crate::{
+        commands::{RequestPolicy, ResponsePolicy},
+        resp::{Command, cmd},
+    };
+
+    /// The two cluster tips are fieldless, so reading one off a command must be a
+    /// register copy and not a `Clone::clone` call. `Copy` is what says so — to
+    /// the compiler in a debug build, and to a reader at the call site.
+    #[test]
+    fn the_cluster_tips_are_copy_so_reading_one_never_clones() {
+        fn assert_copy<T: Copy>() {}
+        assert_copy::<RequestPolicy>();
+        assert_copy::<ResponsePolicy>();
+    }
 
     #[test]
     fn command() {

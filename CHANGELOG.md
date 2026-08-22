@@ -392,6 +392,13 @@ removed trait methods, 4 removed structs, the `resp::Response` trait, the
 
 ### Internal
 
+- **Reading a cluster tip off a `Command` no longer calls `Clone::clone`.**
+  `request_policy()` and `response_policy()` returned `Option<RequestPolicy>` /
+  `Option<ResponsePolicy>` through `.clone()`; both enums are fieldless, so the two
+  accessors now copy. Not a measurable win — one call site each, and a release build
+  already compiled the clone away — but a fieldless tip that reads as if it allocates
+  costs a reader more than it costs the machine.
+
 - **The `bench`-gated RESP entry points are behind a named module.** They were glob
   re-exported into `resp`, where they stood beside the real API with nothing marking
   them apart; they are now `resp::bench_support`, whose module page states that the

@@ -1565,7 +1565,7 @@ impl<'de> Deserialize<'de> for CommandTip {
 /// 1. The command doesn't accept key name arguments: the client can execute the command on an arbitrary shard.
 /// 2. For commands that accept one or more key name arguments: the client should route the command to a single shard,
 ///    as determined by the hash slot of the input keys.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Copy, Deserialize)]
 pub enum RequestPolicy {
     /// the client should execute the command on all nodes - masters and replicas alike.
     ///
@@ -1612,7 +1612,7 @@ impl FromStr for RequestPolicy {
 ///    These should be packed in a single in no particular order.
 /// 2. For commands that accept one or more key name arguments: the client needs to retain the same order of replies as the input key names.
 ///    For example, [`mget`](crate::commands::StringCommands::mget)'s aggregated reply.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Copy, Deserialize)]
 pub enum ResponsePolicy {
     /// the clients should return success if at least one shard didn't reply with an error.
     ///

@@ -3,6 +3,7 @@ use crate::{
     client::{Client, PreparedCommand, command_traits::*},
     resp::{Command, RespBatchDeserializer},
 };
+use bytes::Bytes;
 use serde::de::DeserializeOwned;
 use smallvec::SmallVec;
 
@@ -55,6 +56,26 @@ impl Pipeline<'_> {
         self.forget_flags.push(true);
     }
 
+    /// The name of the one command whose response the caller awaits, when there
+    /// is exactly one.
+    ///
+    /// That is the only case where a name reaches the caller: with several
+    /// responses [`Self::execute`] deserializes the reply as a whole, which
+    /// belongs to no single command. So one name is taken here, from the command
+    /// the flags say is awaited, instead of one per reply — the difference being
+    /// what a pipeline of a thousand commands pays to read none of them.
+    fn single_awaited_command(commands: &[Command], forget_flags: &[bool]) -> Option<Bytes> {
+        let mut awaited = forget_flags
+            .iter()
+            .enumerate()
+            .filter(|(_, forget)| !**forget);
+
+        match (awaited.next(), awaited.next()) {
+            (Some((index, _)), None) => commands.get(index).map(Command::name_bytes),
+            _ => None,
+        }
+    }
+
     /// Execute the pipeline by the sending the queued command
     /// as a whole batch to the Redis server.
     ///
@@ -104,6 +125,8 @@ impl Pipeline<'_> {
             return T::deserialize(&deserializer);
         }
 
+        let awaited_command = Self::single_awaited_command(&self.commands, &self.forget_flags);
+
         let mut results = self
             .client
             .internal_send_batch(self.commands, self.retry_on_error)
@@ -122,21 +145,14 @@ impl Pipeline<'_> {
             });
         }
 
-        // Past this point the command names have served their purpose for the
-        // single-response path below; the batch deserializer reports on the
-        // whole reply, which belongs to no single command.
-        let (results, command_names): (Vec<_>, Vec<_>) = results.into_iter().unzip();
-
         // A single response deserializes directly as `T` rather than as a
         // one-element batch. Peeling it off with `pop` inside the condition
         // rather than after it keeps the emptiness of `results` the only thing
         // this branch depends on, with no length invariant left to assert.
-        let mut results = results;
         if results.len() == 1
             && let Some(result) = results.pop()
         {
-            let named = result.to();
-            return match (named, command_names.into_iter().next()) {
+            return match (result.to(), awaited_command) {
                 (Err(e), Some(command)) => Err(e.with_command(command)),
                 (named, _) => named,
             };

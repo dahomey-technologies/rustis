@@ -254,3 +254,28 @@ async fn a_failing_command_inside_a_transaction_names_itself() -> Result<()> {
 
     Ok(())
 }
+
+/// A pipeline of several awaited commands reports on the reply as a whole, so
+/// the only case where a name reaches the caller is a single awaited command.
+/// The awaited one is named, not the head of the batch — here the third command,
+/// behind two forgotten ones.
+#[tokio::test]
+#[serial]
+async fn a_single_awaited_command_in_a_pipeline_names_itself() -> Result<()> {
+    let client = get_test_client().await?;
+
+    let mut pipeline = client.create_pipeline();
+    pipeline.set("a_text_key", "not_a_number").forget();
+    pipeline.del("a_key_to_delete").forget();
+    pipeline.get::<i64>("a_text_key").queue();
+
+    let result: Result<i64> = pipeline.execute().await;
+    let error = result.expect_err("text read as an integer must be refused");
+    assert_eq!(
+        Some("GET"),
+        error.command(),
+        "the awaited command must name itself: {error:?}"
+    );
+
+    Ok(())
+}

@@ -607,7 +607,7 @@ async fn mid_batch_redirection_does_not_desync_following_responses() -> Result<(
 
     let values = results?
         .iter()
-        .map(|(response, _)| response.to::<String>())
+        .map(|response| response.to::<String>())
         .collect::<Result<Vec<_>>>()?;
     assert_eq!(
         vec!["A", "M", "B"],

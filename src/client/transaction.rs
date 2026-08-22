@@ -3,6 +3,7 @@ use crate::{
     client::{BatchPreparedCommand, Client, PreparedCommand, command_traits::*},
     resp::{Command, RespDeserializer, cmd},
 };
+use bytes::Bytes;
 use serde::{
     Deserializer,
     de::{self, DeserializeOwned, DeserializeSeed, IgnoredAny, SeqAccess, Visitor},
@@ -110,6 +111,13 @@ impl Transaction {
 
         let num_commands = self.commands.len();
 
+        // Unlike a pipeline, a transaction wants one name per command: the server
+        // refuses a command by name at queue time, and the queued phase below
+        // names each refusal. Taken here, from the commands, because a batch hands
+        // its replies back unnamed. `forget_flags` is offset by one against this
+        // list, `MULTI` occupying `commands[0]` and carrying no flag.
+        let command_names: Vec<Bytes> = self.commands.iter().map(Command::name_bytes).collect();
+
         let results = self
             .client
             .internal_send_batch(self.commands, self.retry_on_error)
@@ -127,9 +135,9 @@ impl Transaction {
                 .enumerate()
                 .filter(|(_, forget)| !**forget);
             match (awaited.next(), awaited.next()) {
-                // `results` is MULTI, then one reply per queued command, then
-                // EXEC — hence the offset of one onto the queued commands.
-                (Some((i, _)), None) => results.get(i + 1).map(|(_, name)| name.clone()),
+                // `commands` is MULTI, then the queued commands, then EXEC —
+                // hence the offset of one onto the queued commands.
+                (Some((i, _)), None) => command_names.get(i + 1).cloned(),
                 _ => None,
             }
         };
@@ -138,14 +146,16 @@ impl Transaction {
 
         // MULTI + QUEUED commands. A server error here names the queued command
         // it refused, which is the one the caller has to fix.
-        for _ in 0..num_commands - 1 {
-            if let Some((response, command)) = iter.next() {
-                response.to::<()>().map_err(|e| e.with_command(command))?;
+        for name in command_names.iter().take(num_commands - 1) {
+            if let Some(response) = iter.next() {
+                response
+                    .to::<()>()
+                    .map_err(|e| e.with_command(name.clone()))?;
             }
         }
 
         // EXEC
-        if let Some((result, _)) = iter.next() {
+        if let Some(result) = iter.next() {
             let result = match TransactionResultSeed::new(self.forget_flags)
                 .deserialize(RespDeserializer::new(result.view()?))
             {

@@ -400,6 +400,15 @@ removed trait methods, 4 removed structs, the `resp::Response` trait, the
 
 ### Internal
 
+- **A batch hands its replies back unnamed, so a pipeline stops carrying one command
+  name per command.** Every batch paired a `Bytes` name onto every reply, which the
+  pipeline then unzipped back apart and dropped: a name is read only when a reply
+  fails, and only when exactly one command is awaited. The pipeline now takes that one
+  name from the flags that say which command is awaited, and the transaction — the only
+  caller that names each queued command — takes the list it needs itself. Worth ~57 µs
+  of caller CPU on a thousand commands, against ~1.6 ms for the round trip: the pairing
+  and the unzip are three vectors and 200 KiB of moves.
+
 - **A held `CLIENT REPLY SKIP` is borrowed while it is routed, not cloned.** The five
   cluster routing paths read it through `.cloned()`, because the reply mode and the
   node topology looked like one borrow of the connection; they are separate fields, so

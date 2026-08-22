@@ -55,10 +55,7 @@ pub enum CloseOutcome {
 
 #[derive(Clone)]
 pub struct Client {
-    /// `Option` only so a dropping/closing clone can swap its reference out of
-    /// `&mut self` before calling [`Arc::into_inner`]; a live client always
-    /// holds `Some`.
-    shared: Arc<Option<ClientShared>>,
+    shared: Arc<ClientShared>,
     reconnect_sender: ReconnectSender,
     command_timeout: Duration,
     retry_on_error: bool,
@@ -104,10 +101,10 @@ impl Client {
             NetworkHandler::connect(config.clone()).await?;
 
         Ok(Self {
-            shared: Arc::new(Some(ClientShared {
+            shared: Arc::new(ClientShared {
                 msg_sender,
                 network_task_join_handle,
-            })),
+            }),
             reconnect_sender,
             command_timeout,
             retry_on_error,
@@ -223,10 +220,7 @@ impl Client {
     /// # }
     /// ```
     pub fn is_terminated(&self) -> bool {
-        self.shared
-            .as_ref()
-            .as_ref()
-            .is_some_and(|shared| shared.network_task_join_handle.is_finished())
+        self.shared.network_task_join_handle.is_finished()
     }
 
     /// Ends the connection, if this handle is the last one on it.
@@ -259,14 +253,14 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn close(mut self) -> Result<CloseOutcome> {
-        let mut shared: Arc<Option<ClientShared>> = Arc::new(None);
-        std::mem::swap(&mut shared, &mut self.shared);
-
-        // stop the network loop if we are the last owner of the shared state;
+    pub async fn close(self) -> Result<CloseOutcome> {
+        // Stop the network loop if we are the last owner of the shared state;
         // `into_inner` makes that determination race-free against a concurrent
-        // `close`/`Drop` (see `ClientShared`).
-        if let Some(Some(shared)) = Arc::into_inner(shared) {
+        // `close` or drop (see `ClientShared`). It needs the `Arc` by value,
+        // which a `Client` gives up field by field, having no `Drop` of its own.
+        let Self { shared, .. } = self;
+
+        if let Some(shared) = Arc::into_inner(shared) {
             let ClientShared {
                 msg_sender,
                 network_task_join_handle,
@@ -719,27 +713,23 @@ impl Client {
             }
         }
 
-        // Both failures below deny a specific command, so they name it: the
+        // The failure below denies a specific command, so it names it: the
         // message never reaches the network task, which is what would otherwise
         // have attached it.
         let command_name = message.command_name();
-        if let Some(shared) = self.shared.as_ref() {
-            trace!(
-                tag = %self.connection_tag,
-                "Will enqueue message: {message:?}"
-            );
-            match shared.msg_sender.send(message) {
-                Ok(()) => Ok(command_name),
-                Err(e) => {
-                    info!("{e}");
-                    Self::name_command(
-                        Err(Error::from(ClientError::DisconnectedFromServer)),
-                        command_name,
-                    )
-                }
+        trace!(
+            tag = %self.connection_tag,
+            "Will enqueue message: {message:?}"
+        );
+        match self.shared.msg_sender.send(message) {
+            Ok(()) => Ok(command_name),
+            Err(e) => {
+                info!("{e}");
+                Self::name_command(
+                    Err(Error::from(ClientError::DisconnectedFromServer)),
+                    command_name,
+                )
             }
-        } else {
-            Self::name_command(Err(Error::from(ClientError::InvalidChannel)), command_name)
         }
     }
 

@@ -53,6 +53,9 @@ The upgrade checklist. Each item is stated in the section it belongs to below.
   `NotACollection`, `MissingTransactionReply`, `IncompatibleShardReplies`,
   `NotAUnitVariant` and `MissingMapValue`.
 
+- **`ClientError::InvalidChannel` is removed.** No code path produced it: it stood for
+  a client holding no send channel, which nothing can observe.
+
 - **`Pipeline::queue`/`forget` and `Transaction::queue`/`forget` become
   `queue_command`/`forget_command`.** They took a generic command; the batch trait
   methods of the same name take a prepared one. Two calls that read alike and are
@@ -241,6 +244,11 @@ removed trait methods, 4 removed structs, the `resp::Response` trait, the
 - **`quit` is deleted.** Redis deprecated it in 7.2.0. On a multiplexed client it
   closed the connection of every clone. Use `Client::close`.
 
+- **`ClientError::InvalidChannel` is removed.** It reported a client whose send channel
+  was gone, a state a `Client` cannot be in: `close` takes the client by value, so the
+  handle that gives the channel up is unreachable afterwards. A send that finds the
+  network task gone reports `ClientError::DisconnectedFromServer`.
+
 - **The deprecated string commands are removed.** Use `set_get_with_options` for
   `getset`, `set_with_options` with `SetExpiration::Ex` or `Px` for `setex` and
   `psetex`, `set_with_options` with `SetCondition::NX` for `setnx`, and `getrange` for
@@ -399,6 +407,13 @@ removed trait methods, 4 removed structs, the `resp::Response` trait, the
   sizing jitter against the delay it spreads.
 
 ### Internal
+
+- **The state a client's clones share holds no sentinel.** The field was
+  `Arc<Option<ClientShared>>`, the `Option` there only so `close` could swap its
+  reference out before `Arc::into_inner`. A `Client` has no `Drop`, so `close` takes the
+  `Arc` out of the client it already owns. Both readers of the field — `is_terminated`
+  and the send path every command goes through — lose a `None` branch, and `close` loses
+  the allocation of the sentinel it swapped in.
 
 - **A batch hands its replies back unnamed, so a pipeline stops carrying one command
   name per command.** Every batch paired a `Bytes` name onto every reply, which the

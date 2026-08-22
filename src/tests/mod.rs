@@ -92,6 +92,8 @@ mod pipeline;
 mod pooled_client_manager;
 #[cfg(all(feature = "pool", feature = "server-tests"))]
 mod pooled_client_manager_server;
+#[cfg(feature = "tokio-runtime")]
+mod prelude;
 #[cfg(feature = "server-tests")]
 mod pub_sub_commands;
 mod pub_sub_message;

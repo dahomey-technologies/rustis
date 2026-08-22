@@ -91,8 +91,10 @@ simply dropping it — nothing has reached the server yet.
 
 # Example
 
-To use a command, simply add the related trait to your `use` declerations
-and call the related associated function directly to a client, pipeline, transaction instance.
+To use a command, add the related trait to your `use` declarations and call the
+related associated function directly on a client, pipeline or transaction
+instance. [`prelude`](crate::prelude) carries every trait on the list above, for
+a program that would otherwise import them one by one.
 
 Commands can be directly awaited or [forgotten](crate::client::ClientPreparedCommand::forget).
 

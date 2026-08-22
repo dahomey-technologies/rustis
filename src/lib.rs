@@ -150,6 +150,11 @@ async fn main() -> Result<()> {
 }
 ```
 
+Each command family is a trait, so the import block grows with the number of
+families a program calls. The [`prelude`] re-exports all of them, together with
+the executors and the pub/sub types, which shortens the block above to
+`use rustis::{commands::FlushingMode, prelude::*, Result};`.
+
 # Client
 See the module [`client`] to discover which are the 3
 usages of the [`Client`](client::Client) struct and how to configure it.
@@ -318,6 +323,7 @@ mod error;
 #[cfg(feature = "fuzzing")]
 pub mod fuzz_api;
 mod network;
+pub mod prelude;
 pub mod resp;
 
 #[cfg(feature = "pool")]

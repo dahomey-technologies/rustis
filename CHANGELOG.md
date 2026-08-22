@@ -102,6 +102,16 @@ removed trait methods, 4 removed structs, the `resp::Response` trait, the
 
 ### Added
 
+- **`rustis::prelude` holds every command trait.** A command lives on a trait, so a
+  program calling several families collected one `use` per family. The prelude
+  re-exports all 28, the two traits carrying `forget` and `queue`, and the types a
+  program writes into its own signatures: the four executors — `Client`,
+  `ExclusiveClient`, `Pipeline`, `Transaction` — and `PubSubStream`, its split halves
+  and `PubSubMessage`. What configures a client or reports on it keeps its path, and so
+  does `Result`, a glob import of which shadows the standard prelude's and leaves
+  `Result<T, E>` naming nothing. A test reads `src/commands/mod.rs` and fails on a family
+  the prelude does not re-export.
+
 - **A pub/sub message reads as text or as a Rust type.** `PubSubMessage::channel_str()`
   and `pattern_str()` answer a `&str`, failing with `ErrorKind::Utf8` on a binary name
   rather than replacing what they cannot decode. `payload_as::<T>()` runs the payload

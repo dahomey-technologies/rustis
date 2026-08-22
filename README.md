@@ -144,6 +144,13 @@ async fn main() -> Result<()> {
 }
 ```
 
+Each command family is a trait, so the import block grows with the number of
+families a program calls. The
+[prelude](https://docs.rs/rustis/latest/rustis/prelude/index.html) re-exports all
+of them, together with the executors and the pub/sub types, which shortens the
+block above to
+`use rustis::{commands::FlushingMode, prelude::*, Result};`.
+
 # Tests
 
 1. From the `redis` directory, run `docker_up.sh` or `docker_up.cmd`

@@ -378,7 +378,7 @@ impl RequestInfo {
 
         // The response_policy tip is set for commands that reply with scalar data types,
         // or when it's expected that clients implement a non-default aggregate.
-        let Some(response_policy) = &self.response_policy else {
+        let Some(response_policy) = self.response_policy else {
             return no_response_policy(sub_results, &self);
         };
 

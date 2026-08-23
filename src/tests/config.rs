@@ -379,9 +379,6 @@ fn an_unknown_query_parameter_is_rejected() {
         "redis://127.0.0.1?buffers=1024",
         "redis://127.0.0.1?limits.max_bulk_len=1024",
         "redis+sentinel://127.0.0.1:6379/myservice?sentinel_user=foo",
-        "redis+cluster://127.0.0.1:6379?sentinel_username=foo",
-        // a read preference only means something to a cluster client
-        "redis://127.0.0.1?read_preference=prefer_replica",
     ] {
         let error = uri.into_config().unwrap_err();
         let ErrorKind::Client(ClientError::InvalidUri(message)) = error.kind() else {
@@ -390,6 +387,48 @@ fn an_unknown_query_parameter_is_rejected() {
         assert!(
             message.contains("unknown"),
             "`{uri}`: unhelpful message `{message}`"
+        );
+    }
+}
+
+/// A parameter only one server type reads is rejected on every other, naming
+/// the URI it belongs to.
+///
+/// These are real parameters, so reporting them as unknown sends the caller
+/// looking for a typo that is not there: what is wrong is the scheme they were
+/// written on.
+#[test]
+fn a_query_parameter_of_another_server_type_names_the_uri_it_belongs_to() {
+    for (uri, belongs_to) in [
+        ("redis://127.0.0.1?sentinel_password=secret", "sentinel"),
+        (
+            "redis+cluster://127.0.0.1:6379?sentinel_username=foo",
+            "sentinel",
+        ),
+        (
+            "redis+cluster://127.0.0.1:6379?wait_between_failures=250",
+            "sentinel",
+        ),
+        (
+            "redis://127.0.0.1?read_preference=prefer_replica",
+            "cluster",
+        ),
+        (
+            "redis+sentinel://127.0.0.1:6379/myservice?topology_refresh_interval=60000",
+            "cluster",
+        ),
+        // the TCP schemes have a database, spelled as a path segment
+        ("redis://127.0.0.1?db=5", "unix socket"),
+    ] {
+        let error = uri.into_config().unwrap_err();
+        let ErrorKind::Client(ClientError::InvalidUri(message)) = error.kind() else {
+            panic!("`{uri}` should be rejected as a parameter of another server type");
+        };
+        let name = uri.rsplit_once('?').unwrap().1.split('=').next().unwrap();
+        assert!(
+            message.contains(name) && message.contains(belongs_to),
+            "`{uri}`: message `{message}` names neither `{name}` nor the {belongs_to} URI it \
+             belongs to"
         );
     }
 }

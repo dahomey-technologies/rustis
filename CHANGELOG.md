@@ -279,6 +279,14 @@ removed trait methods, 4 removed structs, the `resp::Response` trait, the
 
 ### Fixed
 
+- **A query parameter written on the wrong scheme now names the URI it belongs to.**
+  `sentinel_username`, `sentinel_password` and `wait_between_failures` are read only by
+  a sentinel URI, `read_preference` and `topology_refresh_interval` only by a cluster
+  one, and `db` only by a unix socket one. On any other scheme they were reported as
+  unknown, which sends the caller hunting for a typo that is not there: the error now
+  says which URI reads the parameter, and points at the last path segment for a
+  database.
+
 - **A cached RESP3 double read as a string now spells the value the way the server
   did.** The client-side cache decodes a double when it compacts an entry, and a read
   as `String` rebuilt the text from that `f64` — so a score of `1e+20` came back as

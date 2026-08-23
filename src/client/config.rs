@@ -958,16 +958,39 @@ impl Config {
         Self::apply_tuning_params(config, query)?;
         Self::apply_reconnection_params(config, query)?;
 
-        // Whatever is left is a key this client does not know: a typo, or a
-        // knob borrowed from another server type. Dropping it silently leaves
-        // the default in place behind the caller's back.
+        // Whatever is left is a key this URI does not read: a typo, or a knob
+        // borrowed from another server type. Dropping it silently leaves the
+        // default in place behind the caller's back.
         if let Some(name) = query.keys().min() {
-            return Err(Self::invalid_uri(format!(
-                "unknown query parameter `{name}`"
-            )));
+            return Err(match Self::server_type_owning(name) {
+                Some(uri) => {
+                    Self::invalid_uri(format!("query parameter `{name}` only applies to {uri}"))
+                }
+                None => Self::invalid_uri(format!("unknown query parameter `{name}`")),
+            });
         }
 
         Ok(())
+    }
+
+    /// Names the URI a query parameter belongs to, for the parameters read
+    /// inside one server type's branch and therefore left over on every other.
+    ///
+    /// A parameter that reaches this is spelled correctly, so reporting it as
+    /// unknown would send the caller hunting for a typo that is not there. Every
+    /// parameter taken outside [`apply_query_params`](Self::apply_query_params)
+    /// belongs here.
+    fn server_type_owning(name: &str) -> Option<&'static str> {
+        match name {
+            "wait_between_failures" | "sentinel_username" | "sentinel_password" => {
+                Some("a sentinel URI")
+            }
+            "read_preference" | "topology_refresh_interval" => Some("a cluster URI"),
+            "db" => Some(
+                "a unix socket URI; the TCP schemes carry the database as the last path segment",
+            ),
+            _ => None,
+        }
     }
 
     /// Reads the knobs held by [`BufferConfig`], [`BackpressureConfig`] and

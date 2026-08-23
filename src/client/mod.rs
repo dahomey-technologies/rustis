@@ -243,7 +243,9 @@ The URL scheme is used to detect the server type:
 ### QueryParameters
 Query parameters set optional configuration fields of the struct [`Config`] or its
 dependencies. The list below is exhaustive: an unknown parameter, or a value that
-does not parse, is rejected with an error rather than ignored.
+does not parse, is rejected with an error rather than ignored. A parameter marked
+for one server type below is read only on that type's scheme, so writing it on any
+other is an error naming the URI it belongs to.
 * [`connect_timeout`](Config::connect_timeout) - The time to attempt a connection before timing out (default `10,000` ms).
 * [`command_timeout`](Config::command_timeout) - If a command does not return a reply within a set number of milliseconds,
   a timeout error will be thrown. If set to 0, no timeout is apply (default `0`).

@@ -301,7 +301,10 @@ impl ClusterConnection {
         config: &Config,
         connection_state: &mut ConnectionState,
     ) -> Result<ClusterConnection> {
-        let topology = ClusterTopology::discover(cluster_config, config, connection_state).await?;
+        // A first connection holds nothing, so the configured seeds are the whole
+        // address list.
+        let topology =
+            ClusterTopology::discover(&cluster_config.nodes, config, connection_state).await?;
         let tag = topology
             .node(0)
             .ok_or_else(|| Error::from(ClientError::ClusterConfig))?
@@ -1112,11 +1115,26 @@ impl ClusterConnection {
         self.state_snapshot = connection_state.clone();
     }
 
+    /// Rediscovers the topology and reconnects one master per shard.
+    ///
+    /// An attempt is all-or-nothing: a single unreachable master fails it, and
+    /// the shards already reconnected are dropped with it. The handler's backoff
+    /// is what retries, so there is no second budget here — a partial topology
+    /// would instead report the cluster reconnected while the slots of the
+    /// missing shard resolve to no node.
     pub(crate) async fn reconnect(&mut self, connection_state: &mut ConnectionState) -> Result<()> {
         info!("Reconnecting to cluster...");
         self.state_snapshot = connection_state.clone();
+
+        // The nodes held come first: they answered until the socket broke, which
+        // is more than is known of any seed, and the seeds are typically one
+        // control-plane endpoint — the thing a partial outage takes away. Dialling
+        // the seeds alone fails the whole attempt while a working node sits
+        // untried, and the handler's budget then repeats that same too-small dial
+        // on every attempt.
+        let addresses = self.topology.discovery_addresses(&self.cluster_config);
         let topology =
-            ClusterTopology::discover(&self.cluster_config, &self.config, connection_state).await?;
+            ClusterTopology::discover(&addresses, &self.config, connection_state).await?;
         info!("Reconnected to cluster!");
 
         self.topology = topology;
@@ -1138,8 +1156,6 @@ impl ClusterConnection {
         self.reply_mode.forget_held_skip();
 
         Ok(())
-
-        // TODO improve reconnection strategy with multiple retries
     }
 
     /// Discover the cluster topology over a **dedicated, short-lived**

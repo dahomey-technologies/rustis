@@ -35,6 +35,75 @@ pub(crate) fn duplex_pair(server: FakeServer) -> (TransportReader, TransportWrit
     (Box::new(reader), Box::new(writer))
 }
 
+/// A [`FakeServer`] listening on a real, ephemeral TCP port.
+///
+/// A pipe cannot stand in for a server a test must *address*: a cluster client
+/// dials the host and port a `CLUSTER SHARDS` reply names, so the reply has to
+/// name a port that answers. Dropping the node closes the listener, which is how
+/// a test spells "this node is gone" — a later dial is refused rather than
+/// hanging.
+/// Binding and serving are two steps because a cluster reply has to name the
+/// port it is served on: a test binds every node, builds the topology from the
+/// ports it got, then starts answering with it.
+pub(crate) struct TcpNode {
+    pub addr: std::net::SocketAddr,
+    accepted: Arc<AtomicUsize>,
+    /// Held until [`serve`](Self::serve) hands it to the accept loop. Connections
+    /// made in between wait in the backlog rather than being refused.
+    listener: Option<tokio::net::TcpListener>,
+    accept_loop: Option<tokio::task::JoinHandle<()>>,
+}
+
+impl TcpNode {
+    /// Binds an ephemeral port, answering nothing yet.
+    pub(crate) async fn bind() -> std::io::Result<Self> {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
+        Ok(Self {
+            addr: listener.local_addr()?,
+            accepted: Arc::new(AtomicUsize::new(0)),
+            listener: Some(listener),
+            accept_loop: None,
+        })
+    }
+
+    /// Answers every connection from now on with `server`.
+    pub(crate) fn serve(&mut self, server: FakeServer) {
+        let Some(listener) = self.listener.take() else {
+            panic!("a node serves once");
+        };
+        let accepted = Arc::clone(&self.accepted);
+
+        self.accept_loop = Some(tokio::spawn(async move {
+            while let Ok((stream, _)) = listener.accept().await {
+                accepted.fetch_add(1, Ordering::SeqCst);
+                let server = server.clone();
+                tokio::spawn(async move { server.serve(stream).await });
+            }
+        }));
+    }
+
+    /// How many connections this node has accepted, which is what tells a test
+    /// whether a node was dialled at all.
+    pub(crate) fn accepted(&self) -> usize {
+        self.accepted.load(Ordering::SeqCst)
+    }
+
+    /// The `(host, port)` pair a cluster configuration addresses this node by.
+    pub(crate) fn address(&self) -> (String, u16) {
+        (self.addr.ip().to_string(), self.addr.port())
+    }
+}
+
+impl Drop for TcpNode {
+    /// Closes the port, which is how a test spells "this node is gone": a later
+    /// dial is refused rather than left hanging.
+    fn drop(&mut self) {
+        if let Some(accept_loop) = &self.accept_loop {
+            accept_loop.abort();
+        }
+    }
+}
+
 /// A factory answering every dial with a fresh pipe, counting its calls so a
 /// test can tell a reconnection from the initial connection.
 struct DuplexTransport {

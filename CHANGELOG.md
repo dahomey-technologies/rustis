@@ -279,6 +279,14 @@ removed trait methods, 4 removed structs, the `resp::Response` trait, the
 
 ### Fixed
 
+- **A cluster reconnection rediscovers the topology from the nodes it holds, not only
+  from the configured seeds.** `reconnect` dialled `ClusterConfig::nodes` alone, so a
+  cluster whose seeds are one control-plane endpoint stayed down for as long as that
+  endpoint did — nodes that had answered until the socket broke sat untried in the
+  topology, and every attempt of the reconnection budget repeated the same too-small
+  dial. It now dials the held nodes first and falls back to the seeds, which is what
+  the two other discovery paths already did.
+
 - **A query parameter written on the wrong scheme now names the URI it belongs to.**
   `sentinel_username`, `sentinel_password` and `wait_between_failures` are read only by
   a sentinel URI, `read_preference` and `topology_refresh_interval` only by a cluster

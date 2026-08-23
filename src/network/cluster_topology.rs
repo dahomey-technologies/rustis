@@ -300,16 +300,21 @@ impl ClusterTopology {
         addresses
     }
 
-    /// Discovers the cluster from the configured seeds and connects one master
-    /// per shard. Replicas are brought in later, by `connect_replicas`.
+    /// Discovers the cluster from `addresses` and connects one master per shard.
+    /// Replicas are brought in later, by `connect_replicas`.
+    ///
+    /// The addresses are the caller's to choose, because what is worth dialling
+    /// depends on what it already knows: the configured seeds are all there is on
+    /// a first connection, while a rediscovery has
+    /// [`discovery_addresses`](Self::discovery_addresses) — the nodes it holds,
+    /// which have answered, ahead of those seeds.
     pub(super) async fn discover(
-        cluster_config: &ClusterConfig,
+        addresses: &[ClusterNodeAddress],
         config: &Config,
         connection_state: &mut ConnectionState,
     ) -> crate::Result<ClusterTopology> {
         #[cfg_attr(not(test), allow(unused_mut))]
-        let Some(mut shard_info_list) = Self::discover_shards(&cluster_config.nodes, config).await
-        else {
+        let Some(mut shard_info_list) = Self::discover_shards(addresses, config).await else {
             return Err(Error::from(ClientError::ClusterConfig));
         };
 

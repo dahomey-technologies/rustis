@@ -43,13 +43,13 @@ Zz4JtMr3UAPczB+k+ei1v8o7sESoHoRoLvFVkFPp
 -----END CERTIFICATE-----
 "#;
 
-#[cfg(any(feature = "native-tls", feature = "rustls"))]
 pub(crate) fn get_default_host() -> String {
     match std::env::var("REDIS_HOST") {
         Ok(host) => host,
         Err(_) => "localhost".to_string(),
     }
 }
+
 pub(crate) fn get_default_port() -> u16 {
     match std::env::var("REDIS_PORT") {
         Ok(port) => port.parse::<u16>().unwrap(),
@@ -60,6 +60,7 @@ pub(crate) fn get_default_addr() -> String {
     format!("{}:{}", get_default_host(), get_default_port())
 }
 
+#[cfg(any(feature = "native-tls", feature = "rustls"))]
 pub(crate) fn get_default_tls_port() -> u16 {
     match std::env::var("REDIS_TLS_PORT") {
         Ok(port) => port.parse::<u16>().unwrap(),

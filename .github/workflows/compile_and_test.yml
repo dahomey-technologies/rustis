@@ -230,6 +230,9 @@ jobs:
   # needed). `--no-default-features` is used so each entry compiles exactly the
   # features it names: the default set would otherwise mask a combination that
   # only builds because something else pulled a dependency in.
+  # `--all-targets` brings in `cfg(test)`, so a helper whose `cfg` does not match
+  # its callers fails here rather than only in an editor: every other job that
+  # compiles the suite names `tokio-rustls`.
   check-features:
     name: Check features (${{ matrix.features }})
     runs-on: ubuntu-latest
@@ -253,11 +256,21 @@ jobs:
           - tokio-runtime,tokio-native-tls
           - tokio-runtime,tokio-rustls,pool,json,client-cache
           - tokio-runtime,tokio-native-tls,pool,json,client-cache
+          # `server-tests` selects the half of the suite that reaches a Redis.
+          # Nothing else here compiles it without a TLS feature, which is what
+          # the default feature set — and therefore an editor — builds.
+          - tokio-runtime,server-tests
+          - tokio-runtime,tokio-native-tls,server-tests
     steps:
       - name: Checkout sources
         uses: actions/checkout@v5
-      - name: cargo check --no-default-features --features ${{ matrix.features }}
-        run: cargo check --no-default-features --features ${{ matrix.features }}
+      - name: cargo check --all-targets --no-default-features --features ${{ matrix.features }}
+        # Registry dependencies build with `--cap-lints allow`, so `RUSTFLAGS`
+        # reaches this crate only. Warnings are denied because an import or a
+        # helper left unused by a feature combination is reported as one.
+        env:
+          RUSTFLAGS: -D warnings
+        run: cargo check --all-targets --no-default-features --features ${{ matrix.features }}
 
   # The combinations that must *not* build. Each is rejected by a `compile_error!`
   # in `lib.rs`, and what is checked is the message: a build failing for some

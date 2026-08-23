@@ -544,11 +544,11 @@ removed trait methods, 4 removed structs, the `resp::Response` trait, the
   second, with no Docker and no deployment. The 19 modules that held both kinds are
   split, so the gate stays on the module list in `src/tests/mod.rs`.
 
-- **CI builds the targets and feature sets it skipped.** `--all-targets` covers only
-  the targets the named features enable, so no job built the 14 benchmark targets, the
-  8 `bench`-gated examples or the 4 `web-examples` ones. `fuzzing` joins the feature
-  matrix for the same reason. `publish.yml` now checks the docs.rs feature set and the
-  native-tls backend, because `cargo publish` builds with default features only.
+- **CI builds the targets and feature sets it skipped.** No job built the 14 benchmark
+  targets, the 8 `bench`-gated examples or the 4 `web-examples` ones: `--all-targets`
+  covers only what the named features enable. The feature matrix gains `fuzzing`, and
+  compiles the test tree with warnings denied — every job that built the suite named
+  `tokio-rustls`. `publish.yml` checks the docs.rs set and the native-tls backend.
 
 ## [0.24.0] - 2026-08-12
 

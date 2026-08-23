@@ -3,8 +3,6 @@ use crate::commands::{
     SentinelCommands, ServerCommands, SortedSetCommands, StreamCommands, StringCommands,
     VectorSetCommands,
 };
-#[cfg(feature = "native-tls")]
-use native_tls::Certificate;
 use std::sync::{
     Mutex, OnceLock,
     atomic::{AtomicBool, Ordering},

@@ -50,8 +50,11 @@ pub enum CloseOutcome {
     /// This was the last handle: the send channel is closed and the network task
     /// has finished.
     Closed,
-    /// A clone is still holding the connection, which stays up. Nothing was sent
-    /// and nothing was shut down.
+    /// A clone was still holding the connection when this handle was given up,
+    /// so nothing was sent and nothing was shut down here. Handles given up at
+    /// the same time all read this but one, the shutdown going to whichever goes
+    /// last, so this outcome does not promise the connection is still up by the
+    /// time it is read.
     StillShared,
 }
 
@@ -232,8 +235,8 @@ impl Client {
     /// is what the call reports:
     /// [`CloseOutcome::Closed`](crate::client::CloseOutcome::Closed) means the
     /// send channel was closed and the network task has finished, and
-    /// [`StillShared`](crate::client::CloseOutcome::StillShared) means a clone
-    /// is still using the connection and nothing was shut down. `Ok` alone is
+    /// [`StillShared`](crate::client::CloseOutcome::StillShared) means another
+    /// handle was still holding it and nothing was shut down here. `Ok` alone is
     /// not the answer, which is why the outcome is returned rather than
     /// discarded: a shutdown path that treats `Ok(())` as "drained" would be
     /// wrong for every clone but one.
@@ -241,6 +244,10 @@ impl Client {
     /// Awaiting a `Closed` outcome awaits the network task, so the socket and
     /// the buffers are gone when it returns. Dropping the last handle does the
     /// same shutdown, without waiting for it.
+    ///
+    /// Handles may be given up at the same time, by `close` or by `Drop`, in any
+    /// mix: the shutdown goes to whichever goes last, so at most one call reads
+    /// `Closed`, and none does when the last handle is a dropped one.
     ///
     /// # Example
     /// ```

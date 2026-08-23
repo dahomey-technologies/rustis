@@ -387,6 +387,13 @@ removed trait methods, 4 removed structs, the `resp::Response` trait, the
 
 ### Documentation
 
+- **`CloseOutcome::StillShared` says what it does not promise.** It read as "a clone is
+  still holding the connection, which stays up", which does not hold for handles given
+  up at the same time: the shutdown goes to whichever goes last, so a call reading
+  `StillShared` may be racing the one that closes. `Client::close` now states the rule
+  for any mix of `close` and `Drop`, including that no call reads `Closed` when the last
+  handle is a dropped one.
+
 - **A shedding budget states the memory it does not bound.** A single message larger
   than `max_pubsub_bytes` or `max_push_bytes` is delivered rather than made
   undeliverable, so the memory actually held is the budget plus one message, itself
@@ -429,6 +436,14 @@ removed trait methods, 4 removed structs, the `resp::Response` trait, the
   sizing jitter against the delay it spreads.
 
 ### Internal
+
+- **The shutdown race is tested on `close` too, and with more than two handles.** Which
+  handle ends the connection is decided by `Arc::into_inner`, an invariant a comment
+  argued and one test covered for two concurrent drops. Eight handles now close at once
+  over a thousand rounds, and a second test mixes drops with closes. The first fails
+  both on the reference-count check this replaced — every racer sees a count above one
+  and backs off, leaving the network task, its socket and its buffers unreachable — and
+  on `Arc::try_unwrap`, where both racers can lose and no caller reports `Closed`.
 
 - **The state a client's clones share holds no sentinel.** The field was
   `Arc<Option<ClientShared>>`, the `Option` there only so `close` could swap its

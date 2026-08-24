@@ -6,7 +6,7 @@ All notable changes to this project are documented here. The format is based on
 Versions up to and including `0.19.3` are documented in the
 [GitHub releases](https://github.com/dahomey-technologies/rustis/releases).
 
-## [Unreleased]
+## [0.25.0] - 2026-08-24
 
 ### BREAKING CHANGES
 
@@ -20,11 +20,10 @@ The upgrade checklist. Each item is stated in the section it belongs to below.
   `setnx` and `substr`.
 
 - **A `nil` reply read as a scalar is now an error, not `0` / `""` / `'\0'`.** Declare
-  the response as an `Option` to accept the absence. The rule reaches inside a reply,
-  so `hmget` is read as `Vec<Option<String>>`, and three public fields become
-  `Option<String>`: `TsInfo::source_key`, `FunctionInfo::description`,
-  `XPendingResult::{smallest_id, greatest_id}`. Collections, `Value` and `bool` keep
-  reading a `nil`.
+  the response as an `Option` to accept the absence. The rule reaches inside a reply, so
+  `hmget` reads as `Vec<Option<String>>`, and three public fields become `Option<String>`:
+  `TsInfoResult::source_key`, `FunctionInfo::description` and
+  `XPendingResult::{smallest_id, greatest_id}`. Collections, `Value` and `bool` are exempt.
 
 - **Seven commands now route on a key they only named before.** A cross-slot call to
   `sdiffstore`, `sinterstore`, `zdiffstore`, `zinterstore`, `zunionstore`,
@@ -61,38 +60,27 @@ The upgrade checklist. Each item is stated in the section it belongs to below.
   methods of the same name take a prepared one. Two calls that read alike and are
   not the same call now differ by name.
 
-- **`CommandBuilder::key` takes exactly one key**, and a collection of keys goes
-  through the new `CommandBuilder::keys`. A built-in command is unaffected — the 24
-  multi-key ones were moved — but a command built by hand with
-  `cmd("DEL").key(my_vec)` now fails with `ClientError::InvalidKeyArity`. Counted
-  forms (`key_with_count` and the stepped variants) are unchanged and may still
-  declare zero keys, as `EVAL` does.
+- **`CommandBuilder::key` takes exactly one key**, and a collection goes through the new
+  `CommandBuilder::keys`. Built-in commands are unaffected — the 24 multi-key ones were
+  moved — but a hand-built `cmd("DEL").key(my_vec)` now fails with
+  `ClientError::InvalidKeyArity`. The counted forms are unchanged and may still declare
+  zero keys, as `EVAL` does.
 
-- **`resp::Response` is deleted.** The trait was `pub trait Response {}` with a blanket
-  impl for every `Deserialize` type, so the `R: Response` bound on ~230 command
-  signatures constrained nothing and `IntoFuture` re-required `DeserializeOwned`
-  behind it. The bound is now `R: DeserializeOwned`, which is what it always meant.
-  A caller who named the trait in a `where` clause replaces it with
-  `serde::de::DeserializeOwned`.
+- **`resp::Response` is deleted.** Replace it with `serde::de::DeserializeOwned` in a
+  `where` clause. The trait was `pub trait Response {}` with a blanket impl for every
+  `Deserialize` type, so the `R: Response` bound on 232 command signatures constrained
+  nothing while `IntoFuture` re-required `DeserializeOwned` behind it. The bound now
+  says what it always meant.
 
 - **`Client::close` returns `CloseOutcome` instead of `()`.** A connection is shared
   by every clone of a client, so a `close` that finds a clone alive shuts nothing down
   and used to report that as `Ok(())`. `CloseOutcome::Closed` and `StillShared` now
   tell the two apart. `ExclusiveClient::close` follows.
 
-- **`resp::Response` is deleted.** The trait was `pub trait Response {}` with a blanket
-  impl for every `Deserialize` type, so the `R: Response` bound on ~230 command
-  signatures constrained nothing and `IntoFuture` re-required `DeserializeOwned`
-  behind it. The bound is now `R: DeserializeOwned`, which is what it always meant.
-  A caller who named the trait in a `where` clause replaces it with
-  `serde::de::DeserializeOwned`.
-
-- **`RedisError::description` is a method, not a field, and the bytes are kept.** A
-  server error reply is bytes and can echo a key or an argument, which
-  `String::from_utf8_lossy` used to mangle on the way in.
-  `RedisError::description()` answers a `Cow<str>` with the same lossy reading, and
-  `RedisError::description_bytes()` answers the exact bytes. `kind` stays a public
-  field.
+- **`RedisError::description` is a method, not a field, and the bytes are kept.** A server
+  error reply is bytes and can echo a key, which `String::from_utf8_lossy` used to mangle
+  on the way in. `description()` answers a `Cow<str>` with the same lossy reading,
+  `description_bytes()` the exact bytes. `kind` stays a public field.
 
 - **`ClientError::InvalidTag` is removed.** No code path could produce it.
 
@@ -102,42 +90,29 @@ removed trait methods, 4 removed structs, the `resp::Response` trait, the
 
 ### Added
 
-- **`Client::send_raw` hands a reply back as RESP bytes.** Every reply went through
-  serde, so a proxy, a bridge to another protocol or a reader of a shape no type
-  models had to go through `Value` — an owned tree that drops what it cannot spell
-  back: a server's rendering of a float, a verbatim string's tag, an error's exact
-  wording. `send_raw` answers a `resp::RawResponse` instead, the frame the client
-  received, byte for byte. A reply the client built itself — a cluster aggregation, a
-  decoded cache entry, a `*-1` — is written as RESP3, which `RawResponse` documents.
-  A Redis error is a reply here rather than a failure, since a caller forwarding
-  replies forwards the failures too: `RawResponse::is_error` tells them apart, and an
-  interceptor is still told the command failed. The bytes are copied out of the read
-  buffer, which the connection recycles.
+- **`Client::send_raw` hands a reply back as RESP bytes.** A proxy or a protocol bridge
+  had to read through `Value`, which drops what it cannot spell back: a server's
+  rendering of a float, a verbatim string's tag, an error's exact wording. `send_raw`
+  answers a `resp::RawResponse` — the frame as received, or RESP3 for a reply the client
+  built itself. A Redis error is a reply here, not a failure; `is_error` tells them apart.
 
-- **`rustis::prelude` holds every command trait.** A command lives on a trait, so a
-  program calling several families collected one `use` per family. The prelude
-  re-exports all 28, the two traits carrying `forget` and `queue`, and the types a
-  program writes into its own signatures: the four executors — `Client`,
-  `ExclusiveClient`, `Pipeline`, `Transaction` — and `PubSubStream`, its split halves
-  and `PubSubMessage`. What configures a client or reports on it keeps its path, and so
-  does `Result`, a glob import of which shadows the standard prelude's and leaves
-  `Result<T, E>` naming nothing. A test reads `src/commands/mod.rs` and fails on a family
-  the prelude does not re-export.
+- **`rustis::prelude` holds every command trait.** A command lives on a trait, so a program
+  calling several families collected one `use` per family. The prelude re-exports all 28,
+  the two batch traits, the four executors and the pub/sub types. `Result` stays out: a
+  glob import of it shadows the standard prelude's and leaves `Result<T, E>` naming
+  nothing. A test reads `src/commands/mod.rs` and fails on a family left out.
 
 - **A pub/sub message reads as text or as a Rust type.** `PubSubMessage::channel_str()`
   and `pattern_str()` answer a `&str`, failing with `ErrorKind::Utf8` on a binary name
   rather than replacing what they cannot decode. `payload_as::<T>()` runs the payload
-  through the same serde machinery as a bulk string reply, so a published number reads
-  as a number and a document as `Json<T>`; `T` may borrow from the message, so
-  `payload_as::<&str>()` allocates nothing.
+  through the same serde machinery as a bulk string reply, so a published number reads as
+  a number and a document as `Json<T>`; `T` may borrow, so `&str` allocates nothing.
 
-- **Every tuning knob is now addressable in a URL.** `buffers`, `backpressure` and
-  `limits` take one query parameter per field, named after it — `buffers.read_capacity`,
-  `backpressure.max_queued_bytes`, `limits.max_bulk_length`. `reconnection` names the
-  policy, `constant`, `linear` or `exponential`, and `reconnection.delay` and its
-  siblings shape it; a field the policy does not carry is rejected rather than dropped.
-  `Display` writes them back, `max_command_attempts` included, so a config round-trips
-  through its URL.
+- **Every tuning knob is now addressable in a URL.** `buffers`, `backpressure` and `limits`
+  take one query parameter per field, named after it — `buffers.read_capacity`,
+  `limits.max_bulk_length`. `reconnection` names the policy and `reconnection.delay` and
+  its siblings shape it; a field the policy does not carry is rejected, not dropped.
+  `Display` writes them all back, so a config round-trips through its URL.
 
 - **A Sentinel failover is now noticed before a command fails.** The client subscribes
   to `+switch-master` and rediscovers the master when a Sentinel announces one, and
@@ -149,15 +124,10 @@ removed trait methods, 4 removed structs, the `resp::Response` trait, the
   cannot hold an absence. The message names the target type and points at `Option`.
 
 - **A key argument that is not a single key fails the command**, with
-  `ClientError::InvalidKeyArity` naming the command and the argument count. Command
-  arguments are `impl Serialize`, so the compiler cannot check how many arguments a
-  value produces: `None` and an empty collection produce none, a struct or a sequence
-  produces one per element. `client.get(None::<String>)` used to reach the server a
-  key short and, in Cluster mode, with no hash slot — which routes it to a random
-  node instead of the node that owns the key. The count is checked where the key is
-  added, so any foreign type is still a valid key as soon as it serializes to one
-  argument. `tests/arg_arity.rs` shows that against real third-party types, `uuid::Uuid`
-  and `serde_json::Value`, neither of which carries any `impl` from this crate.
+  `ClientError::InvalidKeyArity` naming the command and the argument count. Arguments are
+  `impl Serialize`, so the compiler cannot count what a value produces: a `None` key used
+  to reach the server a key short and, in Cluster mode, with no hash slot — which routes
+  it to a random node. Any type serializing to one argument is still a valid key.
 
 - **`Client::stats`** returns a `ClientStats` snapshot: queued commands and bytes,
   the bytes high-water mark, shed commands and reconnections. The numbers existed
@@ -188,12 +158,11 @@ removed trait methods, 4 removed structs, the `resp::Response` trait, the
   error. Per-command metrics, a request identifier or an audit trail had no hook at
   all. It may rewrite the command before it goes out.
 
-- **`Cache::with_store`** takes a `CacheStore`, so the client-side cache can be backed
-  by a store shared between clients, one with an eviction policy of its own, or one
-  that counts what it serves. `Cache` is generic over it and defaults to `MokaStore`,
-  so `Cache` alone still means what it did and a hit allocates nothing. An entry is an
-  opaque `CachedValue`: handing the bytes out would pin a recycled network buffer for
-  as long as the cache holds it, so a store cannot persist an entry.
+- **`Cache::with_store`** takes a `CacheStore`, so the client-side cache can be backed by a
+  store shared between clients, or one with an eviction policy of its own. `Cache` is
+  generic over it and defaults to `MokaStore`, so `Cache` alone still means what it did.
+  An entry is an opaque `CachedValue`: handing the bytes out would pin a recycled network
+  buffer, so a store cannot persist an entry.
 
 - **`ReconnectionConfig::Custom`** takes a `ReconnectionPolicy`, so a delay can depend
   on more than the attempt number: a circuit breaker, an external health signal, a
@@ -256,12 +225,10 @@ removed trait methods, 4 removed structs, the `resp::Response` trait, the
 ### Removed
 
 - **The connection-driving commands are internal.** A `Client` is clonable, so one
-  connection carries the commands of every clone. `HELLO` changed the protocol version
-  the deserializers depend on, and a reconnection silently undid the change.
-  `READONLY` and `READWRITE` changed the read mode that `ClusterConfig::read_preference`
-  depends on. `ASKING` is correct only immediately before the command it redirects.
-  The client sends all of them itself, at the correct points. `CLUSTER SLOTS` callers
-  use `cluster_shards`. The generic command API can still send these commands.
+  connection carries the commands of every clone: `HELLO` changed the protocol version the
+  deserializers depend on, `READONLY` the read mode `ClusterConfig::read_preference`
+  depends on, and `ASKING` is correct only immediately before the command it redirects.
+  The client now sends them itself. `CLUSTER SLOTS` callers use `cluster_shards`.
 
 - **`quit` is deleted.** Redis deprecated it in 7.2.0. On a multiplexed client it
   closed the connection of every clone. Use `Client::close`.
@@ -279,36 +246,29 @@ removed trait methods, 4 removed structs, the `resp::Response` trait, the
 
 ### Fixed
 
-- **A cluster reconnection rediscovers the topology from the nodes it holds, not only
-  from the configured seeds.** `reconnect` dialled `ClusterConfig::nodes` alone, so a
-  cluster whose seeds are one control-plane endpoint stayed down for as long as that
-  endpoint did — nodes that had answered until the socket broke sat untried in the
-  topology, and every attempt of the reconnection budget repeated the same too-small
-  dial. It now dials the held nodes first and falls back to the seeds, which is what
-  the two other discovery paths already did.
+- **A cluster reconnection rediscovers the topology from the nodes it holds, not only from
+  the configured seeds.** `reconnect` dialled `ClusterConfig::nodes` alone, so a cluster
+  whose seeds are one control-plane endpoint stayed down for as long as that endpoint did,
+  every attempt repeating the same too-small dial while nodes that had answered sat untried.
+  It now dials the held nodes first, as the two other discovery paths already did.
 
 - **A query parameter written on the wrong scheme now names the URI it belongs to.**
   `sentinel_username`, `sentinel_password` and `wait_between_failures` are read only by
-  a sentinel URI, `read_preference` and `topology_refresh_interval` only by a cluster
-  one, and `db` only by a unix socket one. On any other scheme they were reported as
-  unknown, which sends the caller hunting for a typo that is not there: the error now
-  says which URI reads the parameter, and points at the last path segment for a
-  database.
+  a sentinel URI, `read_preference` and `topology_refresh_interval` only by a cluster one,
+  and `db` only by a unix socket one. On any other scheme they were reported as unknown,
+  sending the caller after a typo that is not there. The error now names the owning URI.
 
-- **A cached RESP3 double read as a string now spells the value the way the server
-  did.** The client-side cache decodes a double when it compacts an entry, and a read
-  as `String` rebuilt the text from that `f64` — so a score of `1e+20` came back as
-  `100000000000000000000` on a cache hit and `1e+20` on a miss, and `nan` as `NaN`.
-  A compacted double now keeps the reply's own bytes beside the value, so a hit and a
-  miss answer the same string, and the read hands them over borrowed instead of
-  rendering a `String` (56 ns per read, on the caller's thread).
+- **A cached RESP3 double read as a string now spells the value the way the server did.**
+  The client-side cache decodes a double when it compacts an entry, and a read as `String`
+  rebuilt the text from that `f64`: a score of `1e+20` came back as
+  `100000000000000000000` on a hit and `1e+20` on a miss, `nan` as `NaN`. A compacted
+  double now keeps the reply's own bytes, and the read borrows them (56 ns saved).
 
 - **A rendered server error no longer carries a stray space.** `RedisError`'s
-  `Display` wrote `"{kind} {description}"` unconditionally, so an error whose kind
-  rustis does not recognise — the kind renders as nothing, the message holding the
-  whole reply — came out with a leading space, and a redirection, whose detail is
-  all in the kind, with a trailing one. The separator is now written only between
-  two non-empty halves.
+  `Display` wrote `"{kind} {description}"` unconditionally, so an error whose kind rustis
+  does not recognise came out with a leading space, and a redirection, whose detail is all
+  in the kind, with a trailing one. The separator is now written only between two non-empty
+  halves.
 
 - **A cluster `SUBSCRIBE` no longer fails when its channels span several nodes.** The
   command is split per node, but the confirmations were matched by rank against the
@@ -344,20 +304,16 @@ removed trait methods, 4 removed structs, the `resp::Response` trait, the
   stayed for the life of the connection. Both totals now belong to one type that
   zeroes them with the queues it empties.
 
-- **`connect_timeout` bounds the handshake, not only the dial.** A server that
-  accepted the socket and never answered `HELLO` left `Client::connect` waiting
-  forever: the dial succeeded in microseconds, so the only deadline in the path
-  had already been met and nothing bounded the handshake that followed. The
-  budget now covers both, and the error it raises is
-  `ErrorKind::Timeout(TimeoutKind::Connect)`.
+- **`connect_timeout` bounds the handshake, not only the dial.** A server that accepted the
+  socket and never answered `HELLO` left `Client::connect` waiting forever: the dial
+  succeeded in microseconds, so the only deadline in the path had already been met. The
+  budget now covers both, raising `ErrorKind::Timeout(TimeoutKind::Connect)`.
 
-- **An internal failure names the condition it hit.** `ClientError::Unexpected`
-  reported a dozen distinguishable conditions as `Unexpected error`, which points
-  nowhere. Worse, the frame parser raised it, and the framing list did not carry
-  it: a failure leaving the reader at an unknown offset was classified as a
-  per-command error, so it was dispatched to a single caller with the stream
-  possibly desynchronised. The parser's two sites are now `MalformedFrame`, which
-  the framing list does carry.
+- **An internal failure names the condition it hit.** `ClientError::Unexpected` reported a
+  dozen distinguishable conditions as `Unexpected error`. Worse, the frame parser raised it
+  and the framing list did not carry it, so a failure leaving the reader at an unknown
+  offset was dispatched to a single caller with the stream possibly desynchronised. The
+  parser's two sites are now `MalformedFrame`, which the framing list does carry.
 
 - **Enabling both TLS backends reports one error.** `rustls` and `native-tls` each
   define a `TlsConfig` and an `Error::Tls`, with different fields, so the union defined
@@ -403,12 +359,11 @@ removed trait methods, 4 removed structs, the `resp::Response` trait, the
 
 ### Documentation
 
-- **`CloseOutcome::StillShared` says what it does not promise.** It read as "a clone is
-  still holding the connection, which stays up", which does not hold for handles given
-  up at the same time: the shutdown goes to whichever goes last, so a call reading
-  `StillShared` may be racing the one that closes. `Client::close` now states the rule
-  for any mix of `close` and `Drop`, including that no call reads `Closed` when the last
-  handle is a dropped one.
+- **`CloseOutcome::StillShared` says what it does not promise.** It read as "a clone still
+  holds the connection, which stays up", which does not hold for handles given up at the
+  same time: the shutdown goes to whichever goes last, so a call reading `StillShared` may
+  be racing the one that closes. `Client::close` now states the rule for any mix of `close`
+  and `Drop`.
 
 - **A shedding budget states the memory it does not bound.** A single message larger
   than `max_pubsub_bytes` or `max_push_bytes` is delivered rather than made
@@ -430,14 +385,11 @@ removed trait methods, 4 removed structs, the `resp::Response` trait, the
 - **`CONTRIBUTING.md` names the `fuzzing` feature and how to run the targets.** It was
   discoverable only from a `Cargo.toml` comment.
 
-- **The `resp` page says why command arguments are `impl Serialize` and not a trait
-  of the crate's own.** Rust's orphan rule allows an `impl` only in the crate defining
-  the trait or the type, so a user could not implement a `rustis` marker trait for
-  `uuid::Uuid` or `serde_json::Value` — while `Serialize` is already implemented by
-  those crates. `serde_json::Value` also shows such a trait could not be honest:
-  one type, five argument counts, and a trait answers for a type while the count is a
-  property of the value. The page states what is checked instead, and that values are
-  not, a struct as a value being the point of `HSET`.
+- **The `resp` page says why command arguments are `impl Serialize` and not a trait of the
+  crate's own.** The orphan rule allows an `impl` only in the crate defining the trait or
+  the type, so nobody could implement a `rustis` marker trait for `uuid::Uuid` — which
+  already implements `Serialize`. Such a trait could not be honest either: it answers for a
+  type, while the argument count is a property of the value.
 
 - **`select` and `auth` warn that the connection is shared.** Every clone of a
   `Client` shares one connection, so these commands apply to all clones. A new
@@ -454,76 +406,70 @@ removed trait methods, 4 removed structs, the `resp::Response` trait, the
 ### Internal
 
 - **The shutdown race is tested on `close` too, and with more than two handles.** Which
-  handle ends the connection is decided by `Arc::into_inner`, an invariant a comment
-  argued and one test covered for two concurrent drops. Eight handles now close at once
-  over a thousand rounds, and a second test mixes drops with closes. The first fails
-  both on the reference-count check this replaced — every racer sees a count above one
-  and backs off, leaving the network task, its socket and its buffers unreachable — and
-  on `Arc::try_unwrap`, where both racers can lose and no caller reports `Closed`.
+  handle ends the connection is decided by `Arc::into_inner`, an invariant a comment argued
+  and one test covered for two concurrent drops. Eight handles now close at once over a
+  thousand rounds, and a second test mixes drops with closes. The first fails on both
+  designs this replaced: a reference-count check, and `Arc::try_unwrap`.
 
 - **The state a client's clones share holds no sentinel.** The field was
-  `Arc<Option<ClientShared>>`, the `Option` there only so `close` could swap its
-  reference out before `Arc::into_inner`. A `Client` has no `Drop`, so `close` takes the
-  `Arc` out of the client it already owns. Both readers of the field — `is_terminated`
-  and the send path every command goes through — lose a `None` branch, and `close` loses
-  the allocation of the sentinel it swapped in.
+  `Arc<Option<ClientShared>>`, the `Option` there only so `close` could swap its reference
+  out before `Arc::into_inner`. A `Client` has no `Drop`, so `close` takes the `Arc` out of
+  the client it already owns. Both readers lose a `None` branch, and `close` loses the
+  allocation of the sentinel it swapped in.
 
-- **A batch hands its replies back unnamed, so a pipeline stops carrying one command
-  name per command.** Every batch paired a `Bytes` name onto every reply, which the
-  pipeline then unzipped back apart and dropped: a name is read only when a reply
-  fails, and only when exactly one command is awaited. The pipeline now takes that one
-  name from the flags that say which command is awaited, and the transaction — the only
-  caller that names each queued command — takes the list it needs itself. Worth ~57 µs
-  of caller CPU on a thousand commands, against ~1.6 ms for the round trip: the pairing
-  and the unzip are three vectors and 200 KiB of moves.
+- **A batch hands its replies back unnamed.** Every batch paired a `Bytes` name onto every
+  reply, which the pipeline unzipped apart again and dropped: a name is read only when a
+  reply fails, and only when exactly one command is awaited. The pipeline now takes that
+  name from the awaited-command flags, and the transaction takes the list itself. Worth
+  ~57 µs of caller CPU per thousand commands — three vectors and 200 KiB of moves.
 
 - **A held `CLIENT REPLY SKIP` is borrowed while it is routed, not cloned.** The five
-  cluster routing paths read it through `.cloned()`, because the reply mode and the
-  node topology looked like one borrow of the connection; they are separate fields, so
-  the read is a disjoint borrow and needs no copy. A `Command` is 120 bytes over a
-  refcounted buffer and the clone measures 27 ns, paid on the shared network task once
-  per command the caller silences.
+  cluster routing paths read it through `.cloned()`, because the reply mode and the node
+  topology looked like one borrow of the connection; they are separate fields, so the read
+  is a disjoint borrow. The clone measured 27 ns on the shared network task, once per
+  command the caller silences.
 
 - **Reading a cluster tip off a `Command` no longer calls `Clone::clone`.**
-  `request_policy()` and `response_policy()` returned `Option<RequestPolicy>` /
-  `Option<ResponsePolicy>` through `.clone()`; both enums are fieldless, so the two
-  accessors now copy. Not a measurable win — one call site each, and a release build
-  already compiled the clone away — but a fieldless tip that reads as if it allocates
-  costs a reader more than it costs the machine.
+  `request_policy()` and `response_policy()` returned their fieldless enums through
+  `.clone()`; both accessors now copy. Not a measurable win — a release build already
+  compiled the clone away — but a fieldless tip that reads as if it allocates costs a
+  reader more than it costs the machine.
 
 - **The `bench`-gated RESP entry points are behind a named module.** They were glob
-  re-exported into `resp`, where they stood beside the real API with nothing marking
-  them apart; they are now `resp::bench_support`, whose module page states that the
-  module is a development instrument with no stability guarantee. `docs.rs` does not
-  list the `bench` feature and `cargo semver-checks` runs on the explicit features
-  only, so the module is documented and checked nowhere — which is what it is for.
+  re-exported into `resp`, standing beside the real API with nothing marking them apart.
+  They are now `resp::bench_support`, whose page states that it is a development instrument
+  with no stability guarantee. `docs.rs` omits the `bench` feature and `semver-checks` runs
+  on the explicit ones, so the module is documented and checked nowhere.
 
-- **A command routed to a single shard no longer builds a key list.** It built two,
-  one on the sub-request and one on the request, and nothing read either: a key list
-  is read only to line one node's replies up against another's. Measured on
-  `cluster_routing`, the removal is not visible (a 100-key single-slot `mget` is
-  unchanged at ~118 µs, p = 0.29); it ships because the work was dead, and because a
-  constructor that names the case states the invariant the two collects hid.
+- **A command routed to a single shard no longer builds a key list.** It built two, one on
+  the sub-request and one on the request, and nothing read either: a key list is read only
+  to line one node's replies up against another's. The removal is not measurable on
+  `cluster_routing` (a 100-key single-slot `mget` unchanged at ~118 µs, p = 0.29); it ships
+  because the work was dead.
 
-- **TLS and cluster routing have benchmarks.** Two of the crate's headline features
-  had none: the 15 existing targets covered neither, so the encrypted path and the
-  routed path had no figure to weigh a change against. `tls_round_trip` measures the
-  handshake and the per-command record layer against the plain connection;
-  `cluster_routing` measures a routed command, and a cross-slot `mget` at 2, 10 and
-  100 keys, against a plain connection to the same node.
+- **TLS and cluster routing have benchmarks.** The 16 existing targets covered neither, so
+  two headline features had no figure to weigh a change against. `tls_round_trip` measures
+  the handshake and the per-command record layer against a plain connection;
+  `cluster_routing` measures a routed command, and a cross-slot `mget` at 2, 10 and 100
+  keys, against a plain connection to the same node.
 
-- **The cluster retry reasons are no longer a public type.** `RetryReason` named the
-  ASK, MOVED and TRYAGAIN redirections in the crate root, and `ErrorKind::Retry`
-  carried a `SmallVec` of them. Both were `#[doc(hidden)]`, so neither was in the
-  documented contract, yet a caller could read a redirect target out of an error the
-  driver answers no command with. `RetryReason` is now crate-internal and
-  `ErrorKind::Retry` carries an opaque `RetryReasons`, which exposes nothing.
+- **The cluster retry reasons are no longer a public type.** `RetryReason` named the ASK,
+  MOVED and TRYAGAIN redirections in the crate root, and `ErrorKind::Retry` carried a
+  `SmallVec` of them. Both were `#[doc(hidden)]`, so neither was in the documented
+  contract, yet a caller could read a redirect target out of an error no command is
+  answered with. It is now crate-internal, behind an opaque `RetryReasons`.
 
 - **The benchmark and web-example crates are dev dependencies.** `criterion`,
   `fred`, `redis`, `axum`, `actix-web` and `pprof` were optional dependencies so a
   Cargo feature could gate them, which made two competing drivers read as
   dependencies of this crate on crates.io. `bench` and `web-examples` carry no
   dependency now; `required-features` still keeps their targets out of a build.
+
+- **The two connection modules are split into nine.** `network_handler` and
+  `cluster_connection` had reached 1987 and 2477 lines, each holding the router, the
+  reply mode, the retry rule, the subscription table, the topology and the in-flight
+  queue in one `impl` over shared fields. Those move out, leaving 1460 and 1387 lines,
+  and each new type owns the invariant it used to share.
 
 - **The command families are declared once instead of four times.** `Client`,
   `ExclusiveClient`, `Pipeline` and `Transaction` each carried a hand-written block of
@@ -536,16 +482,14 @@ removed trait methods, 4 removed structs, the `resp::Response` trait, the
   published surface by path. `tests/public_api.rs` queues a command from each family
   into a pipeline and a transaction, which fails when a batch impl list falls behind.
 
-- **The test suite selects the half that needs no server.** 470 tests reach neither
-  a Redis nor the network — 468 of the 1161 in the library, plus `tests/public_api.rs`
-  — but nothing named them, so the only way to run them was to run everything and
-  read 693 connection failures. The `server-tests` feature, on by default, now
-  carries the server-bound half: `./run_tests.sh --hermetic` runs the rest in about a
-  second, with no Docker and no deployment. The 19 modules that held both kinds are
-  split, so the gate stays on the module list in `src/tests/mod.rs`.
+- **The test suite selects the half that needs no server.** 493 tests reach neither a
+  Redis nor the network — 491 of the 1185 in the library, plus `tests/public_api.rs` —
+  and nothing named them. The `server-tests` feature, on by default, carries the
+  server-bound half, so `./run_tests.sh --hermetic` runs the rest in about a second
+  with no Docker. The 19 modules that held both kinds are split.
 
-- **CI builds the targets and feature sets it skipped.** No job built the 14 benchmark
-  targets, the 8 `bench`-gated examples or the 4 `web-examples` ones: `--all-targets`
+- **CI builds the targets and feature sets it skipped.** No job built the 18 benchmark
+  targets, the 10 `bench`-gated examples or the 4 `web-examples` ones: `--all-targets`
   covers only what the named features enable. The feature matrix gains `fuzzing`, and
   compiles the test tree with warnings denied — every job that built the suite named
   `tokio-rustls`. `publish.yml` checks the docs.rs set and the native-tls backend.
@@ -1798,6 +1742,7 @@ contains breaking changes; read that section before upgrading.
   name or an enum variant name — instead of the target type deciding whether the
   command succeeds.
 
+[0.25.0]: https://github.com/dahomey-technologies/rustis/compare/0.24.0...0.25.0
 [0.24.0]: https://github.com/dahomey-technologies/rustis/compare/0.23.0...0.24.0
 [0.23.0]: https://github.com/dahomey-technologies/rustis/compare/0.22.0...0.23.0
 [0.22.0]: https://github.com/dahomey-technologies/rustis/compare/0.21.0...0.22.0

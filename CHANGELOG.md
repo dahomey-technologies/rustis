@@ -6,7 +6,7 @@ All notable changes to this project are documented here. The format is based on
 Versions up to and including `0.19.3` are documented in the
 [GitHub releases](https://github.com/dahomey-technologies/rustis/releases).
 
-## [Unreleased]
+## [0.26.0] - 2026-09-22
 
 ### BREAKING CHANGES
 
@@ -1788,6 +1788,7 @@ contains breaking changes; read that section before upgrading.
   name or an enum variant name — instead of the target type deciding whether the
   command succeeds.
 
+[0.26.0]: https://github.com/dahomey-technologies/rustis/compare/0.25.0...0.26.0
 [0.25.0]: https://github.com/dahomey-technologies/rustis/compare/0.24.0...0.25.0
 [0.24.0]: https://github.com/dahomey-technologies/rustis/compare/0.23.0...0.24.0
 [0.23.0]: https://github.com/dahomey-technologies/rustis/compare/0.22.0...0.23.0

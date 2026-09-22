@@ -48,6 +48,10 @@ Versions up to and including `0.19.3` are documented in the
   raised for the expectation to catch and the reasoning stays where the index is
   computed.
 
+- **`tape_memory` reads its nodes with `as_chunks`.** `chunks_exact` with a
+  constant size is what `clippy::chunks_exact_to_as_chunks` names; the array
+  chunks it yields also drop the `try_into().unwrap()` each word went through.
+
 ## [0.25.0] - 2026-08-24
 
 ### BREAKING CHANGES

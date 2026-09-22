@@ -256,8 +256,8 @@ fn drive_nodes_u64(buf: &mut BytesMut, nodes: usize) -> u64 {
         buf.put_u64_le(((b'$' as u64) << 56) | (payload & 0x00FF_FFFF_FFFF_FFFF));
     }
     let mut sum = 0u64;
-    for chunk in buf.chunks_exact(8) {
-        let word = u64::from_le_bytes(chunk.try_into().unwrap());
+    for chunk in buf.as_chunks::<8>().0 {
+        let word = u64::from_le_bytes(*chunk);
         sum = sum.wrapping_add(word & 0x00FF_FFFF_FFFF_FFFF);
     }
     sum
@@ -270,8 +270,8 @@ fn drive_nodes_u32(buf: &mut BytesMut, nodes: usize) -> u64 {
         buf.put_u32_le(((b'$' as u32) << 24) | (payload as u32 & 0x00FF_FFFF));
     }
     let mut sum = 0u64;
-    for chunk in buf.chunks_exact(4) {
-        let word = u32::from_le_bytes(chunk.try_into().unwrap());
+    for chunk in buf.as_chunks::<4>().0 {
+        let word = u32::from_le_bytes(*chunk);
         sum = sum.wrapping_add((word & 0x00FF_FFFF) as u64);
     }
     sum

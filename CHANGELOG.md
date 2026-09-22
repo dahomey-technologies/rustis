@@ -43,6 +43,11 @@ Versions up to and including `0.19.3` are documented in the
   A forgotten reply is dropped unread there as it already was in a pipeline,
   errors included.
 
+- **`into_collection_iter` states its bounds without an `#[expect]`.** The head
+  increment is a `saturating_add`, so no `arithmetic_side_effects` warning is
+  raised for the expectation to catch and the reasoning stays where the index is
+  computed.
+
 ## [0.25.0] - 2026-08-24
 
 ### BREAKING CHANGES

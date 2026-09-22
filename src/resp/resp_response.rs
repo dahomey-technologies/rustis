@@ -365,12 +365,6 @@ impl RespResponse {
     /// flattened, a push yields its kind as the first element. An error reply is
     /// surfaced as the Redis error itself, so a caller cannot mistake a failure
     /// for an empty reply.
-    #[expect(
-        clippy::arithmetic_side_effects,
-        reason = "the guard proves `root` is a collection head, and the parser \
-                  writes a head's element-count node immediately after it, so \
-                  `root + 1` addresses a node that exists."
-    )]
     pub(crate) fn into_collection_iter(self) -> Result<RespResponseIter> {
         if let Some(error) = self.redis_error() {
             return Err(error);
@@ -380,7 +374,10 @@ impl RespResponse {
                 if !tape.is_empty() && tape.node(root as usize).is_collection() =>
             {
                 let root = root as usize;
-                let len = tape.node(root + 1).payload_index();
+                // The guard proves `root` is a collection head, and the parser
+                // writes a head's element-count node immediately after it, so the
+                // next index addresses a node that exists and never saturates.
+                let len = tape.node(root.saturating_add(1)).payload_index();
                 Ok(RespResponseIter::new(buf, tape, root, len))
             }
             _ => Err(Error::from(ClientError::NotACollection)),

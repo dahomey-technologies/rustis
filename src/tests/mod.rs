@@ -102,6 +102,7 @@ mod raw_response;
 mod reconnection_state;
 #[cfg(feature = "server-tests")]
 mod resp3;
+mod resp_batch_deserializer;
 mod resp_deserializer;
 mod resp_frame_parser;
 mod resp_response;

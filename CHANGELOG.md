@@ -6,6 +6,43 @@ All notable changes to this project are documented here. The format is based on
 Versions up to and including `0.19.3` are documented in the
 [GitHub releases](https://github.com/dahomey-technologies/rustis/releases).
 
+## [Unreleased]
+
+### BREAKING CHANGES
+
+- **A batch of one reply read as a sequence is now the batch, not the reply.**
+  `Vec<T>` and tuples over a pipeline or a transaction retaining exactly one
+  command used to read that command's own reply; they now read a one-element
+  batch, as they already did above one retained command. A caller who queued a
+  single collection-returning command -- `pipeline.lrange(..).queue()` read as
+  `Vec<String>`, or a `BLPOP` read as `(String, String)` -- now asks for
+  `Vec<Vec<String>>` and `((String, String),)`, or keeps the old reading by
+  naming the reply's own type. Every non-sequence form is unchanged.
+
+### Fixed
+
+- **A pipeline or a transaction retaining exactly one reply reads as a collection.**
+  `Pipeline::execute::<Vec<T>>()` failed with `CannotParseSequence` when the
+  `forget` flags left a single reply, while the same code with two surviving
+  replies succeeded -- so a caller looping over a variable number of commands had
+  to special-case the count. A batch of one carries two readings, the sequence of
+  one and the reply itself, and the batch deserializer resolved them by picking
+  the reply unconditionally. It now resolves them the way serde already tells them
+  apart: the sequence forms answer for the batch, every other form is answered by
+  the lone reply. `Transaction::execute` carried the same shortcut and now goes
+  through the very same deserializer, so the two agree on every type. The same
+  defect also made `(String,)` unreadable on a one-command pipeline, which is
+  what `examples/pipelining.rs` shows; it now works.
+
+### Internal
+
+- **`EXEC`'s reply is read by the pipeline's batch deserializer.** The transaction
+  had its own `DeserializeSeed` and `SeqAccess` deserializer duplicating what
+  `RespBatchDeserializer` does; `EXEC`'s elements are now handed out as responses
+  of their own -- a refcount bump each, no byte copied -- and read as a batch.
+  A forgotten reply is dropped unread there as it already was in a pipeline,
+  errors included.
+
 ## [0.25.0] - 2026-08-24
 
 ### BREAKING CHANGES

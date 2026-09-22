@@ -145,21 +145,14 @@ impl Pipeline<'_> {
             });
         }
 
-        // A single response deserializes directly as `T` rather than as a
-        // one-element batch. Peeling it off with `pop` inside the condition
-        // rather than after it keeps the emptiness of `results` the only thing
-        // this branch depends on, with no length invariant left to assert.
-        if results.len() == 1
-            && let Some(result) = results.pop()
-        {
-            return match (result.to(), awaited_command) {
-                (Err(e), Some(command)) => Err(e.with_command(command)),
-                (named, _) => named,
-            };
-        }
-
+        // A one-reply batch goes through the batch deserializer like any other:
+        // the requested type is what decides whether that reply stands for
+        // itself or for a sequence of one. See [`RespBatchDeserializer`].
         let deserializer = RespBatchDeserializer::new(&results);
-        T::deserialize(&deserializer)
+        match (T::deserialize(&deserializer), awaited_command) {
+            (Err(e), Some(command)) => Err(e.with_command(command)),
+            (named, _) => named,
+        }
     }
 }
 

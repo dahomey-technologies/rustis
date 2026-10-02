@@ -6,6 +6,33 @@ All notable changes to this project are documented here. The format is based on
 Versions up to and including `0.19.3` are documented in the
 [GitHub releases](https://github.com/dahomey-technologies/rustis/releases).
 
+## [Unreleased]
+
+### BREAKING CHANGES
+
+- **`MonitoredCommandInfo::server_addr` is replaced by `source`.** The field held
+  the address of the client, not of the server, and could only be a
+  `SocketAddr`. It is now a `MonitoredCommandSource`: `Client(SocketAddr)` for a
+  TCP client, `Lua` for a command run by a script or a function, `Unix(String)`
+  for a client on a Unix socket, and `Unknown(String)` for any other form.
+
+### Fixed
+
+- **`MonitorStream` no longer drops script, Unix-socket and IPv6 commands.**
+  `MONITOR` reports the source of a command run by a script as `[db lua]`, of a
+  Unix-socket client as `[db unix:/path]` and of an IPv6 client as
+  `[db [::1]:port]`. The parser read the source as a `SocketAddr` and closed the
+  field at its first `]`, so all three failed to parse, and the stream skipped
+  them without a trace: a consumer never saw what a script ran. The three forms
+  are now parsed, and a form the parser does not know is delivered as
+  `MonitoredCommandSource::Unknown` instead of being skipped.
+
+### Added
+
+- **`MonitorStream::undecodable_messages`** counts the events the stream skipped
+  because it could not decode them, the way `dropped_messages` counts the ones
+  it discarded under memory pressure.
+
 ## [0.26.0] - 2026-09-22
 
 ### BREAKING CHANGES

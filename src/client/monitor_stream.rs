@@ -17,6 +17,7 @@ use tracing::warn;
 /// when the stream is dropped or closed, a reset command is sent to the Redis server
 pub struct MonitorStream {
     closed: bool,
+    undecodable_messages: usize,
     receiver: PushReceiver,
     client: Client,
 }
@@ -25,6 +26,7 @@ impl MonitorStream {
     pub(crate) fn new(receiver: PushReceiver, client: Client) -> Self {
         Self {
             closed: false,
+            undecodable_messages: 0,
             receiver,
             client,
         }
@@ -47,6 +49,17 @@ impl MonitorStream {
     pub fn dropped_messages(&self) -> usize {
         self.receiver.dropped_messages()
     }
+
+    /// Number of events skipped so far because they could not be decoded as a
+    /// [`MonitoredCommandInfo`], or because the connection reported an error
+    /// while receiving them.
+    ///
+    /// Such an event does not end the stream, so this counter is its only trace
+    /// besides a `warn` log. A source the parser does not recognize is not
+    /// counted here: it is delivered as [`MonitoredCommandSource::Unknown`].
+    pub fn undecodable_messages(&self) -> usize {
+        self.undecodable_messages
+    }
 }
 
 impl Stream for MonitorStream {
@@ -61,7 +74,7 @@ impl Stream for MonitorStream {
 
         // An undecodable event must not end the stream: the consumer would stop
         // polling and never see another monitored command, on a feed that is
-        // fully server-driven. Skip it and keep reading instead.
+        // fully server-driven. Count it, skip it and keep reading instead.
         loop {
             let Poll::Ready(event) = this.receiver.poll_next_unpin(cx) else {
                 return Poll::Pending;
@@ -78,6 +91,7 @@ impl Stream for MonitorStream {
                 },
                 Err(e) => warn!("Error while receiving a monitor event: {e}"),
             }
+            this.undecodable_messages = this.undecodable_messages.saturating_add(1);
         }
     }
 }
@@ -92,13 +106,44 @@ impl Drop for MonitorStream {
     }
 }
 
+/// Origin of a command reported by [`MONITOR`](https://redis.io/commands/monitor/).
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum MonitoredCommandSource {
+    /// A client connected over TCP, with its peer address (`[0 127.0.0.1:6379]`).
+    Client(SocketAddr),
+    /// A command run by a Lua script or a function (`[0 lua]`).
+    Lua,
+    /// A client connected over a Unix socket, with the socket path
+    /// (`[0 unix:/tmp/redis.sock]`).
+    Unix(String),
+    /// A form this version of the parser does not know, kept verbatim so that
+    /// the command still reaches the consumer.
+    Unknown(String),
+}
+
+impl MonitoredCommandSource {
+    fn parse(s: &str) -> Self {
+        if s == "lua" {
+            Self::Lua
+        } else if let Some(path) = s.strip_prefix("unix:") {
+            Self::Unix(path.to_owned())
+        } else if let Ok(addr) = s.parse::<SocketAddr>() {
+            Self::Client(addr)
+        } else {
+            Self::Unknown(s.to_owned())
+        }
+    }
+}
+
 /// Result for the [`monitor`](crate::commands::BlockingCommands::monitor) command.
 #[derive(Debug)]
 #[non_exhaustive]
 pub struct MonitoredCommandInfo {
     pub unix_timestamp_millis: f64,
     pub database: usize,
-    pub server_addr: SocketAddr,
+    /// Who issued the command: a client (TCP or Unix socket) or a script.
+    pub source: MonitoredCommandSource,
     pub command: String,
     pub command_args: Vec<String>,
 }
@@ -116,7 +161,8 @@ impl<'de> Deserialize<'de> for MonitoredCommandInfo {
 }
 
 /// Parses one MONITOR event line, whose Redis format is
-/// `<timestamp> [<db> <addr>] "arg0" "arg1" ...`.
+/// `<timestamp> [<db> <source>] "arg0" "arg1" ...`, where `<source>` is a
+/// `host:port` peer address (`[::1]:6379` for IPv6), `lua` or `unix:<path>`.
 ///
 /// The arguments are C-quoted (Redis `sdscatrepr`): each is wrapped in double
 /// quotes and may itself contain spaces and escape sequences. Splitting on spaces
@@ -129,15 +175,17 @@ fn parse_monitor_line(line: &str) -> Option<MonitoredCommandInfo> {
     let (timestamp, rest) = line.split_once(' ')?;
     let unix_timestamp_millis = timestamp.parse::<f64>().ok()?;
 
-    // `[<db> <addr>]`: bracketed, addr contains no spaces.
+    // `[<db> <source>]`. The source may itself contain `]` (an IPv6 address,
+    // `[::1]:6379`) or spaces (a Unix socket path), so the field ends at the
+    // first `] "`, where the quoted command starts, not at the first `]`.
     let rest = rest.strip_prefix('[')?;
-    let (bracket, rest) = rest.split_once(']')?;
-    let (database, server_addr) = bracket.split_once(' ')?;
+    let (database, rest) = rest.split_once(' ')?;
     let database = database.parse::<usize>().ok()?;
-    let server_addr = server_addr.parse::<SocketAddr>().ok()?;
+    let (source, rest) = rest.split_at_checked(rest.find("] \"")?)?;
+    let source = MonitoredCommandSource::parse(source);
 
     // The remainder is the quoted command followed by its quoted arguments.
-    let mut quoted = parse_quoted_args(rest.trim_start())?;
+    let mut quoted = parse_quoted_args(rest.strip_prefix(']')?)?;
     if quoted.is_empty() {
         return None;
     }
@@ -146,7 +194,7 @@ fn parse_monitor_line(line: &str) -> Option<MonitoredCommandInfo> {
     Some(MonitoredCommandInfo {
         unix_timestamp_millis,
         database,
-        server_addr,
+        source,
         command,
         command_args: quoted,
     })
@@ -228,7 +276,67 @@ mod tests {
         clippy::indexing_slicing,
         reason = "test code: a panic is how a test reports failure"
     )]
-    use super::parse_monitor_line;
+    use super::{MonitoredCommandSource, parse_monitor_line};
+    use std::net::SocketAddr;
+
+    fn source_of(line: &str) -> MonitoredCommandSource {
+        parse_monitor_line(line).expect("should parse").source
+    }
+
+    fn client(addr: &str) -> MonitoredCommandSource {
+        MonitoredCommandSource::Client(addr.parse::<SocketAddr>().unwrap())
+    }
+
+    #[test]
+    fn ipv4_client_source() {
+        assert_eq!(
+            client("127.0.0.1:6379"),
+            source_of("1.0 [0 127.0.0.1:6379] \"PING\"")
+        );
+    }
+
+    #[test]
+    fn ipv6_client_source() {
+        // The `]` of the IPv6 address used to close the `[<db> <source>]` field.
+        let info = parse_monitor_line("1.0 [0 [::1]:6379] \"GET\" \"k\"").expect("should parse");
+        assert_eq!(client("[::1]:6379"), info.source);
+        assert_eq!("GET", info.command);
+        assert_eq!(vec!["k".to_string()], info.command_args);
+    }
+
+    #[test]
+    fn lua_source() {
+        let info = parse_monitor_line("1790978426.216525 [7 lua] \"SET\" \"k\" \"1\"")
+            .expect("should parse");
+        assert_eq!(7, info.database);
+        assert_eq!(MonitoredCommandSource::Lua, info.source);
+        assert_eq!("SET", info.command);
+        assert_eq!(vec!["k".to_string(), "1".to_string()], info.command_args);
+    }
+
+    #[test]
+    fn unix_source() {
+        assert_eq!(
+            MonitoredCommandSource::Unix("/tmp/redis.sock".to_string()),
+            source_of("1.0 [0 unix:/tmp/redis.sock] \"PING\"")
+        );
+        // A path with a space and a `]` stays whole.
+        assert_eq!(
+            MonitoredCommandSource::Unix("/tmp/a b]/redis.sock".to_string()),
+            source_of("1.0 [0 unix:/tmp/a b]/redis.sock] \"PING\"")
+        );
+    }
+
+    #[test]
+    fn unknown_source_is_kept() {
+        let info = parse_monitor_line("1.0 [3 something-new] \"PING\"").expect("should parse");
+        assert_eq!(3, info.database);
+        assert_eq!(
+            MonitoredCommandSource::Unknown("something-new".to_string()),
+            info.source
+        );
+        assert_eq!("PING", info.command);
+    }
 
     #[test]
     fn plain_command() {

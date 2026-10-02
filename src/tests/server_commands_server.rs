@@ -3,14 +3,15 @@
 
 use crate::{
     ClientError, ErrorKind, RedisError, RedisErrorKind, Result,
-    client::{Client, ReconnectionConfig},
+    client::{Client, MonitoredCommandSource, ReconnectionConfig},
     commands::{
         AclCatOptions, AclDryRunOptions, AclGenPassOptions, AclLogOptions, BgsaveOptions,
         BlockingCommands, ClientInfo, ClientKillOptions, CommandDoc, CommandHistogram,
         CommandListOptions, ConnectionCommands, DebugCommands, FailOverOptions, FlushingMode,
         HotKeysInfo, HotKeysMetric, HotKeysStartOptions, InfoSection, LatencyHistoryEvent,
         LolWutOptions, MemoryUsageOptions, ModuleInfo, ModuleLoadexOptions, ReplicaOfOptions,
-        RoleResult, ServerCommands, ShutdownOptions, SlowLogGetOptions, StringCommands,
+        RoleResult, ScriptingCommands, ServerCommands, ShutdownOptions, SlowLogGetOptions,
+        StringCommands,
     },
     resp::Value,
     spawn,
@@ -1069,6 +1070,56 @@ async fn monitor() -> Result<()> {
     client.select(2).await?;
     let value: String = client.get("key").await?;
     assert_eq!("value3", value);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn monitor_script() -> Result<()> {
+    const SCRIPT: &str = "redis.call('SET', KEYS[1], '1'); redis.call('DEL', KEYS[1]); return 1";
+
+    let client = get_exclusive_test_client().await?;
+    let client2 = get_test_client().await?;
+    client2.select(2).await?;
+
+    let mut monitor_stream = client.monitor().await?;
+
+    spawn(async move {
+        let _result: Result<i64> = client2.eval(SCRIPT, "monitor_script", ()).await;
+    });
+
+    // Skip what other connections send until the EVAL itself.
+    loop {
+        let info = monitor_stream
+            .next()
+            .await
+            .ok_or_else(|| ErrorKind::Client(ClientError::DisconnectedFromServer))?;
+        if info.database == 2 && info.command.eq_ignore_ascii_case("eval") {
+            assert!(matches!(info.source, MonitoredCommandSource::Client(_)));
+            assert_eq!(SCRIPT, info.command_args[0]);
+            break;
+        }
+    }
+
+    // A script runs atomically, so the commands it issues are the very next
+    // events, each reported with a `lua` source instead of being dropped.
+    for (command, args) in [
+        ("SET", vec!["monitor_script", "1"]),
+        ("DEL", vec!["monitor_script"]),
+    ] {
+        let info = monitor_stream
+            .next()
+            .await
+            .ok_or_else(|| ErrorKind::Client(ClientError::DisconnectedFromServer))?;
+        assert_eq!(2, info.database);
+        assert_eq!(MonitoredCommandSource::Lua, info.source);
+        assert_eq!(command, info.command);
+        assert_eq!(args, info.command_args);
+    }
+
+    assert_eq!(0, monitor_stream.undecodable_messages());
+    monitor_stream.close().await?;
 
     Ok(())
 }

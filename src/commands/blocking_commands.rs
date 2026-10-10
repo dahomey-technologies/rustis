@@ -302,7 +302,6 @@ pub trait BlockingCommands<'a>: Sized {
     ///
     /// # See Also
     /// [<https://redis.io/commands/monitor/>](https://redis.io/commands/monitor/)
-    #[must_use]
     #[allow(async_fn_in_trait)]
     async fn monitor(self) -> Result<MonitorStream>;
 }

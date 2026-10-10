@@ -430,11 +430,21 @@ impl Command {
                   is `cfg(test)` state: no shipped build reaches this."
     )]
     pub(crate) fn try_decrement_kill_connection_on_write(&self) -> bool {
-        self.kill_connection_on_write
-            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |current| {
-                if current > 0 { Some(current - 1) } else { None }
-            })
-            .is_ok()
+        // An explicit loop rather than `fetch_update`, which recent toolchains
+        // deprecate in favour of `try_update`, a name the MSRV does not have.
+        let mut current = self.kill_connection_on_write.load(Ordering::SeqCst);
+        while current > 0 {
+            match self.kill_connection_on_write.compare_exchange_weak(
+                current,
+                current - 1,
+                Ordering::SeqCst,
+                Ordering::SeqCst,
+            ) {
+                Ok(_) => return true,
+                Err(actual) => current = actual,
+            }
+        }
+        false
     }
 }
 

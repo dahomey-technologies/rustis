@@ -26,6 +26,13 @@ Versions up to and including `0.19.3` are documented in the
   with `AlreadySubscribed` until the server confirmed the UNSUBSCRIBE of that
   stream, so a caller that subscribed again right after a drop had to retry. It
   now takes the channel over at once.
+- **The crate builds again with warnings denied on Rust 1.99.** That toolchain
+  deprecates `AtomicUsize::fetch_update` in favour of `try_update`, which the
+  1.88 MSRV does not have, so the test-only fault-injection countdown now
+  decrements through a `compare_exchange_weak` loop that both accept. Its clippy
+  also reports `#[must_use]` on `BlockingCommands::monitor` as redundant -- an
+  `async fn` returns a future, already `must_use` -- so the attribute is gone,
+  with no change to what a caller is warned about.
 
 ## [0.27.0] - 2026-10-03
 

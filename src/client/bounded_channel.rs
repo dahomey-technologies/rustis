@@ -154,6 +154,12 @@ impl BoundedSender {
         self.shared.waker.wake();
         Ok(())
     }
+
+    /// Whether the subscriber is gone, so that every [`send`](Self::send) would
+    /// fail.
+    pub(crate) fn is_closed(&self) -> bool {
+        self.shared.receiver_alive.load(Ordering::Acquire) == 0
+    }
 }
 
 impl Clone for BoundedSender {

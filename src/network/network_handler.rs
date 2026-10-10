@@ -349,6 +349,12 @@ impl NetworkHandler {
     fn handle_message(&mut self, mut msg: Message) {
         trace!("[{:?}] Will handle message: {msg:?}", self.mode);
 
+        // Ahead of the shedding below: an UNSUBSCRIBE answered here is never
+        // queued, so it costs the queue nothing and must not be refused.
+        if self.mode.is_disconnected() && self.unsubscribe_while_disconnected(&mut msg) {
+            return;
+        }
+
         // Shed an incoming command rather than let the send queue grow past its
         // memory budget, which is what a reconnection outage would otherwise do.
         //
@@ -387,7 +393,7 @@ impl NetworkHandler {
                         ..
                     } => {
                         for (channel_or_pattern, _sender) in subscriptions.iter() {
-                            if self.router.is_subscribed(channel_or_pattern) {
+                            if self.router.has_live_subscriber(channel_or_pattern) {
                                 debug!(
                                     "[{:?}] There is already a subscription on channel `{}`",
                                     self.mode,
@@ -400,6 +406,15 @@ impl NetworkHandler {
 
                         if collision_error.is_none() {
                             let subscriptions = std::mem::take(subscriptions);
+                            // Whatever entry is left for these names belongs to
+                            // a subscriber that is gone, which no message has
+                            // revealed yet. It gives way to the new one, rather
+                            // than refusing a channel nobody can receive on.
+                            // Released only now, past the check of the whole
+                            // batch, so a refused SUBSCRIBE changes nothing.
+                            for (channel_or_pattern, _sender) in &subscriptions {
+                                self.router.release_subscription(channel_or_pattern);
+                            }
                             let pending_subscriptions =
                                 subscriptions
                                     .into_iter()
@@ -483,6 +498,56 @@ impl NetworkHandler {
 
         #[cfg(test)]
         self.record_queue_depths();
+    }
+
+    /// Answers an UNSUBSCRIBE that finds the client disconnected, and reports
+    /// whether `msg` was one.
+    ///
+    /// A fresh connection is subscribed to nothing, so the command has already
+    /// achieved its goal: its channels are dropped from the table and the caller
+    /// is told it succeeded. Failing it instead, as any other non-retryable
+    /// command is failed here, left the table untouched, and the reconnection
+    /// then subscribed the server again on behalf of a subscriber that had
+    /// asked to leave. Nothing removed that entry until a message arrived on the
+    /// channel, and until then every `subscribe` to it was refused with
+    /// `AlreadySubscribed`. Queuing a retryable one was no better: it went out
+    /// only after the reconnection had subscribed again, for nothing.
+    ///
+    /// In a cluster too, since a reconnection there rebuilds every node
+    /// connection or none.
+    fn unsubscribe_while_disconnected(&mut self, msg: &mut Message) -> bool {
+        let MessageKind::Single {
+            command,
+            result_sender,
+        } = &mut msg.kind
+        else {
+            return false;
+        };
+        let CommandKind::Unsbuscribe(subscription_type) = command.kind() else {
+            return false;
+        };
+
+        // The channel-less form cancels every subscription of its kind, as in
+        // the connected path.
+        let channels: Vec<Bytes> = if command.num_args() > 0 {
+            command.args().collect()
+        } else {
+            self.router
+                .subscriptions_of(*subscription_type)
+                .into_keys()
+                .collect()
+        };
+        debug!("network disconnected, releasing without sending: {command:?}");
+        for channel_or_pattern in &channels {
+            self.router.release_subscription(channel_or_pattern);
+        }
+
+        if let Some(result_sender) = result_sender.take()
+            && result_sender.send(Ok(RespResponse::ok())).is_err()
+        {
+            debug!("Dropping the reply to an UNSUBSCRIBE: its receiver is gone");
+        }
+        true
     }
 
     #[expect(

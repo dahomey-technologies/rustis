@@ -112,9 +112,29 @@ impl Router {
         }
     }
 
-    /// Whether this channel or pattern is already subscribed.
+    /// Whether this channel or pattern is in the table, live or not. Callers
+    /// deciding whether a channel is taken use [`Self::has_live_subscriber`].
+    #[cfg(test)]
     pub(crate) fn is_subscribed(&self, channel_or_pattern: &Bytes) -> bool {
         self.subscriptions.contains_key(channel_or_pattern)
+    }
+
+    /// Whether this channel or pattern is subscribed for a subscriber still
+    /// able to receive.
+    ///
+    /// A subscriber that is gone is otherwise noticed only when a message
+    /// arrives for it, see [`Self::deliver`]. A quiet channel never gets one,
+    /// and an entry nobody can receive on must not refuse a new subscriber.
+    pub(crate) fn has_live_subscriber(&self, channel_or_pattern: &[u8]) -> bool {
+        self.subscriptions
+            .get(channel_or_pattern)
+            .is_some_and(|(_, sender)| !sender.is_closed())
+    }
+
+    /// Forgets one subscription without anything being sent: the caller either
+    /// knows the server no longer holds it, or replaces it.
+    pub(crate) fn release_subscription(&mut self, channel_or_pattern: &[u8]) {
+        self.subscriptions.remove(channel_or_pattern);
     }
 
     /// Records the subscriptions one caller-issued SUBSCRIBE waits to have
@@ -528,6 +548,39 @@ mod tests {
             Delivery::NoSubscriber
         ));
         assert!(!router.has_orphaned());
+    }
+
+    /// A subscriber that is gone still holds its entry until a message reveals
+    /// it, which a quiet channel never sends: it must not count as live, or it
+    /// refuses every new subscriber to that channel.
+    #[test]
+    fn a_dead_subscriber_on_a_quiet_channel_is_not_live() {
+        let mut router = Router::new();
+        let (pending, receiver) = subscriber("news");
+        router.expect_subscriptions([pending]);
+        router.confirm_subscription(b"news");
+        assert!(router.has_live_subscriber(b"news"));
+
+        drop(receiver);
+
+        assert!(router.is_subscribed(&channel("news")));
+        assert!(!router.has_live_subscriber(b"news"));
+        assert!(!router.has_live_subscriber(b"sports"));
+    }
+
+    /// A released subscription is not re-issued by a reconnection: the server
+    /// would be subscribed again for nobody.
+    #[test]
+    fn a_released_subscription_is_not_reissued_on_reconnection() {
+        let mut router = Router::new();
+        let (pending, _receiver) = subscriber("news");
+        router.expect_subscriptions([pending]);
+        router.confirm_subscription(b"news");
+
+        router.release_subscription(b"news");
+
+        assert!(!router.is_subscribed(&channel("news")));
+        assert!(router.take_resubscriptions().is_empty());
     }
 
     #[test]

@@ -6,6 +6,27 @@ All notable changes to this project are documented here. The format is based on
 Versions up to and including `0.19.3` are documented in the
 [GitHub releases](https://github.com/dahomey-technologies/rustis/releases).
 
+## [Unreleased]
+
+### Fixed
+
+- **A stream closed or dropped while the client is disconnected releases its
+  channel.** Its UNSUBSCRIBE reached the network task between two reconnection
+  attempts and, being non-retryable, was failed with `DisconnectedByPeer`
+  without the subscription being forgotten. The reconnection then subscribed the
+  server again to the channel, for a subscriber that no longer existed, and
+  every later `subscribe` to it on the same `Client` was refused with
+  `AlreadySubscribed` until a message happened to arrive on it. A channel that
+  stays quiet, like a per-user channel while its user is offline, stayed blocked
+  for the life of the `Client`. Such an UNSUBSCRIBE now succeeds without being
+  sent: a fresh connection is subscribed to nothing, so it has nothing left to
+  do. `PubSubStream::close` therefore returns `Ok` during an outage.
+- **A subscription whose stream is gone no longer refuses a new subscriber.** A
+  `subscribe` to a channel whose previous stream had been dropped was refused
+  with `AlreadySubscribed` until the server confirmed the UNSUBSCRIBE of that
+  stream, so a caller that subscribed again right after a drop had to retry. It
+  now takes the channel over at once.
+
 ## [0.27.0] - 2026-10-03
 
 ### BREAKING CHANGES

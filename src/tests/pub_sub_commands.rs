@@ -1089,6 +1089,140 @@ async fn a_failed_unsubscribe_keeps_the_channel_tracked() -> Result<()> {
     Ok(())
 }
 
+/// Closing a stream while the client is disconnected must release its channel.
+///
+/// The UNSUBSCRIBE reached a handler that was backing off between reconnection
+/// attempts. Being non-retryable, it was failed with `DisconnectedByPeer` and
+/// the subscription table was left untouched, so the reconnection subscribed
+/// the channel again on the server, for a subscriber that no longer existed.
+/// The dead entry was only noticed when a message arrived on the channel, and
+/// until then every later `subscribe` to it was refused with `AlreadySubscribed`.
+/// A per-user channel receives nothing while its user is offline, so that user
+/// was locked out for the life of the client.
+#[tokio::test]
+#[serial]
+async fn closing_a_stream_while_disconnected_releases_its_channel() -> Result<()> {
+    const CHANNEL: &str = "stale_on_close";
+    let (subscriber, observer, mut on_reconnect) = disconnected_subscriber(CHANNEL).await?;
+
+    // Being disconnected, the server is subscribed to nothing on this client, so
+    // the UNSUBSCRIBE has nothing left to do and is not an error.
+    subscriber.stream.close().await?;
+
+    on_reconnect.recv().await.unwrap();
+    assert_channel_released(&subscriber.client, &observer, CHANNEL).await
+}
+
+/// Dropping a stream while the client is disconnected must release its channel,
+/// like closing it does: the fire-and-forget UNSUBSCRIBE of `Drop` was failed
+/// as silently as it is sent.
+#[tokio::test]
+#[serial]
+async fn dropping_a_stream_while_disconnected_releases_its_channel() -> Result<()> {
+    const CHANNEL: &str = "stale_on_drop";
+    let (subscriber, observer, mut on_reconnect) = disconnected_subscriber(CHANNEL).await?;
+
+    drop(subscriber.stream);
+
+    on_reconnect.recv().await.unwrap();
+    assert_channel_released(&subscriber.client, &observer, CHANNEL).await
+}
+
+/// A subscription whose subscriber is gone must not refuse the next one, even
+/// before anything confirmed the release: the channel used to be refused with
+/// `AlreadySubscribed` until the server's confirmation of the UNSUBSCRIBE was
+/// read, or, had that UNSUBSCRIBE been lost, until a message arrived on it.
+///
+/// The new subscription must also survive the UNSUBSCRIBE of the old one, which
+/// is still on its way to the server when it is asked for.
+#[tokio::test]
+#[serial]
+async fn subscribing_right_after_a_drop_takes_the_channel_over() -> Result<()> {
+    log_try_init();
+    const CHANNEL: &str = "taken_over";
+
+    let subscriber = get_test_client().await?;
+    let publisher = get_test_client().await?;
+
+    let stream = subscriber.subscribe(CHANNEL).await?;
+    drop(stream);
+    let mut stream = subscriber.subscribe(CHANNEL).await?;
+
+    publisher.publish(CHANNEL, "after").await?;
+    let message = timeout(
+        Duration::from_secs(5),
+        TimeoutKind::Command,
+        stream.try_next(),
+    )
+    .await
+    .expect("the new subscription was cancelled by the old one's UNSUBSCRIBE")?
+    .unwrap();
+    assert_eq!(b"after", message.payload());
+
+    stream.close().await?;
+    Ok(())
+}
+
+struct Subscriber {
+    client: Client,
+    stream: crate::client::PubSubStream,
+}
+
+/// A client subscribed to `channel`, whose connection has been killed and which
+/// is now backing off before its first reconnection attempt.
+///
+/// The backoff is long enough for the caller to act while the handler is
+/// disconnected: that is the state the race of the original report lands in,
+/// reached here on purpose rather than by chance.
+async fn disconnected_subscriber(
+    channel: &str,
+) -> Result<(Subscriber, Client, crate::network::ReconnectReceiver)> {
+    log_try_init();
+
+    let mut config = get_default_config()?;
+    config.reconnection = ReconnectionConfig::new_constant(0, 1000);
+    let client = get_test_client_with_config(config).await?;
+    let observer = get_test_client().await?;
+
+    let stream = client.subscribe(channel).await?;
+    let client_id = client.client_id().await?;
+    let on_reconnect = client.on_reconnect();
+
+    observer
+        .client_kill(ClientKillOptions::default().id(client_id))
+        .await?;
+    wait_for(Duration::from_secs(5), || async {
+        Ok(!client.is_connected())
+    })
+    .await?;
+
+    Ok((Subscriber { client, stream }, observer, on_reconnect))
+}
+
+/// Neither the client nor the server may still hold `channel` after the
+/// reconnection: the server must not have been subscribed again, and the client
+/// must accept a new subscription to it.
+async fn assert_channel_released(
+    subscriber: &Client,
+    observer: &Client,
+    channel: &str,
+) -> Result<()> {
+    // A round trip on the reconnected socket, so the server has processed
+    // whatever the reconnection wrote on it before it is asked about it.
+    subscriber.client_id().await?;
+    let subscribers: HashMap<String, usize> = observer.pub_sub_numsub(channel).await?;
+    assert_eq!(
+        Some(&0),
+        subscribers.get(channel),
+        "the reconnection subscribed the server again to a released channel"
+    );
+
+    let stream = subscriber.subscribe(channel).await?;
+    stream.close().await?;
+
+    Ok(())
+}
+
 #[tokio::test]
 #[serial]
 async fn punsubscribe() -> Result<()> {

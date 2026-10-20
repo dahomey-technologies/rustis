@@ -683,7 +683,9 @@ impl Error {
     ///
     /// True for every [connection error](Error::is_connection_error), for a
     /// [timeout](Error::is_timeout), and for the server codes that ask for a
-    /// replay: `TRYAGAIN`, `CLUSTERDOWN`, `MASTERDOWN` and `NOMASTERLINK`.
+    /// replay: `TRYAGAIN`, `CLUSTERDOWN`, `MASTERDOWN`, `NOMASTERLINK`,
+    /// `LOADING` (the server is loading its dataset after a restart) and `BUSY`
+    /// (a script or a function runs past `busy-reply-threshold`).
     ///
     /// # Warning
     ///
@@ -691,7 +693,13 @@ impl Error {
     /// or a deadline that expires after the server applied the write leaves no
     /// way to tell it apart from one that died before. Replay only commands
     /// that are safe to apply twice, or make them idempotent first — `INCR`
-    /// replayed on a lost reply counts twice.
+    /// replayed on a lost reply counts twice. The server codes above are the
+    /// exception: the server refused the command without running it, so any
+    /// command can be replayed on them.
+    ///
+    /// `BUSY` lasts until the script ends, or until an operator kills it. A
+    /// script stuck in a loop after a write cannot be killed and keeps the
+    /// server `BUSY` until a `SHUTDOWN NOSAVE`, so bound the replays.
     #[must_use]
     pub fn is_retryable(&self) -> bool {
         if self.is_connection_error() || self.is_timeout() {
@@ -704,7 +712,9 @@ impl Error {
                 kind: RedisErrorKind::TryAgain
                     | RedisErrorKind::ClusterDown
                     | RedisErrorKind::MasterDown
-                    | RedisErrorKind::NoMasterLink,
+                    | RedisErrorKind::NoMasterLink
+                    | RedisErrorKind::Loading
+                    | RedisErrorKind::Busy,
                 ..
             })
         )
@@ -813,12 +823,14 @@ pub enum RedisErrorKind {
         hash_slot: u16,
         address: (String, u16),
     },
+    Busy,
     BusyGroup,
     ClusterDown,
     CrossSlot,
     Err,
     InProg,
     IoErr,
+    Loading,
     MasterDown,
     MisConf,
     Moved {
@@ -872,12 +884,14 @@ impl<'a> TryFrom<&'a [u8]> for RedisErrorKind {
 
     fn try_from(value: &'a [u8]) -> std::result::Result<Self, Self::Error> {
         match value {
+            b"BUSY" => Ok(Self::Busy),
             b"BUSYGROUP" => Ok(Self::BusyGroup),
             b"CLUSTERDOWN" => Ok(Self::ClusterDown),
             b"CROSSSLOT" => Ok(Self::CrossSlot),
             b"ERR" => Ok(Self::Err),
             b"INPROG" => Ok(Self::InProg),
             b"IOERR" => Ok(Self::IoErr),
+            b"LOADING" => Ok(Self::Loading),
             b"MASTERDOWN" => Ok(Self::MasterDown),
             b"MISCONF" => Ok(Self::MisConf),
             b"NOAUTH" => Ok(Self::NoAuth),
@@ -920,12 +934,14 @@ impl Display for RedisErrorKind {
                 hash_slot,
                 address: (host, port),
             } => f.write_fmt(format_args!("ASK {} {}:{}", *hash_slot, *host, *port)),
+            RedisErrorKind::Busy => f.write_str("BUSY"),
             RedisErrorKind::BusyGroup => f.write_str("BUSYGROUP"),
             RedisErrorKind::ClusterDown => f.write_str("CLUSTERDOWN"),
             RedisErrorKind::CrossSlot => f.write_str("CROSSSLOT"),
             RedisErrorKind::Err => f.write_str("ERR"),
             RedisErrorKind::InProg => f.write_str("INPROG"),
             RedisErrorKind::IoErr => f.write_str("IOERR"),
+            RedisErrorKind::Loading => f.write_str("LOADING"),
             RedisErrorKind::MasterDown => f.write_str("MASTERDOWN"),
             RedisErrorKind::MisConf => f.write_str("MISCONF"),
             RedisErrorKind::Moved {

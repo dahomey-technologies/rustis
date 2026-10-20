@@ -307,6 +307,8 @@ fn a_retryable_error_covers_every_transient_layer() {
     assert!(redis(RedisErrorKind::ClusterDown).is_retryable());
     assert!(redis(RedisErrorKind::MasterDown).is_retryable());
     assert!(redis(RedisErrorKind::NoMasterLink).is_retryable());
+    assert!(redis(RedisErrorKind::Loading).is_retryable());
+    assert!(redis(RedisErrorKind::Busy).is_retryable());
 
     // Replaying these produces the very same error.
     assert!(!redis(RedisErrorKind::WrongType).is_retryable());
@@ -314,6 +316,53 @@ fn a_retryable_error_covers_every_transient_layer() {
     assert!(!redis(RedisErrorKind::Err).is_retryable());
     assert!(!client(ClientError::MismatchedKeySlots).is_retryable());
     assert!(!Error::from(ErrorKind::Aborted).is_retryable());
+}
+
+/// A server restarting with persistence answers `LOADING` until its dataset is
+/// in memory, and one running a long script answers `BUSY`. Both are outages,
+/// not defects of the command, so they must not fall into `Other`, where
+/// `is_retryable` cannot see them.
+#[test]
+fn loading_and_busy_are_parsed_and_retryable() -> Result<()> {
+    let loading =
+        RedisError::try_from(b"LOADING Redis is loading the dataset in memory".as_slice())?;
+    assert_eq!(RedisErrorKind::Loading, loading.kind);
+    assert_eq!(
+        "LOADING Redis is loading the dataset in memory",
+        loading.to_string()
+    );
+    assert!(Error::from(loading).is_retryable());
+
+    let busy = RedisError::try_from(
+        b"BUSY Redis is busy running a script. You can only call SCRIPT KILL or SHUTDOWN NOSAVE."
+            .as_slice(),
+    )?;
+    assert_eq!(RedisErrorKind::Busy, busy.kind);
+    assert!(busy.to_string().starts_with("BUSY Redis is busy"));
+    assert!(Error::from(busy).is_retryable());
+
+    Ok(())
+}
+
+/// The codes are matched whole, so the codes that only start with `BUSY` keep
+/// their own meaning. `BUSYKEY` is what `RESTORE` answers on an existing key:
+/// a defect of the command, which a replay only repeats.
+#[test]
+fn codes_starting_with_busy_are_not_busy() -> Result<()> {
+    let busy_group =
+        RedisError::try_from(b"BUSYGROUP Consumer Group name already exists".as_slice())?;
+    assert_eq!(RedisErrorKind::BusyGroup, busy_group.kind);
+    assert!(!Error::from(busy_group).is_retryable());
+
+    let busy_key = RedisError::try_from(b"BUSYKEY Target key name already exists.".as_slice())?;
+    assert_eq!(RedisErrorKind::Other, busy_key.kind);
+    assert_eq!(
+        "BUSYKEY Target key name already exists.",
+        busy_key.to_string()
+    );
+    assert!(!Error::from(busy_key).is_retryable());
+
+    Ok(())
 }
 
 /// A server message is bytes, not text. Reading it as text is lossy, so the

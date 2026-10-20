@@ -6,6 +6,20 @@ All notable changes to this project are documented here. The format is based on
 Versions up to and including `0.19.3` are documented in the
 [GitHub releases](https://github.com/dahomey-technologies/rustis/releases).
 
+## [Unreleased]
+
+### Fixed
+
+- **`LOADING` and `BUSY` are retryable server errors.** A server restarting
+  with persistence answers `LOADING` until its dataset is in memory, and one
+  running a script or a function past `busy-reply-threshold` answers `BUSY`.
+  Both codes fell into `RedisErrorKind::Other`, so `Error::is_retryable`
+  returned `false` and a caller that relies on it took a normal restart for a
+  defect of its command. They now parse to the new `RedisErrorKind::Loading`
+  and `RedisErrorKind::Busy`, which `is_retryable` reports as transient. The
+  server refuses the command without running it, so any command, `INCR`
+  included, can be replayed on them. `BUSYGROUP` and `BUSYKEY` are unchanged.
+
 ## [0.27.1] - 2026-10-10
 
 ### Fixed

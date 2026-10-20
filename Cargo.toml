@@ -130,6 +130,16 @@ required-features = ["server-tests"]
 features = ["tokio-runtime", "tokio-rustls", "pool", "json", "client-cache"]
 rustdoc-args = ["--cfg", "docsrs"]
 
+# `enum_no_repr_variant_discriminant_changed` fires on any new variant inserted
+# before others, even on an enum with a field-carrying variant, which cannot be
+# cast with `as` and so has no observable discriminant. `RedisErrorKind` is such
+# an enum (`Ask`, `Moved`), and it is kept in alphabetical order. The lint still
+# prints its finding, but it no longer fails the release: a real break on a
+# field-less enum has to be caught at review, as `publish.yml` cannot tell the
+# two apart.
+[package.metadata.cargo-semver-checks.lints]
+enum_no_repr_variant_discriminant_changed = "warn"
+
 [[bench]]
 name = "generic_api"
 harness = false

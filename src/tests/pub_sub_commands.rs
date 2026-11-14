@@ -1597,39 +1597,69 @@ async fn closing_a_shard_stream_spanning_slots_succeeds_in_cluster() -> Result<(
     Ok(())
 }
 
-/// A SSUBSCRIBE refused before being sent -- its shard channels span two
-/// slots -- must leave nothing behind: the client's next subscriptions are
-/// confirmed and receive their messages.
+/// A single `ssubscribe` may name shard channels of several slots: the cluster
+/// connection sends one `SSUBSCRIBE` per slot, to the master owning it. The
+/// server refuses a cross-slot one with `CROSSSLOT`, and the client used to
+/// refuse it itself with `MismatchedKeySlots`.
+///
+/// This is the reproduction of the original report, run to the end: subscribe,
+/// receive from both masters, drop, subscribe again.
 #[tokio::test]
 #[serial]
-async fn a_refused_cross_slot_ssubscribe_leaves_the_client_usable() -> Result<()> {
+async fn a_cross_slot_ssubscribe_is_split_per_slot_in_cluster() -> Result<()> {
     log_try_init();
+
+    // `{a}` and `{b}` hash to slots served by two different masters of the
+    // three-node test cluster.
+    const CHANNELS: [&str; 2] = ["cross_slot_ssubscribe{a}", "cross_slot_ssubscribe{b}"];
 
     let client = get_cluster_test_client().await?;
     let publisher = get_cluster_test_client().await?;
 
-    let refused = client
-        .ssubscribe(["refused_ssubscribe{a}", "refused_ssubscribe{b}"])
-        .await;
-    assert!(matches!(
-        refused.map(|_| ()).unwrap_err().kind(),
-        ErrorKind::Client(ClientError::MismatchedKeySlots)
-    ));
+    // A shard subscription lives on the master owning its slot only, so each
+    // master is asked about its own.
+    let shard_results: Vec<ClusterShardResult> = client.cluster_shards().await?;
+    let mut master_clients = Vec::new();
+    for shard in &shard_results {
+        let master_node = shard.nodes.iter().find(|n| n.role == "master").unwrap();
+        master_clients.push(
+            Client::connect((master_node.ip.clone(), master_node.port.unwrap()).into_config()?)
+                .await?,
+        );
+    }
 
-    let mut stream = timeout(
-        Duration::from_secs(5),
-        TimeoutKind::Command,
-        client.ssubscribe("refused_ssubscribe{a}"),
-    )
-    .await??;
-    publisher
-        .spublish("refused_ssubscribe{a}", "payload")
+    for round in 0..2 {
+        let mut stream = timeout(
+            Duration::from_secs(5),
+            TimeoutKind::Command,
+            client.ssubscribe(CHANNELS),
+        )
+        .await??;
+
+        for channel in CHANNELS {
+            publisher.spublish(channel, round.to_string()).await?;
+            let message = timeout(Duration::from_secs(5), TimeoutKind::Command, stream.next())
+                .await?
+                .unwrap()?;
+            assert_eq!(channel.as_bytes(), message.channel());
+        }
+
+        drop(stream);
+
+        // The client clears its registry only when each master confirms the
+        // unsubscription, which `drop` does not wait for.
+        wait_for(Duration::from_secs(5), || async {
+            let mut subscribed = HashSet::<String>::new();
+            for master_client in &master_clients {
+                let channels: HashSet<String> = master_client
+                    .pub_sub_shardchannels("cross_slot_ssubscribe*")
+                    .await?;
+                subscribed.extend(channels);
+            }
+            Ok(subscribed.is_empty())
+        })
         .await?;
-    let message = timeout(Duration::from_secs(5), TimeoutKind::Command, stream.next())
-        .await?
-        .unwrap()?;
-    assert_eq!(b"payload", message.payload());
+    }
 
-    stream.close().await?;
     Ok(())
 }

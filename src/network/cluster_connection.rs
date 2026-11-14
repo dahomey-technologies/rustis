@@ -151,18 +151,21 @@ fn is_broadcast_pub_sub_command(command: &Command) -> bool {
     )
 }
 
-/// Whether the command is a `SUNSUBSCRIBE` naming shard channels of more than
-/// one slot.
+/// Whether the command is a `SSUBSCRIBE` or a `SUNSUBSCRIBE` naming shard
+/// channels of more than one slot.
 ///
-/// A single `SSUBSCRIBE` must name one slot, but a `PubSubStream` may add shard
-/// channels of other slots afterwards, and its `close` and `drop` release them
-/// all in one `SUNSUBSCRIBE`. Routed as a single-slot command, that cleanup was
-/// refused before reaching any node: every subscription stayed on its master
-/// and in the client's registry. Cut per slot like a multi-shard command, each
-/// master hears about its own shard channels — the acknowledgements are matched
-/// per channel, so the caller is answered once all of them are in.
-fn is_shard_unsubscribe_spanning_slots(command: &Command) -> bool {
-    if command.name() != b"SUNSUBSCRIBE" {
+/// The server requires a single slot per command, but a shard subscription is
+/// per channel: nothing is atomic about subscribing to two of them at once.
+/// Cut per slot like a multi-shard command, each master hears about its own
+/// shard channels, and the acknowledgements are matched per channel by the
+/// router, so the caller is answered once all of them are in.
+///
+/// For `SUNSUBSCRIBE` this is not a convenience: a `PubSubStream` collects
+/// shard channels one `ssubscribe` at a time, and its `close` and `drop`
+/// release them all in one command. Routed as a single-slot command, that
+/// cleanup was refused before reaching any node.
+fn is_shard_pub_sub_spanning_slots(command: &Command) -> bool {
+    if !matches!(command.name(), b"SSUBSCRIBE" | b"SUNSUBSCRIBE") {
         return false;
     }
 
@@ -205,7 +208,7 @@ fn route(command: &Command) -> Result<Route> {
         });
     }
 
-    if is_shard_unsubscribe_spanning_slots(command) {
+    if is_shard_pub_sub_spanning_slots(command) {
         return Ok(Route::MultiShard);
     }
 

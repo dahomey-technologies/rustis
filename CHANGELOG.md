@@ -8,6 +8,15 @@ Versions up to and including `0.19.3` are documented in the
 
 ## [Unreleased]
 
+### Changed
+
+- **`ssubscribe` accepts shard channels of several slots in a cluster.** The
+  server requires one slot per `SSUBSCRIBE`, and the client refused a
+  cross-slot one with `MismatchedKeySlots`. A shard subscription is per
+  channel, so nothing is lost by splitting it: one `SSUBSCRIBE` is now sent per
+  slot, to the master owning it, and the caller is answered once every master
+  has confirmed.
+
 ### Fixed
 
 - **A sharded `PubSubStream` spanning several slots is released in a

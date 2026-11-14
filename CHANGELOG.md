@@ -6,6 +6,20 @@ All notable changes to this project are documented here. The format is based on
 Versions up to and including `0.19.3` are documented in the
 [GitHub releases](https://github.com/dahomey-technologies/rustis/releases).
 
+## [Unreleased]
+
+### Fixed
+
+- **A sharded `PubSubStream` spanning several slots is released in a
+  cluster.** A single `SSUBSCRIBE` must name one slot, but a stream may add
+  shard channels of other slots with `PubSubStream::ssubscribe`. Its `close`
+  and its `Drop` then released them all in one `SUNSUBSCRIBE`, which the
+  cluster connection refused before sending it (`MismatchedKeySlots`): `close`
+  failed, `Drop` failed silently, every subscription stayed on its master, and
+  the next command on the `Client` could stall. A `SUNSUBSCRIBE` naming several
+  slots, including one passed to `PubSubStream::sunsubscribe`, is now split per
+  slot and sent to the master owning each one.
+
 ## [0.27.2] - 2026-10-20
 
 ### Fixed

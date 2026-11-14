@@ -131,6 +131,27 @@ fn is_broadcast_pub_sub_command(command: &Command) -> bool {
     )
 }
 
+/// Whether the command is a `SUNSUBSCRIBE` naming shard channels of more than
+/// one slot.
+///
+/// A single `SSUBSCRIBE` must name one slot, but a `PubSubStream` may add shard
+/// channels of other slots afterwards, and its `close` and `drop` release them
+/// all in one `SUNSUBSCRIBE`. Routed as a single-slot command, that cleanup was
+/// refused before reaching any node: every subscription stayed on its master
+/// and in the client's registry. Cut per slot like a multi-shard command, each
+/// master hears about its own shard channels — the acknowledgements are matched
+/// per channel, so the caller is answered once all of them are in.
+fn is_shard_unsubscribe_spanning_slots(command: &Command) -> bool {
+    if command.name() != b"SUNSUBSCRIBE" {
+        return false;
+    }
+
+    let mut slots = command.slots();
+    slots
+        .next()
+        .is_some_and(|first_slot| slots.any(|slot| slot != first_slot))
+}
+
 /// One shard's slice of a multi-key command: the keys of a single slot, the node
 /// that serves them, and whether the send must be prefixed with an `ASKING`.
 #[derive(Debug, PartialEq, Eq)]
@@ -544,6 +565,10 @@ impl ClusterConnection {
                 // so every master hears it.
                 self.request_policy_all_shards(command).await
             };
+        }
+
+        if is_shard_unsubscribe_spanning_slots(command) {
+            return self.request_policy_multi_shard(command, ask_reasons).await;
         }
 
         let request_policy = command.request_policy();

@@ -1508,3 +1508,91 @@ where
         sleep(Duration::from_millis(50)).await;
     }
 }
+
+/// A `PubSubStream` collects shard channels from several slots one `ssubscribe`
+/// at a time -- a single `SSUBSCRIBE` must name one slot, but the stream may
+/// add more later. Dropping it sent them all in one `SUNSUBSCRIBE`, which a
+/// cluster cannot route: it was refused before reaching any node, the
+/// subscriptions stayed on both masters, and the client kept both channels
+/// registered, so a later `ssubscribe` was refused as `AlreadySubscribed`.
+#[tokio::test]
+#[serial]
+async fn dropping_a_shard_stream_spanning_slots_releases_every_slot_in_cluster() -> Result<()> {
+    log_try_init();
+
+    // `{a}` and `{b}` hash to slots served by two different masters of the
+    // three-node test cluster.
+    const CHANNELS: [&str; 2] = ["cross_slot_drop{a}", "cross_slot_drop{b}"];
+
+    let client = get_cluster_test_client().await?;
+    let publisher = get_cluster_test_client().await?;
+
+    let mut stream = client.ssubscribe(CHANNELS[0]).await?;
+    stream.ssubscribe(CHANNELS[1]).await?;
+    drop(stream);
+
+    // Re-subscribing works only once the client has forgotten both channels.
+    // Polled: the client clears its table only when it reads each node's
+    // confirmation, which `drop` does not wait for.
+    let started = std::time::Instant::now();
+    let mut stream = loop {
+        let already_subscribed =
+            |e: &Error| matches!(e.kind(), ErrorKind::Client(ClientError::AlreadySubscribed));
+        match client.ssubscribe(CHANNELS[0]).await {
+            Ok(mut stream) => match stream.ssubscribe(CHANNELS[1]).await {
+                Ok(()) => break stream,
+                Err(e) if already_subscribed(&e) => stream.close().await?,
+                Err(e) => return Err(e),
+            },
+            Err(e) if already_subscribed(&e) => (),
+            Err(e) => return Err(e),
+        }
+        assert!(
+            started.elapsed() < Duration::from_secs(5),
+            "the dropped shard channels are still registered"
+        );
+        sleep(Duration::from_millis(50)).await;
+    };
+
+    // And the new subscriptions are live on both masters.
+    for channel in CHANNELS {
+        publisher.spublish(channel, channel).await?;
+        let message = timeout(Duration::from_secs(5), TimeoutKind::Command, stream.next())
+            .await?
+            .unwrap()?;
+        assert_eq!(channel.as_bytes(), message.channel());
+    }
+
+    stream.close().await?;
+
+    Ok(())
+}
+
+/// `close` sends the same `SUNSUBSCRIBE` as `drop`, but awaits it: it failed
+/// outright on a stream whose shard channels span several slots.
+#[tokio::test]
+#[serial]
+async fn closing_a_shard_stream_spanning_slots_succeeds_in_cluster() -> Result<()> {
+    log_try_init();
+
+    const CHANNELS: [&str; 2] = ["cross_slot_close{a}", "cross_slot_close{b}"];
+
+    let client = get_cluster_test_client().await?;
+
+    let mut stream = client.ssubscribe(CHANNELS[0]).await?;
+    stream.ssubscribe(CHANNELS[1]).await?;
+    stream.close().await?;
+
+    // Nothing left registered: the same channels can be subscribed again.
+    let mut stream = client.ssubscribe(CHANNELS[0]).await?;
+    stream.ssubscribe(CHANNELS[1]).await?;
+    // An explicit unsubscription spanning both slots is split the same way.
+    stream.sunsubscribe(CHANNELS).await?;
+    stream.close().await?;
+
+    let mut stream = client.ssubscribe(CHANNELS[0]).await?;
+    stream.ssubscribe(CHANNELS[1]).await?;
+    stream.close().await?;
+
+    Ok(())
+}

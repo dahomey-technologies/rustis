@@ -186,6 +186,16 @@ impl Connection {
         matches!(self, Connection::Cluster(_))
     }
 
+    /// Refuses a command this connection could never route, before anything
+    /// is recorded or written for it. Only a cluster refuses anything: see
+    /// [`ClusterConnection::check_routable`].
+    pub(crate) fn check_routable(&self, command: &Command) -> Result<()> {
+        match self {
+            Connection::Cluster(_) => ClusterConnection::check_routable(command),
+            Connection::Standalone(_) | Connection::Sentinel(_) => Ok(()),
+        }
+    }
+
     pub(crate) fn tag(&self) -> Arc<str> {
         match self {
             Connection::Standalone(connection) => connection.tag(),

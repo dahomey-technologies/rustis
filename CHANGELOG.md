@@ -20,6 +20,24 @@ Versions up to and including `0.19.3` are documented in the
   slots, including one passed to `PubSubStream::sunsubscribe`, is now split per
   slot and sent to the master owning each one.
 
+- **A command the cluster cannot route no longer poisons the connection.** A
+  command refused before being sent — keys spanning several slots where one
+  is required, or a command the cluster does not support — was refused only
+  when the network task fed it, after its bookkeeping had been recorded:
+  - a refused `SSUBSCRIBE` left its pending batch at the head of the
+    subscription queue, so the next subscription on the same `Client` was
+    matched against it and never answered;
+  - in a pipeline, the commands ahead of the refused one had already been
+    written, and their replies were handed to the next callers;
+  - the messages queued behind it in the same send batch were not sent until
+    another message woke the network task, so their callers could wait
+    forever on an idle client, and the refused message's byte charge was
+    never released from the send-queue budget.
+
+  Such a command is now refused before anything is recorded or written, and a
+  message whose feed fails for any other reason is failed on its own while
+  the rest of its batch goes out.
+
 ## [0.27.2] - 2026-10-20
 
 ### Fixed

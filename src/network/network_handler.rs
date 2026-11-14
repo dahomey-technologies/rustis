@@ -349,6 +349,21 @@ impl NetworkHandler {
     fn handle_message(&mut self, mut msg: Message) {
         trace!("[{:?}] Will handle message: {msg:?}", self.mode);
 
+        // First of all: a command the connection can never route is refused
+        // before it registers any pub/sub bookkeeping or reaches the queue. Left
+        // to fail at feed time, a refused SUBSCRIBE kept its pending batch at
+        // the head of the router's queue, against which every later
+        // confirmation was then matched, and the commands of a pipeline fed
+        // ahead of the refused one were written with nobody left to read
+        // their replies.
+        if let Err(e) = msg
+            .commands()
+            .try_for_each(|command| self.connection.check_routable(command))
+        {
+            msg.send_error(e);
+            return;
+        }
+
         // Ahead of the shedding below: an UNSUBSCRIBE answered here is never
         // queued, so it costs the queue nothing and must not be refused.
         if self.mode.is_disconnected() && self.unsubscribe_while_disconnected(&mut msg) {
@@ -598,6 +613,7 @@ impl NetworkHandler {
             }
 
             let mut num_commands_to_receive: usize = 0;
+            let mut feed_error = None;
 
             // Commands are fed one by one on purpose. Batching them into a single
             // call (to hoist the stream-variant `match` out of the loop and issue
@@ -664,10 +680,26 @@ impl NetworkHandler {
                 }
 
                 if let Err(e) = self.connection.feed(command, &retry_reasons).await {
-                    error!("Feed error: {e}");
-                    msg.send_error(e);
-                    return;
+                    feed_error = Some(e);
+                    break;
                 }
+            }
+
+            // The message is failed on its own: the rest of the batch is still
+            // fed and flushed below. Returning here instead stranded every
+            // message behind it in the send queue until some later message
+            // happened to wake the send path — a caller awaiting one of them
+            // waited forever on an otherwise idle client — and kept the failed
+            // message's byte charge, which nothing released any more.
+            //
+            // Routing refusals never get this far, see `check_routable`: what
+            // fails here is the connection itself, or a topology that covers no
+            // node for a slot.
+            if let Some(e) = feed_error {
+                error!("Feed error: {e}");
+                self.queue.release(cost);
+                msg.send_error(e);
+                continue;
             }
 
             if num_commands_to_receive > 0 {

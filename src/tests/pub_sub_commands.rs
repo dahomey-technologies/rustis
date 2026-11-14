@@ -1596,3 +1596,40 @@ async fn closing_a_shard_stream_spanning_slots_succeeds_in_cluster() -> Result<(
 
     Ok(())
 }
+
+/// A SSUBSCRIBE refused before being sent -- its shard channels span two
+/// slots -- must leave nothing behind: the client's next subscriptions are
+/// confirmed and receive their messages.
+#[tokio::test]
+#[serial]
+async fn a_refused_cross_slot_ssubscribe_leaves_the_client_usable() -> Result<()> {
+    log_try_init();
+
+    let client = get_cluster_test_client().await?;
+    let publisher = get_cluster_test_client().await?;
+
+    let refused = client
+        .ssubscribe(["refused_ssubscribe{a}", "refused_ssubscribe{b}"])
+        .await;
+    assert!(matches!(
+        refused.map(|_| ()).unwrap_err().kind(),
+        ErrorKind::Client(ClientError::MismatchedKeySlots)
+    ));
+
+    let mut stream = timeout(
+        Duration::from_secs(5),
+        TimeoutKind::Command,
+        client.ssubscribe("refused_ssubscribe{a}"),
+    )
+    .await??;
+    publisher
+        .spublish("refused_ssubscribe{a}", "payload")
+        .await?;
+    let message = timeout(Duration::from_secs(5), TimeoutKind::Command, stream.next())
+        .await?
+        .unwrap()?;
+    assert_eq!(b"payload", message.payload());
+
+    stream.close().await?;
+    Ok(())
+}

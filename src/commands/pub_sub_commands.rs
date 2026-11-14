@@ -186,10 +186,15 @@ pub trait PubSubCommands<'a>: Sized {
         prepare_command(self, cmd("SPUBLISH").key(shardchannel).arg(message))
     }
 
-    /// Subscribes the client to the specified channels.
+    /// Subscribes the client to the specified shard channels.
+    ///
+    /// On a cluster, the shard channels may hash to different slots: one
+    /// `SSUBSCRIBE` is sent per slot, to the master owning it, and the call
+    /// returns once every one of them is confirmed. The same goes for the
+    /// `SUNSUBSCRIBE` the stream sends when it is closed or dropped.
     ///
     /// # See Also
-    /// [<https://redis.io/commands/subscribe/>](https://redis.io/commands/subscribe/)
+    /// [<https://redis.io/commands/ssubscribe/>](https://redis.io/commands/ssubscribe/)
     #[allow(async_fn_in_trait)]
     async fn ssubscribe(self, shardchannels: impl Serialize) -> Result<PubSubStream>;
 

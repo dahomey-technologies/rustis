@@ -19,16 +19,16 @@ Versions up to and including `0.19.3` are documented in the
 
 ### Fixed
 
-- **A sharded `PubSubStream` spanning several slots is released in a
-  cluster.** A stream may hold shard channels of several slots, added one
-  `PubSubStream::ssubscribe` at a time (or, since the change above, in a
-  single `ssubscribe`). Its `close` and its `Drop` then released them all in
-  one `SUNSUBSCRIBE`, which the
-  cluster connection refused before sending it (`MismatchedKeySlots`): `close`
-  failed, `Drop` failed silently, every subscription stayed on its master, and
-  the next command on the `Client` could stall. A `SUNSUBSCRIBE` naming several
-  slots, including one passed to `PubSubStream::sunsubscribe`, is now split per
-  slot and sent to the master owning each one.
+- **A sharded `PubSubStream` spanning several slots is released in a cluster.**
+  A stream may hold shard channels of several slots, added one
+  `PubSubStream::ssubscribe` at a time (or, since the change above, in a single
+  `ssubscribe`). Its `close` and its `Drop` then released them all in one
+  `SUNSUBSCRIBE`, which the cluster connection refused before sending it
+  (`MismatchedKeySlots`): `close` failed, `Drop` failed silently, every
+  subscription stayed on its master, and the next command on the `Client` could
+  stall. A `SUNSUBSCRIBE` naming several slots, including one passed to
+  `PubSubStream::sunsubscribe`, is now split per slot and sent to the master
+  owning each one.
 
 - **A command the cluster cannot route no longer poisons the connection.** A
   command refused before being sent — keys spanning several slots where one

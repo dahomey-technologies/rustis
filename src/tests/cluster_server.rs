@@ -1460,16 +1460,18 @@ async fn a_read_goes_to_a_replica_when_the_read_preference_asks_for_it() -> Resu
     client.set("clu_read_replica_key", "value").await?;
 
     // The write is asynchronous, so the value may need a moment to reach the
-    // replica the read is now routed to.
-    let mut value = String::new();
+    // replica the read is now routed to. Read as an `Option`: until it does, the
+    // replica answers nil, which a `String` refuses with `UnexpectedNil` — and
+    // the `?` then ended the test on the first attempt instead of retrying.
+    let mut value = None;
     for _ in 0..20 {
-        value = client.get("clu_read_replica_key").await?;
-        if value == "value" {
+        value = client.get::<Option<String>>("clu_read_replica_key").await?;
+        if value.as_deref() == Some("value") {
             break;
         }
         sleep(Duration::from_millis(50)).await;
     }
-    assert_eq!("value", value);
+    assert_eq!(Some("value"), value.as_deref());
 
     assert!(
         any_node_ran(&replica_ports, name, "get").await?,

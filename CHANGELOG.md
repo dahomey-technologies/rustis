@@ -20,9 +20,10 @@ Versions up to and including `0.19.3` are documented in the
 ### Fixed
 
 - **A sharded `PubSubStream` spanning several slots is released in a
-  cluster.** A single `SSUBSCRIBE` must name one slot, but a stream may add
-  shard channels of other slots with `PubSubStream::ssubscribe`. Its `close`
-  and its `Drop` then released them all in one `SUNSUBSCRIBE`, which the
+  cluster.** A stream may hold shard channels of several slots, added one
+  `PubSubStream::ssubscribe` at a time (or, since the change above, in a
+  single `ssubscribe`). Its `close` and its `Drop` then released them all in
+  one `SUNSUBSCRIBE`, which the
   cluster connection refused before sending it (`MismatchedKeySlots`): `close`
   failed, `Drop` failed silently, every subscription stayed on its master, and
   the next command on the `Client` could stall. A `SUNSUBSCRIBE` naming several

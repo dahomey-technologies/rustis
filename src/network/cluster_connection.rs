@@ -44,6 +44,11 @@ pub(crate) struct ClusterTestHook {
     /// Counts every completed topology discovery, so a test can tell a refresh
     /// that happened on its own from one a redirection asked for.
     topology_refreshes: Arc<std::sync::atomic::AtomicUsize>,
+    /// When set, the next feed of a command by this name fails with
+    /// `ClusterConfig` before anything is written, reproducing a feed that
+    /// fails past the routing check: a slot no known node covers, or a node
+    /// connection that breaks on write.
+    feed_error_for: Arc<std::sync::Mutex<Option<String>>>,
 }
 
 #[cfg(test)]
@@ -113,6 +118,21 @@ impl ClusterTestHook {
         *self.transient_error.lock().unwrap() = Some(Bytes::from(format!("-{error}\r\n")));
     }
 
+    /// Arms a one-shot feed failure for the next command named `command_name`.
+    pub(crate) fn arm_feed_error_for(&self, command_name: &str) {
+        *self.feed_error_for.lock().unwrap() = Some(command_name.to_owned());
+    }
+
+    fn take_feed_error_for(&self, command_name: &[u8]) -> bool {
+        let mut armed = self.feed_error_for.lock().unwrap();
+        if armed.as_deref().map(str::as_bytes) == Some(command_name) {
+            *armed = None;
+            true
+        } else {
+            false
+        }
+    }
+
     fn take_transient_error(&self) -> Option<Bytes> {
         self.transient_error.lock().unwrap().take()
     }
@@ -150,6 +170,63 @@ fn is_shard_unsubscribe_spanning_slots(command: &Command) -> bool {
     slots
         .next()
         .is_some_and(|first_slot| slots.any(|slot| slot != first_slot))
+}
+
+/// How the cluster connection serves a command, decided from the command alone.
+///
+/// The single place that tells a routable command from one that is not:
+/// [`ClusterConnection::check_routable`] and the feed path both read it, so
+/// what the handler accepts up front is exactly what the feed then serves.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Route {
+    /// A subscription command naming channels or patterns, hashed per name.
+    PubSubByChannel,
+    /// Every master.
+    AllShards,
+    /// Every node, masters and replicas alike.
+    AllNodes,
+    /// One slice per slot of its keys.
+    MultiShard,
+    /// The node owning the slot of its keys, or any node when it names none.
+    SingleShard,
+}
+
+fn route(command: &Command) -> Result<Route> {
+    if is_broadcast_pub_sub_command(command) {
+        // A channel-less UNSUBSCRIBE (or PUNSUBSCRIBE) names nothing to hash,
+        // and cancels every subscription the *connection* holds — which in a
+        // cluster is spread over the masters. Served by one node it cancels
+        // that node's share and silently leaves the rest, so every master
+        // hears it.
+        return Ok(if command.num_args() > 0 {
+            Route::PubSubByChannel
+        } else {
+            Route::AllShards
+        });
+    }
+
+    if is_shard_unsubscribe_spanning_slots(command) {
+        return Ok(Route::MultiShard);
+    }
+
+    match command.request_policy() {
+        Some(RequestPolicy::AllNodes) => Ok(Route::AllNodes),
+        Some(RequestPolicy::AllShards) => Ok(Route::AllShards),
+        Some(RequestPolicy::MultiShard) => Ok(Route::MultiShard),
+        Some(RequestPolicy::Special) => Err(Error::from(ClientError::CommandNotSupportedInCluster)
+            .with_command(command.name_bytes())),
+        None => {
+            let mut slots = command.slots();
+            if let Some(first_slot) = slots.next()
+                && !slots.all(|slot| slot == first_slot)
+            {
+                return Err(
+                    Error::from(ClientError::MismatchedKeySlots).with_command(command.name_bytes())
+                );
+            }
+            Ok(Route::SingleShard)
+        }
+    }
 }
 
 /// One shard's slice of a multi-key command: the keys of a single slot, the node
@@ -383,6 +460,13 @@ impl ClusterConnection {
             return Ok(());
         }
 
+        #[cfg(test)]
+        if let Some(hook) = &self.test_hook
+            && hook.take_feed_error_for(command.name())
+        {
+            return Err(Error::from(ClientError::ClusterConfig));
+        }
+
         // The skip travels with the command it silences, on every node that command
         // reached. It applies to nothing further — including when the routing below
         // fails, where it never reached a node at all and the handler has already
@@ -554,46 +638,31 @@ impl ClusterConnection {
     ) -> Result<()> {
         trace!("Analyzing command {command:?}");
 
-        if is_broadcast_pub_sub_command(command) {
-            return if command.num_args() > 0 {
-                self.request_policy_pub_sub(command).await
-            } else {
-                // A channel-less UNSUBSCRIBE (or PUNSUBSCRIBE) names nothing to
-                // hash, and cancels every subscription the *connection* holds —
-                // which in a cluster is spread over the masters. Served by one
-                // node it cancels that node's share and silently leaves the rest,
-                // so every master hears it.
-                self.request_policy_all_shards(command).await
-            };
+        match route(command)? {
+            Route::PubSubByChannel => self.request_policy_pub_sub(command).await,
+            Route::AllShards => self.request_policy_all_shards(command).await,
+            Route::AllNodes => self.request_policy_all_nodes(command).await,
+            Route::MultiShard => self.request_policy_multi_shard(command, ask_reasons).await,
+            Route::SingleShard => self
+                .no_request_policy(command, ask_reasons)
+                .await
+                .map(|_| ()),
         }
+    }
 
-        if is_shard_unsubscribe_spanning_slots(command) {
-            return self.request_policy_multi_shard(command, ask_reasons).await;
-        }
-
-        let request_policy = command.request_policy();
-
-        if let Some(request_policy) = request_policy {
-            match request_policy {
-                RequestPolicy::AllNodes => {
-                    self.request_policy_all_nodes(command).await?;
-                }
-                RequestPolicy::AllShards => {
-                    self.request_policy_all_shards(command).await?;
-                }
-                RequestPolicy::MultiShard => {
-                    self.request_policy_multi_shard(command, ask_reasons)
-                        .await?;
-                }
-                RequestPolicy::Special => {
-                    self.request_policy_special(command)?;
-                }
-            }
-        } else {
-            self.no_request_policy(command, ask_reasons).await?;
-        }
-
-        Ok(())
+    /// Refuses, before anything is recorded or written, a command this
+    /// connection could never route: one whose keys span several slots where a
+    /// single slot is required, or one the cluster does not support at all.
+    ///
+    /// The refusal depends on the command alone, so the network handler asks
+    /// before it files any pub/sub bookkeeping or feeds any command of a
+    /// message. Refused at feed time instead, a SUBSCRIBE left its pending
+    /// batch at the head of the router's queue — where the confirmation of
+    /// every later subscription was matched against it — and the commands of a
+    /// pipeline fed ahead of the refused one were already written, their
+    /// replies due to callers that had been answered with the error.
+    pub(crate) fn check_routable(command: &Command) -> Result<()> {
+        route(command).map(|_| ())
     }
 
     #[inline]
@@ -819,10 +888,6 @@ impl ClusterConnection {
         let sub_request = SubRequest::keyless(node.id.clone());
         self.file_request(RequestInfo::single_shard(command, sub_request));
         Ok(())
-    }
-
-    fn request_policy_special(&mut self, _command: &Command) -> Result<()> {
-        Err(Error::from(ClientError::CommandNotSupportedInCluster))
     }
 
     /// A pending request is orphaned once one of its still-unresolved

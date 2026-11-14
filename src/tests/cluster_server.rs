@@ -1706,3 +1706,77 @@ async fn a_redirection_spends_the_attempt_budget() -> Result<()> {
 
     Ok(())
 }
+
+/// A command whose feed fails is failed on its own: the messages queued behind
+/// it in the same send batch are still written. The handler used to return on
+/// the first feed error, which left them in the send queue until some later
+/// message woke the send path, so a caller awaiting one of them on an
+/// otherwise idle client waited forever.
+#[tokio::test]
+#[serial]
+async fn a_feed_error_does_not_strand_the_rest_of_the_batch() -> Result<()> {
+    crate::tests::log_try_init();
+
+    let cluster_hook = ClusterTestHook::new();
+
+    let host = get_default_host();
+    let mut config =
+        format!("redis+cluster://{host}:7000,{host}:7001,{host}:7002").into_config()?;
+    config.cluster_test_hook = Some(cluster_hook.clone());
+    let client = Client::connect(config).await?;
+
+    cluster_hook.arm_feed_error_for("GET");
+
+    // Queued synchronously, then the awaited SET right behind it: the test
+    // runtime is single-threaded, so the network task picks both up in one
+    // send batch, the failing GET first.
+    client.send_and_forget(cmd("GET").key("feed_error_batch{1}"), None)?;
+    timeout(
+        Duration::from_secs(5),
+        TimeoutKind::Command,
+        client.set("feed_error_batch{1}", "value").into_future(),
+    )
+    .await??;
+
+    let value: Option<String> = client.get("feed_error_batch{1}").await?;
+    assert_eq!(Some("value".to_owned()), value);
+
+    Ok(())
+}
+
+/// A pipeline holding a command the cluster cannot route is refused as a
+/// whole, before any of its commands is written. Refused at feed time, the
+/// commands ahead of the refused one had already been written: their replies
+/// came back with no caller waiting for them and were handed to the next one.
+#[tokio::test]
+#[serial]
+async fn a_pipeline_with_a_cross_slot_command_runs_nothing() -> Result<()> {
+    crate::tests::log_try_init();
+
+    let client = get_cluster_test_client().await?;
+    client.del("refused_pipeline{1}").await?;
+
+    let mut pipeline = client.create_pipeline();
+    pipeline.queue_command(cmd("SET").key("refused_pipeline{1}").arg("written"));
+    pipeline.queue_command(
+        cmd("SUNION")
+            .key("refused_pipeline{a}")
+            .key("refused_pipeline{b}"),
+    );
+    let refused: Result<()> = pipeline.execute().await;
+    assert!(matches!(
+        refused.unwrap_err().kind(),
+        ErrorKind::Client(ClientError::MismatchedKeySlots)
+    ));
+
+    // Nothing ran, and the next reply belongs to the next caller.
+    let value: Option<String> = timeout(
+        Duration::from_secs(5),
+        TimeoutKind::Command,
+        client.get("refused_pipeline{1}").into_future(),
+    )
+    .await??;
+    assert_eq!(None, value);
+
+    Ok(())
+}
